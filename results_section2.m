@@ -29,9 +29,6 @@ for subj = 1 : n_subj
     % load
     load([dir_bids,'sourcedata/',subj_handle,'/eeg/',subj_handle,'_task-rf_eeg.mat'])
     
-    % drop source to single precision
-    source.trial = cellfun(@single,source.trial,'UniformOutput',false);
-    
     % get time-frequency representation of data
     cfg             = [];
     cfg.keeptrials  = 'yes';
