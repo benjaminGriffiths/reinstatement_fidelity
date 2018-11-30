@@ -215,7 +215,7 @@ for i = 1 : numel(modality)
     % export
     cfg = [];
     cfg.parameter     = 'pow';               % specify the functional parameter to write to the .nii file
-    cfg.filename      = [dir_bids,'data/eeg/source/stat_',modality{i},'.nii'];  % enter the desired file name
+    cfg.filename      = [dir_bids,'derivatives/group/eeg/group_task-rf_eeg-',modality{i},'map.nii'];  % enter the desired file name
     cfg.filetype      = 'nifti';
     cfg.coordsys      = 'spm';
     cfg.vmpversion    = 2;
@@ -223,12 +223,12 @@ for i = 1 : numel(modality)
     ft_volumewrite(cfg,source);      % be sure to use your interpolated source data
     
     % reslice to 1mm isometric to match template MRI
-    reslice_nii([dir_bids,'data/eeg/source/stat_',modality{i},'.nii'],[dir_bids,'data/eeg/source/stat_',modality{i},'_sm.nii'],[1 1 1]);
+    reslice_nii([dir_bids,'derivatives/group/eeg/group_task-rf_eeg-',modality{i},'map.nii'],[dir_bids,'derivatives/group/eeg/group_task-rf_eeg-',modality{i},'map.nii'],[1 1 1]);
 end
 
 %% Extract Raw Power of Cluster 
 % load data
-load([dir_bids,'data/eeg/source/grand_freq.mat'])
+load([dir_bids,'derivatives/group/eeg/group_task-rf_eeg-freq.mat'])
 
 % get indices of clusters
 clus_idx = stat.video.negclusterslabelmat==1;
@@ -242,70 +242,4 @@ rse = hits - misses;
 tbl = table(rse);
 
 % write table
-writetable(tbl,[dir_repos,'data/sourceEEG.csv'],'Delimiter',',')
-
-%% Get Time-Series of Cluster
-% load cluster data
-load([dir_bids,'data/eeg/source/stat.mat'])
-
-% predefine group data matrix
-group_freq = cell(n_subj,2);
-
-% load template grid
-load('Y:/projects/general/fieldtrip-20170319/template/sourcemodel/standard_sourcemodel3d4mm.mat'); 
-template_grid = sourcemodel; clear sourcemodel
-
-% cycle through each subject
-for subj = 1 : n_subj
-    
-    % load
-    load([dir_bids,'data/eeg/source/subj',sprintf('%02.0f',subj),'_source.mat'])
-    
-    % find audio/video hit/miss trials
-    [audio_bool,hit_bool]   = get_splits_eeg(source);
-
-    % define electrodes in cluster
-    labels = source.label(stat.video.negclusterslabelmat(stat.video.inside)==1);
-    
-    % get time-frequency representation of data
-    cfg             = [];
-    cfg.trials      = audio_bool == 0;
-    cfg.channel     = labels;
-    cfg.keeptrials  = 'yes';
-    cfg.method      = 'wavelet';
-    cfg.width       = 6;
-    cfg.output      = 'pow';
-    cfg.toi         = -0.5:0.05:2;
-    cfg.foi         = 8:25; % 50hz sampling
-    cfg.pad         = 'nextpow2';
-    freq            = ft_freqanalysis(cfg, source); clear source
-
-    % convert powspctrm to single
-    freq.powspctrm  = single(freq.powspctrm);
-    
-    % z-transform
-    avg_pow         = repmat(nanmean(nanmean(freq.powspctrm,4),1),[size(freq.powspctrm,1) 1 1 size(freq.powspctrm,4)]);
-    std_pow         = repmat(nanstd(nanmean(freq.powspctrm,4),[],1),[size(freq.powspctrm,1) 1 1 size(freq.powspctrm,4)]);
-    freq.powspctrm  = (freq.powspctrm - avg_pow) ./ std_pow; clear avg_pow std_pow
-    
-    % apply gaussian smoothing
-    cfg             = [];
-    cfg.fwhm_t      = 0.2;
-    cfg.fwhm_f      = 2;
-    freq            = smooth_TF_GA(cfg,freq);
-    
-    % average over time and frequency
-    cfg             = [];
-    cfg.avgoverfreq = 'yes';
-    cfg.avgoverchan = 'yes';
-    freq            = ft_selectdata(cfg,freq);
-    
-    % split video data
-    hits_series(subj,:) = squeeze(mean(freq.powspctrm(hit_bool(audio_bool==0)==1,:,:,:),1));
-    miss_series(subj,:) = squeeze(mean(freq.powspctrm(hit_bool(audio_bool==0)==0,:,:,:),1));
-end
-
-% save
-csvwrite([dir_repos,'data/sourceEEG_hitSeries.csv'],hits_series)
-csvwrite([dir_repos,'data/sourceEEG_missSeries.csv'],miss_series)
-   
+writetable(tbl,[dir_bids,'derivatives/group/eeg/group_task-rf_eeg-cluster.csv'],'Delimiter',',')
