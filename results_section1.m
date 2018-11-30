@@ -7,9 +7,6 @@ clc
 spm('Defaults','fMRI');
 spm_jobman('initcfg');
 
-% load layout
-load('Y:/projects/reinstatement_fidelity/data/layout.mat')
-
 % add RSA toolbox to path
 addpath(genpath('Y:/projects/general/rsatoolbox-develop'))
 
@@ -32,9 +29,13 @@ addpath([dir_repos,'subfunctions'])
 % cycle through each subject
 for subj = 1 : n_subj
     
+    % define key subject strings
+    subj_handle = sprintf('sub-%02.0f',subj);
+    dir_subj = [dir_root,'bids_data/',subj_handle,'/'];
+    
     % prepare deformation batch
-    matlabbatch{1}.spm.util.defs.comp{1}.inv.comp{1}.def        = {[dir_root,'data/fmri/preprocessing/subj',sprintf('%02.0f',subj),'/iy_subj',num2str(subj),'_7_1.nii']};
-    matlabbatch{1}.spm.util.defs.comp{1}.inv.space              = {[dir_root,'data/fmri/preprocessing/subj',sprintf('%02.0f',subj),'/subj',num2str(subj),'_7_1.nii']};
+    matlabbatch{1}.spm.util.defs.comp{1}.inv.comp{1}.def        = {[dir_subj,'anat/fmri/preprocessing/subj',sprintf('%02.0f',subj),'/iy_subj',num2str(subj),'_7_1.nii']};
+    matlabbatch{1}.spm.util.defs.comp{1}.inv.space              = {[dir_subj,'anat/',subj_handle,'_T1w.nii']};
     matlabbatch{1}.spm.util.defs.out{1}.push.fnames             = {[dir_root,'data/fmri/rsa/masks/template/whole_brain.nii']};
     matlabbatch{1}.spm.util.defs.out{1}.push.weight             = {''};
     matlabbatch{1}.spm.util.defs.out{1}.push.savedir.saveusr    = {[dir_root,'data/fmri/rsa/masks/subj',sprintf('%02.0f',subj),'/']};

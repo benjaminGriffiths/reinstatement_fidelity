@@ -141,12 +141,24 @@ for subj = 1 : n_subj
     
     % make derivatives folder for subject
     mkdir([data_dir,'derivatives\',subj_handle,'\func\'])
+    mkdir([data_dir,'derivatives\',subj_handle,'\anat\'])
 
     % copy all files to derivatives folder
     copyfile([subj_dir,'func\'],[data_dir,'derivatives\',subj_handle,'\func\'])
+    copyfile([subj_dir,'func\'],[data_dir,'derivatives\',subj_handle,'\anat\'])
 
-    % get bids files in derivatives folder
+    % get functional bids files in derivatives folder
     bids_files = dir([data_dir,'derivatives\',subj_handle,'\func\sub*']);
+
+    % cycle through each file
+    for i = 1 : numel(bids_files)
+
+        % delete bids files from derivaties folder
+        delete([bids_files(i).folder,'\',bids_files(i).name])
+    end
+    
+    % get anatomical bids files in derivatives folder
+    bids_files = dir([data_dir,'derivatives\',subj_handle,'\anat\sub*']);
 
     % cycle through each file
     for i = 1 : numel(bids_files)
