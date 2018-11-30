@@ -31,12 +31,12 @@ orig_shape  = size(mri.anatomy);
 mri.anatomy = mri.anatomy(:);
 
 % change MRI to binary 'in-occipital' vs. 'out-occipital'
-mri.anatomy = [mri.anatomy == 5001 | mri.anatomy == 5002 | ... % calcarine L/R 
+mri.anatomy = mri.anatomy == 5001 | mri.anatomy == 5002 | ... % calcarine L/R 
     mri.anatomy == 5011 | mri.anatomy == 5012 | ... % cuneus L/R 
     mri.anatomy == 5021 | mri.anatomy == 5022 | ... % lingual L/R 
     mri.anatomy == 5101 | mri.anatomy == 5102 | ... % occipital superior L/R 
     mri.anatomy == 5201 | mri.anatomy == 5202 | ... % occipital middle L/R 
-    mri.anatomy == 5301 | mri.anatomy == 5302]; % occiptial inferior L/R 
+    mri.anatomy == 5301 | mri.anatomy == 5302; % occiptial inferior L/R 
 
 % reshape mri.anatomy
 mri.anatomy = reshape(mri.anatomy,orig_shape);
@@ -54,7 +54,8 @@ clear mri template_grid cfg
 % predefine matrices for data
 group_erp = nan(n_subj,551);
 group_fft = nan(n_subj,275);
-fft_freq  = 100*(0:275)/551;
+fft_freq  = 100*(1:275)/551;
+erp_time  = linspace(-1.75,3.75,551);
 
 % cycle through each subject
 for subj = 1 : n_subj
@@ -82,9 +83,12 @@ for subj = 1 : n_subj
     cfg.lpfreq      = 15;
     tml             = ft_preprocessing(cfg,tml);
     
+    % take absolute of timelocked data (address phase differences between subjs)
+    tml.avg = abs(tml.avg);    
+    
     % baseline correct timelocked data
     cfg             = [];
-    cfg.baseline    = [-0.3 -0.1];
+    cfg.baseline    = [-0.25 0];
     tml             = ft_timelockbaseline(cfg,tml);
     
     % average over channels
@@ -116,7 +120,24 @@ for subj = 1 : n_subj
 end
 
 % save
-mkdir([dir_bids,'derivatives/group/eeg/'])
-save([dir_bids,'derivatives/group/eeg/group_task-rf_eeg-sanity.mat'],'group_erp','group_fft','fft_freq')
+save([dir_bids,'derivatives/group/eeg/group_task-rf_eeg-sanity.mat'],'group_erp','group_fft','fft_freq','erp_time')
 
-   
+%% Plot
+h=figure('units','centimeters','position',[1 2 17.8 6]); hold on
+subplot(1,2,1); hold on
+shadedErrorBar(erp_time,mean(abs(group_erp)),sem(abs(group_erp)))
+plot([0 0],[0 2000],'k--')
+xlabel('Time (s)')
+ylabel('Abs. Amp. (µV)'); ylim([0 2000])
+xlim([-0.25 1])
+title('a','position',[-0.6 2000],'FontSize',14)
+set(gca,'tickdir','out','box','off','xtick',-0.25:0.25:1,'ytick',0:400:2000)
+
+subplot(1,2,2); hold on
+shadedErrorBar(fft_freq,mean(group_fft),sem(group_fft))
+xlabel('Freq. (Hz)')
+ylabel('Power (a. u.)'); ylim([0 1200000])
+title('b','position',[-10 1200000],'FontSize',14)
+set(gca,'tickdir','out','box','off','xtick',0:10:50,'ytick',(0:2:12)*100000)
+
+print(h,[dir_repos(1:end-10),'figures/supplementary2'],'-dtiff','-r300')

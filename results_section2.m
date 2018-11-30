@@ -36,7 +36,7 @@ for subj = 1 : n_subj
     cfg.width       = 6;
     cfg.output      = 'pow';
     cfg.toi         = -1:0.1:3;
-    cfg.foi         = 8:2:30; % 50hz sampling
+    cfg.foi         = 8:2:30; % 100hz sampling
     cfg.pad         = 'nextpow2';
     freq            = ft_freqanalysis(cfg, source); clear source
 
@@ -134,7 +134,7 @@ keep dir_root
 
 %% Run Statistical Analysis across Whole Brain
 % load data
-load([dir_bids,'data/eeg/source/grand_freq.mat'])
+load([dir_bids,'derivatives/group/eeg/group_task-rf_eeg-freq.mat'])
 
 % get modality names
 modality = fieldnames(grand_hits);
@@ -173,11 +173,11 @@ end
 results_table = table(modality,p,ci,t,dz) %#ok<NOPTS>
 
 % save
-save([dir_bids,'data/eeg/source/stat.mat'],'stat')
+save([dir_bids,'derivatives/group/eeg/group_task-rf_eeg-stat.mat'],'stat','results_table')
 
 %% Create Masked Source and Export
 % load data
-load([dir_bids,'data/eeg/source/stat.mat'])
+load([dir_bids,'derivatives/group/eeg/group_task-rf_eeg-stat.mat'])
 
 % load template MRI
 mri = ft_read_mri('Y:/projects/general/fieldtrip-20170319/template/anatomy/single_subj_T1_1mm.nii');
