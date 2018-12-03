@@ -13,8 +13,13 @@ git_dir  = 'E:\bjg335\projects\reinstatement_fidelity\';
 bear_dir = 'Y:\projects\reinstatement_fidelity\bids_data\';
 data_dir = 'E:\bids\';
 
+% get all 'sub-xx' folders in BIDS directory
+files_to_copy = dir([bear_dir,'sub*']);
+
 % copy bids data to local directory (faster computation)
-copyfile(bear_dir,data_dir)
+for i = 1 : numel(files_to_copy)
+    copyfile([files_to_copy(i).folder,'\',files_to_copy(i).name],[data_dir,files_to_copy(i).name])
+end
 
 % add subfunctions
 addpath([git_dir,'subfunctions'])
@@ -145,7 +150,7 @@ for subj = 1 : n_subj
 
     % copy all files to derivatives folder
     copyfile([subj_dir,'func\'],[data_dir,'derivatives\',subj_handle,'\func\'])
-    copyfile([subj_dir,'func\'],[data_dir,'derivatives\',subj_handle,'\anat\'])
+    copyfile([subj_dir,'anat\'],[data_dir,'derivatives\',subj_handle,'\anat\'])
 
     % get functional bids files in derivatives folder
     bids_files = dir([data_dir,'derivatives\',subj_handle,'\func\sub*']);
