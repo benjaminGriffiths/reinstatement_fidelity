@@ -109,25 +109,24 @@ for subj = 1 : n_subj
     end
        
     % define parameters for GLM
-    matlabbatch{1}.spm.stats.fmri_spec.units            = 'secs';
-    matlabbatch{1}.spm.stats.fmri_spec.RT               = 2;
-    matlabbatch{1}.spm.stats.fmri_spec.fmri_t           = 32;
-    matlabbatch{1}.spm.stats.fmri_spec.fmri_t0          = 16;
-    matlabbatch{1}.spm.stats.fmri_spec.multi            = {''};
-    matlabbatch{1}.spm.stats.fmri_spec.regress.name     = [];
-    matlabbatch{1}.spm.stats.fmri_spec.regress.val      = [];
-    matlabbatch{1}.spm.stats.fmri_spec.hpf              = 128;
-    matlabbatch{1}.spm.stats.fmri_spec.fact.name        = [];
-    matlabbatch{1}.spm.stats.fmri_spec.fact.levels      = [];
-    matlabbatch{1}.spm.stats.fmri_spec.bases.hrf.derivs = [0 0];
     matlabbatch{1}.spm.stats.fmri_spec.volt             = 1;
     matlabbatch{1}.spm.stats.fmri_spec.global           = 'None';
     matlabbatch{1}.spm.stats.fmri_spec.mthresh          = 0.8;
     matlabbatch{1}.spm.stats.fmri_spec.mask             = {''};
     matlabbatch{1}.spm.stats.fmri_spec.cvi              = 'AR(1)';
     matlabbatch{1}.spm.stats.fmri_spec.dir              = {[dir_root,'bids_data/derivatives/',subj_handle,'/spm']};
-    matlabbatch{1}.spm.stats.fmri_spec.sess.scans       = get_scans([local_dir,'swua*.*']);
-    matlabbatch{1}.spm.stats.fmri_spec.sess.multi_reg   = {[dir_root,'bids_data/derivatives/',subj_handle,'/spm/R.mat']};     
+    matlabbatch{1}.spm.stats.fmri_spec.fact             = struct('name', {}, 'levels', {});
+    matlabbatch{1}.spm.stats.fmri_spec.bases.hrf.derivs = [0 0];
+    matlabbatch{1}.spm.stats.fmri_spec.sess.multi       = {''};
+    matlabbatch{1}.spm.stats.fmri_spec.sess.regress     = struct('name', {}, 'val', {});
+    matlabbatch{1}.spm.stats.fmri_spec.sess.hpf         = 128;
+    matlabbatch{1}.spm.stats.fmri_spec.sess.scans       = get_functional_files([dir_root,'bids_data/derivatives/',subj_handle,'/'],'swua');
+    matlabbatch{1}.spm.stats.fmri_spec.sess.scans       = matlabbatch{1}.spm.stats.fmri_spec.sess.scans{1};
+    matlabbatch{1}.spm.stats.fmri_spec.sess.multi_reg   = {[dir_root,'bids_data/derivatives/',subj_handle,'/spm/R.mat']};   
+    matlabbatch{1}.spm.stats.fmri_spec.timing.units     = 'secs';
+    matlabbatch{1}.spm.stats.fmri_spec.timing.RT        = 2;
+    matlabbatch{1}.spm.stats.fmri_spec.timing.fmri_t    = 32;
+    matlabbatch{1}.spm.stats.fmri_spec.timing.fmri_t0   = 16;  
                 
     % add details for each condition
     matlabbatch{1}.spm.stats.fmri_spec.sess.cond(1).name        = 'Visual_Encoding_Recalled';
@@ -135,84 +134,94 @@ for subj = 1 : n_subj
     matlabbatch{1}.spm.stats.fmri_spec.sess.cond(1).duration    = 3;
     matlabbatch{1}.spm.stats.fmri_spec.sess.cond(1).tmod        = 0;
     matlabbatch{1}.spm.stats.fmri_spec.sess.cond(1).orth        = 1;
-    matlabbatch{1}.spm.stats.fmri_spec.sess.cond(1).pmod.name   = [];
-    matlabbatch{1}.spm.stats.fmri_spec.sess.cond(1).pmod.param  = [];
-    matlabbatch{1}.spm.stats.fmri_spec.sess.cond(1).pmod.poly   = [];
+    matlabbatch{1}.spm.stats.fmri_spec.sess.cond(1).pmod        = struct('name',{},'param',{},'poly',{});
     
     matlabbatch{1}.spm.stats.fmri_spec.sess.cond(2).name        = 'Visual_Encoding_Forgotten';
     matlabbatch{1}.spm.stats.fmri_spec.sess.cond(2).onset       = events_table.onset(events_table.isVisual == 1 & events_table.isEncoding == 1 & events_table.isRemembered == 0);
     matlabbatch{1}.spm.stats.fmri_spec.sess.cond(2).duration    = 3;
     matlabbatch{1}.spm.stats.fmri_spec.sess.cond(2).tmod        = 0;
     matlabbatch{1}.spm.stats.fmri_spec.sess.cond(2).orth        = 1;
-    matlabbatch{1}.spm.stats.fmri_spec.sess.cond(2).pmod.name   = [];
-    matlabbatch{1}.spm.stats.fmri_spec.sess.cond(2).pmod.param  = [];
-    matlabbatch{1}.spm.stats.fmri_spec.sess.cond(2).pmod.poly   = [];
+    matlabbatch{1}.spm.stats.fmri_spec.sess.cond(2).pmod        = struct('name',{},'param',{},'poly',{});
     
     matlabbatch{1}.spm.stats.fmri_spec.sess.cond(3).name        = 'Visual_Retrieval_Recalled';
     matlabbatch{1}.spm.stats.fmri_spec.sess.cond(3).onset       = events_table.onset(events_table.isVisual == 1 & events_table.isEncoding == 0 & events_table.isRemembered == 1);
     matlabbatch{1}.spm.stats.fmri_spec.sess.cond(3).duration    = 3;
     matlabbatch{1}.spm.stats.fmri_spec.sess.cond(3).tmod        = 0;
     matlabbatch{1}.spm.stats.fmri_spec.sess.cond(3).orth        = 1;
-    matlabbatch{1}.spm.stats.fmri_spec.sess.cond(3).pmod.name   = [];
-    matlabbatch{1}.spm.stats.fmri_spec.sess.cond(3).pmod.param  = [];
-    matlabbatch{1}.spm.stats.fmri_spec.sess.cond(3).pmod.poly   = [];
+    matlabbatch{1}.spm.stats.fmri_spec.sess.cond(3).pmod        = struct('name',{},'param',{},'poly',{});
     
     matlabbatch{1}.spm.stats.fmri_spec.sess.cond(4).name        = 'Visual_Retrieval_Forgotten';
     matlabbatch{1}.spm.stats.fmri_spec.sess.cond(4).onset       = events_table.onset(events_table.isVisual == 1 & events_table.isEncoding == 0 & events_table.isRemembered == 0);
     matlabbatch{1}.spm.stats.fmri_spec.sess.cond(4).duration    = 3;
     matlabbatch{1}.spm.stats.fmri_spec.sess.cond(4).tmod        = 0;
     matlabbatch{1}.spm.stats.fmri_spec.sess.cond(4).orth        = 1;
-    matlabbatch{1}.spm.stats.fmri_spec.sess.cond(4).pmod.name   = [];
-    matlabbatch{1}.spm.stats.fmri_spec.sess.cond(4).pmod.param  = [];
-    matlabbatch{1}.spm.stats.fmri_spec.sess.cond(4).pmod.poly   = [];
+    matlabbatch{1}.spm.stats.fmri_spec.sess.cond(4).pmod        = struct('name',{},'param',{},'poly',{});
     
     matlabbatch{1}.spm.stats.fmri_spec.sess.cond(5).name        = 'Auditory_Encoding_Recalled';
-    matlabbatch{1}.spm.stats.fmri_spec.sess.cond(5).onset       = events_table.onset(events_table.isVisual == 1 & events_table.isEncoding == 1 & events_table.isRemembered == 1);
+    matlabbatch{1}.spm.stats.fmri_spec.sess.cond(5).onset       = events_table.onset(events_table.isVisual == 0 & events_table.isEncoding == 1 & events_table.isRemembered == 1);
     matlabbatch{1}.spm.stats.fmri_spec.sess.cond(5).duration    = 3;
     matlabbatch{1}.spm.stats.fmri_spec.sess.cond(5).tmod        = 0;
     matlabbatch{1}.spm.stats.fmri_spec.sess.cond(5).orth        = 1;
-    matlabbatch{1}.spm.stats.fmri_spec.sess.cond(5).pmod.name   = [];
-    matlabbatch{1}.spm.stats.fmri_spec.sess.cond(5).pmod.param  = [];
-    matlabbatch{1}.spm.stats.fmri_spec.sess.cond(5).pmod.poly   = [];
+    matlabbatch{1}.spm.stats.fmri_spec.sess.cond(5).pmod        = struct('name',{},'param',{},'poly',{});
     
     matlabbatch{1}.spm.stats.fmri_spec.sess.cond(6).name        = 'Auditory_Encoding_Forgotten';
-    matlabbatch{1}.spm.stats.fmri_spec.sess.cond(6).onset       = events_table.onset(events_table.isVisual == 1 & events_table.isEncoding == 1 & events_table.isRemembered == 0);
+    matlabbatch{1}.spm.stats.fmri_spec.sess.cond(6).onset       = events_table.onset(events_table.isVisual == 0 & events_table.isEncoding == 1 & events_table.isRemembered == 0);
     matlabbatch{1}.spm.stats.fmri_spec.sess.cond(6).duration    = 3;
     matlabbatch{1}.spm.stats.fmri_spec.sess.cond(6).tmod        = 0;
     matlabbatch{1}.spm.stats.fmri_spec.sess.cond(6).orth        = 1;
-    matlabbatch{1}.spm.stats.fmri_spec.sess.cond(6).pmod.name   = [];
-    matlabbatch{1}.spm.stats.fmri_spec.sess.cond(6).pmod.param  = [];
-    matlabbatch{1}.spm.stats.fmri_spec.sess.cond(6).pmod.poly   = [];
+    matlabbatch{1}.spm.stats.fmri_spec.sess.cond(6).pmod        = struct('name',{},'param',{},'poly',{});
     
     matlabbatch{1}.spm.stats.fmri_spec.sess.cond(7).name        = 'Auditory_Retrieval_Recalled';
-    matlabbatch{1}.spm.stats.fmri_spec.sess.cond(7).onset       = events_table.onset(events_table.isVisual == 1 & events_table.isEncoding == 0 & events_table.isRemembered == 1);
+    matlabbatch{1}.spm.stats.fmri_spec.sess.cond(7).onset       = events_table.onset(events_table.isVisual == 0 & events_table.isEncoding == 0 & events_table.isRemembered == 1);
     matlabbatch{1}.spm.stats.fmri_spec.sess.cond(7).duration    = 3;
     matlabbatch{1}.spm.stats.fmri_spec.sess.cond(7).tmod        = 0;
     matlabbatch{1}.spm.stats.fmri_spec.sess.cond(7).orth        = 1;
-    matlabbatch{1}.spm.stats.fmri_spec.sess.cond(7).pmod.name   = [];
-    matlabbatch{1}.spm.stats.fmri_spec.sess.cond(7).pmod.param  = [];
-    matlabbatch{1}.spm.stats.fmri_spec.sess.cond(7).pmod.poly   = [];
+    matlabbatch{1}.spm.stats.fmri_spec.sess.cond(7).pmod        = struct('name',{},'param',{},'poly',{});
     
     matlabbatch{1}.spm.stats.fmri_spec.sess.cond(8).name        = 'Auditory_Retrieval_Forgotten';
-    matlabbatch{1}.spm.stats.fmri_spec.sess.cond(8).onset       = events_table.onset(events_table.isVisual == 1 & events_table.isEncoding == 0 & events_table.isRemembered == 0);
+    matlabbatch{1}.spm.stats.fmri_spec.sess.cond(8).onset       = events_table.onset(events_table.isVisual == 0 & events_table.isEncoding == 0 & events_table.isRemembered == 0);
     matlabbatch{1}.spm.stats.fmri_spec.sess.cond(8).duration    = 3;
     matlabbatch{1}.spm.stats.fmri_spec.sess.cond(8).tmod        = 0;
     matlabbatch{1}.spm.stats.fmri_spec.sess.cond(8).orth        = 1;
-    matlabbatch{1}.spm.stats.fmri_spec.sess.cond(8).pmod.name   = [];
-    matlabbatch{1}.spm.stats.fmri_spec.sess.cond(8).pmod.param  = [];
-    matlabbatch{1}.spm.stats.fmri_spec.sess.cond(8).pmod.poly   = [];
+    matlabbatch{1}.spm.stats.fmri_spec.sess.cond(8).pmod        = struct('name',{},'param',{},'poly',{});
     
-    matlabbatch{1}.spm.stats.fmri_spec.sess.cond(8).name        = 'ButtonPress';
-    matlabbatch{1}.spm.stats.fmri_spec.sess.cond(8).onset       = button_onset;
-    matlabbatch{1}.spm.stats.fmri_spec.sess.cond(8).duration    = 0.5;
-    matlabbatch{1}.spm.stats.fmri_spec.sess.cond(8).tmod        = 0;
-    matlabbatch{1}.spm.stats.fmri_spec.sess.cond(8).orth        = 1;
-    matlabbatch{1}.spm.stats.fmri_spec.sess.cond(8).pmod.name   = [];
-    matlabbatch{1}.spm.stats.fmri_spec.sess.cond(8).pmod.param  = [];
-    matlabbatch{1}.spm.stats.fmri_spec.sess.cond(8).pmod.poly   = [];
+    matlabbatch{1}.spm.stats.fmri_spec.sess.cond(9).name        = 'ButtonPress';
+    matlabbatch{1}.spm.stats.fmri_spec.sess.cond(9).onset       = button_onset;
+    matlabbatch{1}.spm.stats.fmri_spec.sess.cond(9).duration    = 0.5;
+    matlabbatch{1}.spm.stats.fmri_spec.sess.cond(9).tmod        = 0;
+    matlabbatch{1}.spm.stats.fmri_spec.sess.cond(9).orth        = 1;
+    matlabbatch{1}.spm.stats.fmri_spec.sess.cond(9).pmod        = struct('name',{},'param',{},'poly',{});
         
     % specify model
     spm_jobman('run',matlabbatch)
     clear matlabbatch
     
+    % estimate GLM
+    matlabbatch{1}.spm.stats.fmri_est.write_residuals           = 0;
+    matlabbatch{1}.spm.stats.fmri_est.method.Classical          = 1;
+    matlabbatch{1}.spm.stats.fmri_est.spmmat                    = {[dir_root,'bids_data/derivatives/',subj_handle,'/spm/SPM.mat']};
+      
+    % contrast betas
+    matlabbatch{2}.spm.stats.con.delete                         = 0;
+    matlabbatch{2}.spm.stats.con.consess{1}.tcon.name           = 'contrastModality_atEncoding';
+    matlabbatch{2}.spm.stats.con.consess{1}.tcon.convec         = [1 1 0 0 -1 -1 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0];
+    matlabbatch{2}.spm.stats.con.consess{1}.tcon.sessrep        = 'none';
+    matlabbatch{2}.spm.stats.con.consess{2}.tcon.name           = 'contrastModality_atRetrieval';
+    matlabbatch{2}.spm.stats.con.consess{2}.tcon.convec         = [0 0 1 1 0 0 -1 -1 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0];
+    matlabbatch{2}.spm.stats.con.consess{2}.tcon.sessrep        = 'none';
+    matlabbatch{2}.spm.stats.con.consess{4}.tcon.name           = 'contrastModality_retrievalSuccess';
+    matlabbatch{2}.spm.stats.con.consess{4}.tcon.convec         = [0 0 1 0 0 0 -1 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0];
+    matlabbatch{2}.spm.stats.con.consess{4}.tcon.sessrep        = 'none';
+    matlabbatch{2}.spm.stats.con.consess{4}.tcon.name           = 'retrievalSuccess_visual';
+    matlabbatch{2}.spm.stats.con.consess{4}.tcon.convec         = [0 0 1 -1 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0];
+    matlabbatch{2}.spm.stats.con.consess{4}.tcon.sessrep        = 'none';
+    matlabbatch{2}.spm.stats.con.consess{5}.tcon.name           = 'retrievalSuccess_auditory';
+    matlabbatch{2}.spm.stats.con.consess{5}.tcon.convec         = [0 0 0 0 0 0 1 -1 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0];
+    matlabbatch{2}.spm.stats.con.consess{5}.tcon.sessrep        = 'none';
+    matlabbatch{2}.spm.stats.con.spmmat(1)                      = {[dir_root,'bids_data/derivatives/',subj_handle,'/spm/SPM.mat']};    
+    
+    % run job
+    spm_jobman('run',matlabbatch)
+    clear matlabbatch
+        
 end
