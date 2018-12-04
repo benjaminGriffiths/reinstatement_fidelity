@@ -108,6 +108,9 @@ for subj = 1 : n_subj
         end
     end
        
+    % convert event onsets from EEG samples to seconds
+    events_table.onset =  events_table.onset ./ EEG_sample;
+    
     % define parameters for GLM
     matlabbatch{1}.spm.stats.fmri_spec.volt             = 1;
     matlabbatch{1}.spm.stats.fmri_spec.global           = 'None';
