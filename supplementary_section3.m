@@ -79,7 +79,7 @@ for subj = 1 : n_subj
     for run = 1 : n_runs
 
         % load event table
-        tbl = readtable([dir_root,'bids_data/',subj_handle,'/func/',subj_handle,'_task-rf_run-1_events.tsv'],'FileType','text','Delimiter','\t');
+        tbl = readtable([dir_root,'bids_data/',subj_handle,'/func/',subj_handle,'_task-rf_run-',num2str(run),'_events.tsv'],'FileType','text','Delimiter','\t');
         
         % add length of prior scans to this event table
         tbl.onset = tbl.onset + LoS;
@@ -108,8 +108,9 @@ for subj = 1 : n_subj
         end
     end
        
-    % convert event onsets from EEG samples to seconds
+    % convert event onsets and button presses from EEG samples to seconds
     events_table.onset =  events_table.onset ./ EEG_sample;
+    button_onset = button_onset ./ EEG_sample;
     
     % define parameters for GLM
     matlabbatch{1}.spm.stats.fmri_spec.volt             = 1;
