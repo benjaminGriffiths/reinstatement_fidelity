@@ -30,7 +30,7 @@ addpath([dir_repos,'subfunctions'])
 
 %% Run First-Level Analysis
 % cycle through each subject
-for subj = 1 : n_subj
+for subj = 4 : n_subj
     
     % define key subject strings
     subj_handle = sprintf('sub-%02.0f',subj);
@@ -115,7 +115,7 @@ for subj = 1 : n_subj
     % define parameters for GLM
     matlabbatch{1}.spm.stats.fmri_spec.volt             = 1;
     matlabbatch{1}.spm.stats.fmri_spec.global           = 'None';
-    matlabbatch{1}.spm.stats.fmri_spec.mthresh          = 0.8;
+    matlabbatch{1}.spm.stats.fmri_spec.mthresh          = 0.7;
     matlabbatch{1}.spm.stats.fmri_spec.mask             = {''};
     matlabbatch{1}.spm.stats.fmri_spec.cvi              = 'AR(1)';
     matlabbatch{1}.spm.stats.fmri_spec.dir              = {[dir_root,'bids_data/derivatives/',subj_handle,'/spm']};
@@ -228,4 +228,59 @@ for subj = 1 : n_subj
     spm_jobman('run',matlabbatch)
     clear matlabbatch
         
+end
+
+%% Run Second-Level Stats
+% define each first-level contrast name
+contrast_labels = {'contrastModality_atEncoding' 'contrastModality_atRetrieval' 'contrastModality_retrievalSuccess' 'retrievalSuccess_visual' 'retrievalSuccess_auditory'};
+
+% cycle through each first-level contrast
+for i = 1 : numel(contrast_labels)
+    
+    % define directory for second-level analysis
+    stat_dir = [dir_root,'bids_data/derivatives/group/spm/',contrast_labels{i},'/'];
+    mkdir(stat_dir)
+    
+    % predefine cell to hold contrast filenames
+    contrast_files = cell(n_subj,1);
+    
+    % cycle through each subkect
+    for subj = 1 : n_subj
+        
+        % add filename of contrast image to group cell
+        subj_handle = sprintf('sub-%02.0f',subj);
+        contrast_files{subj,1} = [dir_root,'bids_data/derivatives/',subj_handle,'/spm/con_',sprintf('%04.0f',i),'.nii'];
+        
+        clear subj_handle
+    end
+    
+    % specify model
+    matlabbatch{1}.spm.stats.factorial_design.cov                       = struct('c',{},'cname',{},'iCFI',{},'iCC',{});
+    matlabbatch{1}.spm.stats.factorial_design.multi_cov                 = struct('files',{},'iCFI',{},'iCC',{});
+    matlabbatch{1}.spm.stats.factorial_design.masking.tm.tm_none        = 1;
+    matlabbatch{1}.spm.stats.factorial_design.masking.im                = 0;
+    matlabbatch{1}.spm.stats.factorial_design.masking.em                = {''};
+    matlabbatch{1}.spm.stats.factorial_design.globalc.g_omit            = 1;
+    matlabbatch{1}.spm.stats.factorial_design.globalm.gmsca.gmsca_no    = 1;
+    matlabbatch{1}.spm.stats.factorial_design.globalm.glonorm           = 1;
+    matlabbatch{1}.spm.stats.factorial_design.dir                       = {stat_dir};
+    matlabbatch{1}.spm.stats.factorial_design.des.t1.scans              = contrast_files;
+    
+    % estimate model
+    matlabbatch{2}.spm.stats.fmri_est.write_residuals                   = 0;
+    matlabbatch{2}.spm.stats.fmri_est.method.Classical                  = 1;
+    matlabbatch{2}.spm.stats.fmri_est.spmmat                            = {[stat_dir,'SPM.mat']};
+
+    % define contrasts
+    matlabbatch{3}.spm.stats.con.delete                                 = 0;
+    matlabbatch{3}.spm.stats.con.consess{1}.tcon.name                   = 'positive';
+    matlabbatch{3}.spm.stats.con.consess{1}.tcon.convec                 = 1;
+    matlabbatch{3}.spm.stats.con.consess{1}.tcon.sessrep                = 'none';
+    matlabbatch{3}.spm.stats.con.consess{2}.tcon.name                   = 'negative';
+    matlabbatch{3}.spm.stats.con.consess{2}.tcon.convec                 = -1;
+    matlabbatch{3}.spm.stats.con.consess{2}.tcon.sessrep                = 'none';    
+    matlabbatch{3}.spm.stats.con.spmmat(1)                              = {[stat_dir,'SPM.mat']};  
+
+    spm_jobman('run',matlabbatch)
+    clear matlabbatch
 end

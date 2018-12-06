@@ -7,7 +7,7 @@ clc
 % define root directory
 if ispc;    dir_bids = 'Y:/projects/reinstatement_fidelity/bids_data/';
             dir_tool = 'Y:/projects/general/';
-            dir_repos  = 'E:/bjg335/projects/reinstatement_fidelity/bids_data/'; % repository directory
+            dir_repos = 'E:/bjg335/projects/reinstatement_fidelity/bids_data/'; % repository directory
 else;       dir_bids = '/media/bjg335/rds-share-2018-hanslmas-memory/projects/reinstatement_fidelity';
             dir_tool = '/media/bjg335/rds-share-2018-hanslmas-memory/projects/general';
 end
@@ -243,3 +243,67 @@ tbl = table(rse);
 
 % write table
 writetable(tbl,[dir_bids,'derivatives/group/eeg/group_task-rf_eeg-cluster.csv'],'Delimiter',',')
+
+%% Get TF of Source Data
+% load stat
+load([dir_bids,'derivatives/group/eeg/group_task-rf_eeg-stat.mat'])
+
+% predefine group power matrix
+toi         = -0.5 : 0.1 : 2;
+foi         = 4 : 2 : 40;
+group_pow   = nan(n_subj,numel(foi),numel(toi));
+
+% cycle through each subject
+for subj = 1 : n_subj
+    
+    % define subject handle
+    subj_handle = sprintf('sub-%02.0f',subj);
+    dir_subj = [dir_bids,'sourcedata/',subj_handle,'/eeg/'];
+    
+    % load
+    load([dir_bids,'sourcedata/',subj_handle,'/eeg/',subj_handle,'_task-rf_eeg.mat'])
+    
+    % restrict source to channels in cluster
+    cfg             = [];
+    cfg.channel     = source.label(stat.video.negclusterslabelmat(stat.video.inside==1)==1);
+    source          = ft_selectdata(cfg,source);
+        
+    % get time-frequency representation of data
+    cfg             = [];
+    cfg.keeptrials  = 'yes';
+    cfg.method      = 'wavelet';
+    cfg.width       = 6;
+    cfg.output      = 'pow';
+    cfg.toi         = toi;
+    cfg.foi         = foi; % 100hz sampling
+    cfg.pad         = 'nextpow2';
+    freq            = ft_freqanalysis(cfg, source); clear source
+
+    % convert powspctrm to single
+    freq.powspctrm = single(freq.powspctrm);
+    
+    % z-transform
+    avg_pow = repmat(nanmean(nanmean(freq.powspctrm,4),1),[size(freq.powspctrm,1) 1 1 size(freq.powspctrm,4)]);
+    std_pow = repmat(nanstd(nanmean(freq.powspctrm,4),[],1),[size(freq.powspctrm,1) 1 1 size(freq.powspctrm,4)]);
+    freq.powspctrm = (freq.powspctrm - avg_pow) ./ std_pow; clear avg_pow std_pow
+    
+    % split into hits and misses
+    cfg         = [];
+    cfg.trials  = hit_bool==1 & audio_bool==0;
+    freqtmp{1}  = ft_freqdescriptives(cfg, freq);
+
+    cfg         = [];
+    cfg.trials  = hit_bool==0 & audio_bool==0;
+    freqtmp{2}  = ft_freqdescriptives(cfg, freq);
+        
+    % take difference
+    group_pow(subj,:,:) = squeeze(nanmean(freqtmp{1}.powspctrm - freqtmp{2}.powspctrm,1));
+    
+    % clean workspace
+    clear subj_handle freq freqtmp cfg brainGeo avg_pow std_pow
+end
+
+% save group timeseries
+save([dir_bids,'derivatives/group/eeg/group_task-rf_eeg-spectogram.mat'],'group_pow')
+
+
