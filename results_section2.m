@@ -7,13 +7,13 @@ clc
 % define root directory
 if ispc;    dir_bids = 'Y:/projects/reinstatement_fidelity/bids_data/';
             dir_tool = 'Y:/projects/general/';
-            dir_repos = 'E:/bjg335/projects/reinstatement_fidelity/bids_data/'; % repository directory
+            dir_repos = 'E:/bjg335/projects/reinstatement_fidelity/'; % repository directory
 else;       dir_bids = '/media/bjg335/rds-share-2018-hanslmas-memory/projects/reinstatement_fidelity';
             dir_tool = '/media/bjg335/rds-share-2018-hanslmas-memory/projects/general';
 end
 
 % add subfunctions
-addpath([dir_bids,'scripts/subfunctions'])
+addpath([dir_repos,'subfunctions'])
 
 % define number of subjects
 n_subj = 21;
@@ -286,6 +286,9 @@ for subj = 1 : n_subj
     avg_pow = repmat(nanmean(nanmean(freq.powspctrm,4),1),[size(freq.powspctrm,1) 1 1 size(freq.powspctrm,4)]);
     std_pow = repmat(nanstd(nanmean(freq.powspctrm,4),[],1),[size(freq.powspctrm,1) 1 1 size(freq.powspctrm,4)]);
     freq.powspctrm = (freq.powspctrm - avg_pow) ./ std_pow; clear avg_pow std_pow
+    
+    % find audio/video hit/miss trials
+    [audio_bool,hit_bool]   = get_splits_eeg(freq);
     
     % split into hits and misses
     cfg         = [];
