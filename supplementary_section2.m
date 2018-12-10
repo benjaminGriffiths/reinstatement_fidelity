@@ -141,3 +141,81 @@ title('b','position',[-10 1200000],'FontSize',14)
 set(gca,'tickdir','out','box','off','xtick',0:10:50,'ytick',(0:2:12)*100000)
 
 print(h,[dir_repos(1:end-10),'figures/supplementary2'],'-dtiff','-r300')
+
+%% Run Whole Brain Timelock Analysis
+% load template grid
+load('Y:/projects/general/fieldtrip-20170319/template/sourcemodel/standard_sourcemodel3d4mm.mat'); 
+template_grid = sourcemodel; clear sourcemodel
+
+% predefine matrices for data
+group_erp = nan(n_subj,23156);
+
+% cycle through each subject
+for subj = 1 : n_subj
+    
+    % define subject handle
+    subj_handle = sprintf('sub-%02.0f',subj);
+    
+    % load
+    load([dir_bids,'sourcedata/',subj_handle,'/eeg/',subj_handle,'_task-rf_eeg.mat'])
+        
+    % get timelocked data
+    tml             = ft_timelockanalysis([],source);
+    
+    % filter
+    cfg             = [];
+    cfg.lpfilter    = 'yes';
+    cfg.lpfreq      = 15;
+    tml             = ft_preprocessing(cfg,tml);
+    
+    % take absolute of timelocked data (address phase differences between subjs)
+    tml.avg = abs(tml.avg);    
+    
+    % baseline correct timelocked data
+    cfg             = [];
+    cfg.baseline    = [-0.25 0];
+    tml             = ft_timelockbaseline(cfg,tml);
+    
+    % average over channels
+    cfg             = [];
+    cfg.latency     = [0.1 0.2];
+    cfg.avgovertime = 'yes';
+    tml             = ft_selectdata(cfg,tml);
+    
+    % extract data
+    group_erp(subj,:) = tml.avg;
+        
+    % clean workspace
+    clear subj_handle source trl cfg tml subj_fft chan
+end
+
+% create source data structure
+source                  = [];
+source.inside           = brainGeo.inside;
+source.dim              = brainGeo.dim;
+source.pos              = template_grid.pos*10;
+source.unit             = 'mm';
+
+% define powspctrm of cluster
+source.pow              = nan(size(brainGeo.pos,1),1);     
+source.pow(brainGeo.inside==1)	= nanmean(group_erp,1); 
+
+% reshape data to 3D
+source.pow              = reshape(source.pow,source.dim);
+source.inside           = reshape(source.inside,source.dim);
+
+% add transformation matrix
+source.transform        = [1,0,0,-91;
+                           0,1,0,-127;
+                           0,0,1,-73;
+                           0,0,0,1];
+
+% export
+cfg = [];
+cfg.parameter     = 'pow';               % specify the functional parameter to write to the .nii file
+cfg.filename      = [dir_bids,'derivatives/group/eeg/group_task-rf_eeg-erpmap.nii'];  % enter the desired file name
+cfg.filetype      = 'nifti';
+cfg.coordsys      = 'spm';
+cfg.vmpversion    = 2;
+cfg.datatype      = 'float';
+ft_volumewrite(cfg,source);      % be sure to use your interpolated source data
