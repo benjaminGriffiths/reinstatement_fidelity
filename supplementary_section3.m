@@ -37,34 +37,10 @@ for subj = 1 : n_subj
     dir_subj = [dir_root,'bids_data/',subj_handle,'/'];
     
     % make directory for SPM data
-    delete([dir_root,'bids_data/derivatives/',subj_handle,'/spm/'])
     mkdir([dir_root,'bids_data/derivatives/',subj_handle,'/spm/'])
     
-    % load movement parameters
-    R = load([dir_root,'bids_data/derivatives/',subj_handle,'/func/rp_a',subj_handle,'_task-rf_run-1_bold.txt']);
-    
-    % add regressors that model the per-block linear change
-    R(1+(n_volumes*0):n_volumes*1,7) = linspace(0,1,n_volumes);
-    R(1+(n_volumes*2):n_volumes*3,8) = linspace(0,1,n_volumes);
-    R(1+(n_volumes*4):n_volumes*5,9) = linspace(0,1,n_volumes);
-    R(1+(n_volumes*6):n_volumes*7,10) = linspace(0,1,n_volumes);
-    R(1+(n_volumes*1):n_volumes*2,11) = linspace(0,1,n_volumes);
-    R(1+(n_volumes*3):n_volumes*4,12) = linspace(0,1,n_volumes);
-    R(1+(n_volumes*5):n_volumes*6,13) = linspace(0,1,n_volumes);
-    R(1+(n_volumes*7):n_volumes*8,14) = linspace(0,1,n_volumes);
-    
-    % add regressors that model the per-block constant
-    R(1+(n_volumes*0):n_volumes*1,15) = zeros(1,n_volumes);
-    R(1+(n_volumes*2):n_volumes*3,16) = zeros(1,n_volumes);
-    R(1+(n_volumes*4):n_volumes*5,17) = zeros(1,n_volumes);
-    R(1+(n_volumes*6):n_volumes*7,18) = zeros(1,n_volumes);
-    R(1+(n_volumes*1):n_volumes*2,19) = zeros(1,n_volumes);
-    R(1+(n_volumes*3):n_volumes*4,20) = zeros(1,n_volumes);
-    R(1+(n_volumes*5):n_volumes*6,21) = zeros(1,n_volumes);
-    R(1+(n_volumes*7):n_volumes*8,21) = zeros(1,n_volumes); 
-    
-    % save nuisance regressors
-    save([dir_root,'bids_data/derivatives/',subj_handle,'/spm/R.mat'],'R')        
+    % delete old SPM file if it exists
+    if exist([dir_root,'bids_data/derivatives/',subj_handle,'/spm/SPM.mat'],'file'); delete([dir_root,'bids_data/derivatives/',subj_handle,'/spm/SPM.mat']); end
     
     % create cell to hold events data
     events_table  = array2table(zeros(n_trials*2,4), 'VariableNames', {'onset','isVisual','isEncoding','isRemembered'});
@@ -81,6 +57,12 @@ for subj = 1 : n_subj
 
         % load event table
         tbl = readtable([dir_root,'bids_data/',subj_handle,'/func/',subj_handle,'_task-rf_run-',num2str(run),'_events.tsv'],'FileType','text','Delimiter','\t');
+        
+        % remove first three volumes and last five volumes
+        tbl = tbl(4:end-5,:);
+        
+        % adjust time accordingly
+        tbl.onset = tbl.onset - 30000;
         
         % add length of prior scans to this event table
         tbl.onset = tbl.onset + LoS;
@@ -111,12 +93,57 @@ for subj = 1 : n_subj
        
     % convert event onsets and button presses from EEG samples to seconds
     events_table.onset =  events_table.onset ./ EEG_sample;
-    button_onset = button_onset ./ EEG_sample;
+    button_onset = button_onset ./ EEG_sample;    
+    
+    % load movement parameters
+    R = load([dir_root,'bids_data/derivatives/',subj_handle,'/func/rp_a',subj_handle,'_task-rf_run-1_bold.txt']);
+    
+    % find first three volumes and last five volumes of each run
+    bad_scans = zeros(8*n_runs,1);
+    for run = 1 : n_runs
+        bad_scans(1+(8*(run-1)):8*run) = [1 2 3 251 252 253 254 255] + n_volumes*(run-1);
+    end
+    
+    % remove these scans
+    R(bad_scans,:) = [];
+    
+    % define number of volumes remaining in a run
+    n_volumes_adj = n_volumes - 8;
+    
+    % add regressors that model the per-block linear change
+    R(1+(n_volumes_adj*0):n_volumes_adj*1,7) = linspace(0,1,n_volumes_adj);
+    R(1+(n_volumes_adj*2):n_volumes_adj*3,8) = linspace(0,1,n_volumes_adj);
+    R(1+(n_volumes_adj*4):n_volumes_adj*5,9) = linspace(0,1,n_volumes_adj);
+    R(1+(n_volumes_adj*6):n_volumes_adj*7,10) = linspace(0,1,n_volumes_adj);
+    R(1+(n_volumes_adj*1):n_volumes_adj*2,11) = linspace(0,1,n_volumes_adj);
+    R(1+(n_volumes_adj*3):n_volumes_adj*4,12) = linspace(0,1,n_volumes_adj);
+    R(1+(n_volumes_adj*5):n_volumes_adj*6,13) = linspace(0,1,n_volumes_adj);
+    R(1+(n_volumes_adj*7):n_volumes_adj*8,14) = linspace(0,1,n_volumes_adj);
+    
+    % add regressors that model the per-block constant
+    R(1+(n_volumes_adj*0):n_volumes_adj*1,15) = zeros(1,n_volumes_adj);
+    R(1+(n_volumes_adj*2):n_volumes_adj*3,16) = zeros(1,n_volumes_adj);
+    R(1+(n_volumes_adj*4):n_volumes_adj*5,17) = zeros(1,n_volumes_adj);
+    R(1+(n_volumes_adj*6):n_volumes_adj*7,18) = zeros(1,n_volumes_adj);
+    R(1+(n_volumes_adj*1):n_volumes_adj*2,19) = zeros(1,n_volumes_adj);
+    R(1+(n_volumes_adj*3):n_volumes_adj*4,20) = zeros(1,n_volumes_adj);
+    R(1+(n_volumes_adj*5):n_volumes_adj*6,21) = zeros(1,n_volumes_adj);
+    R(1+(n_volumes_adj*7):n_volumes_adj*8,21) = zeros(1,n_volumes_adj); 
+    
+    % save nuisance regressors
+    save([dir_root,'bids_data/derivatives/',subj_handle,'/spm/R.mat'],'R')            
+    
+    % get all scans for GLM
+    all_scans = get_functional_files([dir_root,'bids_data/derivatives/',subj_handle,'/'],'swua');
+    all_scans = all_scans{1};
+    
+    % remove bad scans
+    all_scans(bad_scans) = [];
     
     % define parameters for GLM
     matlabbatch{1}.spm.stats.fmri_spec.volt             = 1;
     matlabbatch{1}.spm.stats.fmri_spec.global           = 'None';
-    matlabbatch{1}.spm.stats.fmri_spec.mthresh          = 0.7;
+    matlabbatch{1}.spm.stats.fmri_spec.mthresh          = 0.8;
     matlabbatch{1}.spm.stats.fmri_spec.mask             = {''};
     matlabbatch{1}.spm.stats.fmri_spec.cvi              = 'AR(1)';
     matlabbatch{1}.spm.stats.fmri_spec.dir              = {[dir_root,'bids_data/derivatives/',subj_handle,'/spm']};
@@ -125,8 +152,7 @@ for subj = 1 : n_subj
     matlabbatch{1}.spm.stats.fmri_spec.sess.multi       = {''};
     matlabbatch{1}.spm.stats.fmri_spec.sess.regress     = struct('name', {}, 'val', {});
     matlabbatch{1}.spm.stats.fmri_spec.sess.hpf         = 128;
-    matlabbatch{1}.spm.stats.fmri_spec.sess.scans       = get_functional_files([dir_root,'bids_data/derivatives/',subj_handle,'/'],'swua');
-    matlabbatch{1}.spm.stats.fmri_spec.sess.scans       = matlabbatch{1}.spm.stats.fmri_spec.sess.scans{1};
+    matlabbatch{1}.spm.stats.fmri_spec.sess.scans       = all_scans;
     matlabbatch{1}.spm.stats.fmri_spec.sess.multi_reg   = {[dir_root,'bids_data/derivatives/',subj_handle,'/spm/R.mat']};   
     matlabbatch{1}.spm.stats.fmri_spec.timing.units     = 'secs';
     matlabbatch{1}.spm.stats.fmri_spec.timing.RT        = 2;
