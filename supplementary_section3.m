@@ -30,13 +30,14 @@ addpath([dir_repos,'subfunctions'])
 
 %% Run First-Level Analysis
 % cycle through each subject
-for subj = 4 : n_subj
+for subj = 1 : n_subj
     
     % define key subject strings
     subj_handle = sprintf('sub-%02.0f',subj);
     dir_subj = [dir_root,'bids_data/',subj_handle,'/'];
     
     % make directory for SPM data
+    delete([dir_root,'bids_data/derivatives/',subj_handle,'/spm/'])
     mkdir([dir_root,'bids_data/derivatives/',subj_handle,'/spm/'])
     
     % load movement parameters
