@@ -245,12 +245,11 @@ tbl = table(rse);
 writetable(tbl,[dir_bids,'derivatives/group/eeg/group_task-rf_eeg-cluster.csv'],'Delimiter',',')
 
 %% Get TF of Source Data
-% load stat
 load([dir_bids,'derivatives/group/eeg/group_task-rf_eeg-stat.mat'])
 
 % predefine group power matrix
-toi         = -0.5 : 0.1 : 2;
-foi         = 4 : 2 : 40;
+toi         = -0.5 : 0.05 : 2;
+foi         = 4 : 1 : 40;
 group_pow   = nan(n_subj,numel(foi),numel(toi));
 
 % cycle through each subject
@@ -309,4 +308,14 @@ end
 % save group timeseries
 save([dir_bids,'derivatives/group/eeg/group_task-rf_eeg-spectogram.mat'],'group_pow')
 
+%% Plot TF
+% load data
+load([dir_bids,'derivatives/group/eeg/group_task-rf_eeg-spectogram.mat'])
 
+% define time and frequecy
+toi         = -0.5 : 0.05 : 2;
+foi         = 4 : 1 : 40;
+
+% plot
+figure; hold on;
+imagesc(toi,foi,squeeze(mean(group_pow,1)))

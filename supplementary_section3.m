@@ -235,20 +235,17 @@ for subj = 1 : n_subj
     % contrast betas
     matlabbatch{2}.spm.stats.con.delete                         = 0;
     matlabbatch{2}.spm.stats.con.consess{1}.tcon.name           = 'contrastModality_atEncoding';
-    matlabbatch{2}.spm.stats.con.consess{1}.tcon.convec         = [1 1 0 0 -1 -1 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0];
+    matlabbatch{2}.spm.stats.con.consess{1}.tcon.convec         = [1 0 0 0 -1 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0];
     matlabbatch{2}.spm.stats.con.consess{1}.tcon.sessrep        = 'none';
     matlabbatch{2}.spm.stats.con.consess{2}.tcon.name           = 'contrastModality_atRetrieval';
-    matlabbatch{2}.spm.stats.con.consess{2}.tcon.convec         = [0 0 1 1 0 0 -1 -1 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0];
+    matlabbatch{2}.spm.stats.con.consess{2}.tcon.convec         = [0 0 1 0 0 0 -1 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0];
     matlabbatch{2}.spm.stats.con.consess{2}.tcon.sessrep        = 'none';
-    matlabbatch{2}.spm.stats.con.consess{3}.tcon.name           = 'contrastModality_retrievalSuccess';
-    matlabbatch{2}.spm.stats.con.consess{3}.tcon.convec         = [0 0 1 0 0 0 -1 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0];
+    matlabbatch{2}.spm.stats.con.consess{3}.tcon.name           = 'retrievalSuccess_visual';
+    matlabbatch{2}.spm.stats.con.consess{3}.tcon.convec         = [0 0 1 -1 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0];
     matlabbatch{2}.spm.stats.con.consess{3}.tcon.sessrep        = 'none';
-    matlabbatch{2}.spm.stats.con.consess{4}.tcon.name           = 'retrievalSuccess_visual';
-    matlabbatch{2}.spm.stats.con.consess{4}.tcon.convec         = [0 0 1 -1 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0];
+    matlabbatch{2}.spm.stats.con.consess{4}.tcon.name           = 'retrievalSuccess_auditory';
+    matlabbatch{2}.spm.stats.con.consess{4}.tcon.convec         = [0 0 0 0 0 0 1 -1 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0];
     matlabbatch{2}.spm.stats.con.consess{4}.tcon.sessrep        = 'none';
-    matlabbatch{2}.spm.stats.con.consess{5}.tcon.name           = 'retrievalSuccess_auditory';
-    matlabbatch{2}.spm.stats.con.consess{5}.tcon.convec         = [0 0 0 0 0 0 1 -1 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0];
-    matlabbatch{2}.spm.stats.con.consess{5}.tcon.sessrep        = 'none';
     matlabbatch{2}.spm.stats.con.spmmat(1)                      = {[dir_root,'bids_data/derivatives/',subj_handle,'/spm/SPM.mat']};    
     
     % run job
@@ -259,7 +256,7 @@ end
 
 %% Run Second-Level Stats
 % define each first-level contrast name
-contrast_labels = {'contrastModality_atEncoding' 'contrastModality_atRetrieval' 'contrastModality_retrievalSuccess' 'retrievalSuccess_visual' 'retrievalSuccess_auditory'};
+contrast_labels = {'contrastModality_atEncoding' 'contrastModality_atRetrieval' 'retrievalSuccess_visual' 'retrievalSuccess_auditory'};
 
 % cycle through each first-level contrast
 for i = 1 : numel(contrast_labels)
