@@ -16,6 +16,9 @@ dir_repos   = 'E:/bjg335/projects/reinstatement_fidelity/'; % repository directo
 n_subj      = 21;                                           % number of subjects
 n_trials    = 192;                                          % number of trials
 n_volumes   = 255;                                          % number of volumes
+n_runs      = 8;
+TR          = 2;
+EEG_sample  = 5000;
 scan_fov    = [64 64 32];                                   % scan field of view
 scan_vox    = [3 3 4];                                      % scan voxel size
 scan_search = 12;                                           % searchlight radius
@@ -63,7 +66,7 @@ end
 for subj = 1 : n_subj
     
     % update command line
-    fprintf('/n--- Working on Subject %d ---------/n',subj)
+    fprintf('\n--- Working on Subject %d ---------\n',subj)
     
     % define key subject strings
     subj_handle = sprintf('sub-%02.0f',subj);
@@ -77,7 +80,7 @@ for subj = 1 : n_subj
     maskImg(1,:) = reshape(nii.img,1,[]);
 
     % predefine matrix for functional data
-    scanVec = zeros(n_volumes.*numel(scan_func),numel(nii.img));
+    scanVec = zeros((n_volumes-8).*numel(scan_func),numel(nii.img));
     
     % start scan counter
     scanCount = 1;
@@ -91,31 +94,34 @@ for subj = 1 : n_subj
 
         % read in nifti file
         nii = load_untouch_nii(filename);
-
-        % cycle through each scan
-        for j = 1 : n_volumes
+        
+        % define good scans
+        good_scans = 4 : n_volumes-5;
+        
+        % cycle through each scan (excluding first three and last five)
+        for j = 1 : numel(good_scans)
             
             % extract image
-            scanVec(scanCount,:) = reshape(nii.img(:,:,:,j),1,[]);
+            scanVec(scanCount,:) = reshape(nii.img(:,:,:,good_scans(j)),1,[]);
             
             % count scan as read in
             scanCount = scanCount + 1;            
         end
         
         % update command line
-        fprintf('Run %d of %d read in.../n',i,numel(scan_func))
+        fprintf('Run %d of %d read in...\n',i,numel(scan_func))
     end
     
     % clear up
     clear i j filename scanCount nii
     
     % save
-    fprintf('/nSaving full volume.../n')
+    fprintf('\nSaving full volume...\n')
     mkdir([dir_root,'bids_data/derivatives/',subj_handle,'/rsa/'])
     save([dir_root,'bids_data/derivatives/',subj_handle,'/rsa/',subj_handle,'_task-rf_rsa-fullVolume.mat'],'scanVec')
     
     % apply mask to scans
-    fprintf('Masking data.../n')
+    fprintf('Masking data...\n')
     
     % define patterns for mask
     patterns = scanVec;
@@ -136,7 +142,7 @@ for subj = 1 : n_subj
     patterns(:,any(patterns == 0)) = [];
     
     % save
-    fprintf('Saving masked volumes.../n')
+    fprintf('Saving masked volumes...\n')
     save([dir_root,'bids_data/derivatives/',subj_handle,'/rsa/',subj_handle,'_task-rf_rsa-maskedVolume.mat'],'patterns')
     save([dir_root,'bids_data/derivatives/',subj_handle,'/rsa/',subj_handle,'_task-rf_rsa-mask.mat'],'mask_idx')
     
@@ -168,7 +174,7 @@ for subj = 1 : n_subj
     clear subjHandle meanPattern patterns
 end
 
-%% Prepare GLMs and Data for Searchlight Analysis
+%% Create GLM Model
 % cycle through each subject
 for subj = 1 : n_subj
     
@@ -176,38 +182,230 @@ for subj = 1 : n_subj
     subj_handle = sprintf('sub-%02.0f',subj);
     dir_subj = [dir_root,'bids_data/',subj_handle,'/'];
     
+    % delete old SPM file if it exists
+    if exist([dir_root,'bids_data/derivatives/',subj_handle,'/rsa/SPM.mat'],'file'); delete([dir_root,'bids_data/derivatives/',subj_handle,'/rsa/SPM.mat']); end
+    
+    % create cell to hold events data
+    events_onset  = zeros(n_trials*2,1);
+    count = 1;
+    
+    % create array to hold button press onsets
+    button_onset = [];
+    
+    % define 'length of scan'
+    LoS = 0;
+        
+    % cycle through each run
+    for run = 1 : n_runs
+
+        % load event table
+        tbl = readtable([dir_root,'bids_data/',subj_handle,'/func/',subj_handle,'_task-rf_run-',num2str(run),'_events.tsv'],'FileType','text','Delimiter','\t');
+        
+        % remove first three volumes and last five volumes
+        tbl = tbl(4:end-5,:);
+        
+        % adjust time accordingly
+        tbl.onset = tbl.onset - 30000;
+        
+        % add length of prior scans to this event table
+        tbl.onset = tbl.onset + LoS;
+        
+        % extract 'length of scan' and add on additional scan for next iteration
+        LoS = max(tbl.onset) + (TR*EEG_sample)-1;
+        
+        % cut table to stimulus onset
+        tbl = tbl(ismember(tbl.trial_type,'Stimulus Onset'),:);
+        
+        % cycle through every event
+        for e = 1 : size(tbl,1)
+            
+            % add key values
+            events_onset(count) = tbl.onset(e);
+            
+            % get button press onset (if pressed)
+            if ~isnan(tbl.rt(e)); button_onset(end+1,1) = tbl.onset(e) + tbl.rt(e); end %#ok<SAGROW>
+                
+            % update counter
+            count = count + 1;
+            
+        end
+    end
+    
+    % tidy up
+    clear count e tbl LoS run
+       
+    % convert event onsets and button presses from EEG samples to seconds
+    events_onset = events_onset ./ EEG_sample;
+    button_onset = button_onset ./ EEG_sample;    
+    
+    % load movement parameters
+    R = load([dir_root,'bids_data/derivatives/',subj_handle,'/func/rp_a',subj_handle,'_task-rf_run-1_bold.txt']);
+    
+    % find first three volumes and last five volumes of each run
+    bad_scans = zeros(8*n_runs,1);
+    for run = 1 : n_runs
+        bad_scans(1+(8*(run-1)):8*run) = [1 2 3 251 252 253 254 255] + n_volumes*(run-1);
+    end
+    
+    % remove these scans
+    R(bad_scans,:) = [];
+    
+    % define number of volumes remaining in a run
+    n_volumes_adj = n_volumes - 8;
+    
+    % add regressors that model the per-block linear change
+    R(1+(n_volumes_adj*0):n_volumes_adj*1,7) = linspace(0,1,n_volumes_adj);
+    R(1+(n_volumes_adj*2):n_volumes_adj*3,8) = linspace(0,1,n_volumes_adj);
+    R(1+(n_volumes_adj*4):n_volumes_adj*5,9) = linspace(0,1,n_volumes_adj);
+    R(1+(n_volumes_adj*6):n_volumes_adj*7,10) = linspace(0,1,n_volumes_adj);
+    R(1+(n_volumes_adj*1):n_volumes_adj*2,11) = linspace(0,1,n_volumes_adj);
+    R(1+(n_volumes_adj*3):n_volumes_adj*4,12) = linspace(0,1,n_volumes_adj);
+    R(1+(n_volumes_adj*5):n_volumes_adj*6,13) = linspace(0,1,n_volumes_adj);
+    R(1+(n_volumes_adj*7):n_volumes_adj*8,14) = linspace(0,1,n_volumes_adj);
+    
+    % add regressors that model the per-block constant
+    R(1+(n_volumes_adj*0):n_volumes_adj*1,15) = zeros(1,n_volumes_adj);
+    R(1+(n_volumes_adj*2):n_volumes_adj*3,16) = zeros(1,n_volumes_adj);
+    R(1+(n_volumes_adj*4):n_volumes_adj*5,17) = zeros(1,n_volumes_adj);
+    R(1+(n_volumes_adj*6):n_volumes_adj*7,18) = zeros(1,n_volumes_adj);
+    R(1+(n_volumes_adj*1):n_volumes_adj*2,19) = zeros(1,n_volumes_adj);
+    R(1+(n_volumes_adj*3):n_volumes_adj*4,20) = zeros(1,n_volumes_adj);
+    R(1+(n_volumes_adj*5):n_volumes_adj*6,21) = zeros(1,n_volumes_adj);
+    R(1+(n_volumes_adj*7):n_volumes_adj*8,21) = zeros(1,n_volumes_adj); 
+    
+    % save nuisance regressors
+    save([dir_root,'bids_data/derivatives/',subj_handle,'/rsa/R.mat'],'R')            
+    clear R n_volumes_adj run
+    
+    % get all scans for GLM
+    all_scans = get_functional_files([dir_root,'bids_data/derivatives/',subj_handle,'/'],'ua');
+    all_scans = all_scans{1};
+    
+    % remove bad scans
+    all_scans(bad_scans) = [];
+    
+    % define parameters for GLM
+    matlabbatch{1}.spm.stats.fmri_spec.volt             = 1;
+    matlabbatch{1}.spm.stats.fmri_spec.global           = 'None';
+    matlabbatch{1}.spm.stats.fmri_spec.mthresh          = 0.8;
+    matlabbatch{1}.spm.stats.fmri_spec.mask             = {''};
+    matlabbatch{1}.spm.stats.fmri_spec.cvi              = 'AR(1)';
+    matlabbatch{1}.spm.stats.fmri_spec.dir              = {[dir_root,'bids_data/derivatives/',subj_handle,'/rsa']};
+    matlabbatch{1}.spm.stats.fmri_spec.fact             = struct('name', {}, 'levels', {});
+    matlabbatch{1}.spm.stats.fmri_spec.bases.hrf.derivs = [0 0];
+    matlabbatch{1}.spm.stats.fmri_spec.sess.multi       = {''};
+    matlabbatch{1}.spm.stats.fmri_spec.sess.regress     = struct('name', {}, 'val', {});
+    matlabbatch{1}.spm.stats.fmri_spec.sess.hpf         = 128;
+    matlabbatch{1}.spm.stats.fmri_spec.sess.scans       = all_scans;
+    matlabbatch{1}.spm.stats.fmri_spec.sess.multi_reg   = {[dir_root,'bids_data/derivatives/',subj_handle,'/rsa/R.mat']};   
+    matlabbatch{1}.spm.stats.fmri_spec.timing.units     = 'secs';
+    matlabbatch{1}.spm.stats.fmri_spec.timing.RT        = 2;
+    matlabbatch{1}.spm.stats.fmri_spec.timing.fmri_t    = 32;
+    matlabbatch{1}.spm.stats.fmri_spec.timing.fmri_t0   = 16;  
+                   
+    % cycle through and define each condition
+    for trl = 1 : numel(events_onset)
+        matlabbatch{1}.spm.stats.fmri_spec.sess.cond(trl).name        = ['trl',sprintf('%03.0f',trl)];
+        matlabbatch{1}.spm.stats.fmri_spec.sess.cond(trl).onset       = events_onset(trl,1);
+        matlabbatch{1}.spm.stats.fmri_spec.sess.cond(trl).duration    = 3;
+        matlabbatch{1}.spm.stats.fmri_spec.sess.cond(trl).tmod        = 0;
+        matlabbatch{1}.spm.stats.fmri_spec.sess.cond(trl).orth        = 1;
+        matlabbatch{1}.spm.stats.fmri_spec.sess.cond(trl).pmod        = struct('name',{},'param',{},'poly',{});
+    end
+    
+    % add button press
+    matlabbatch{1}.spm.stats.fmri_spec.sess.cond(end+1).name      = 'button_press';
+    matlabbatch{1}.spm.stats.fmri_spec.sess.cond(end).onset       = button_onset;
+    matlabbatch{1}.spm.stats.fmri_spec.sess.cond(end).duration    = 0.5;
+    matlabbatch{1}.spm.stats.fmri_spec.sess.cond(end).tmod        = 0;
+    matlabbatch{1}.spm.stats.fmri_spec.sess.cond(end).orth        = 1;
+    matlabbatch{1}.spm.stats.fmri_spec.sess.cond(end).pmod        = struct('name',{},'param',{},'poly',{});
+    
+    % specify model
+    spm_jobman('run',matlabbatch)
+    clear matlabbatch all_scans bad_scans subj_handle button_onset events_onset trl
+    
+end
+
+%% Prepare GLM and Data for Searchlight Analysis
+% cycle through each subject
+for subj = 1 : n_subj
+    
+    % define key subject strings
+    subj_handle = sprintf('sub-%02.0f',subj);
+    dir_subj = [dir_root,'bids_data/derivatives/',subj_handle,'/'];
+    
     % load pattern data
-    load([dir_root,'data/fmri/rsa/data/',subjHandle,'/sl_volume_demeaned.mat'])
+    load([dir_subj,'/rsa/',subj_handle,'_task-rf_rsa-maskedDemeanedVolume.mat'])
     
     % load SPM.mat
-    load([dir_root,'data/fmri/rsa/data/',subjHandle,'/SPM.mat'])
+    load([dir_subj,'/rsa/SPM.mat'])
     
-    % load stimulus details
-    load([dir_root,'data/fmri/rsa/data/',subjHandle,'/stim.mat'])
+    % create table to record stimulus detail
+    stim_details  = array2table(zeros(n_trials*2,2),'VariableNames', {'encoding','remembered'});
+    stim_details.word = cell(n_trials*2,1);
+    stim_details.dynamic = cell(n_trials*2,1);
+    count = 1;
+    
+    % cycle through each run
+    for run = 1 : n_runs
+
+        % load event table
+        tbl = readtable([dir_root,'bids_data/',subj_handle,'/func/',subj_handle,'_task-rf_run-',num2str(run),'_events.tsv'],'FileType','text','Delimiter','\t');
+        
+        % cut table to stimulus onset
+        tbl = tbl(ismember(tbl.trial_type,'Stimulus Onset'),:);
+         
+        % cycle through every event
+        for e = 1 : size(tbl,1)
+            
+            % add key values
+            stim_details.word(count)       = tbl.word(e);
+            stim_details.dynamic(count)    = tbl.stimulus(e);
+            stim_details.encoding(count)   = strcmpi(tbl.operation(e),'encoding');
+            stim_details.remembered(count) = tbl.recalled(e);
+                       
+            % update counter
+            count = count + 1;            
+        end
+    end
+    
+    % clean up
+    clear run tbl e count
     
     % get design matrix (X) and split into two groups (Xa and Xb)
     X.raw = SPM.xX.X;
     
-    % define conditions to calculate similarity between
-    conditions = {'eBIKE','eFARM','eUNDERWATER','eWATERMILL','eACCORDIAN','eGUITAR','ePIANO','eTRUMPET',...
-        'rBIKE','rFARM','rUNDERWATER','rWATERMILL','rACCORDIAN','rGUITAR','rPIANO','rTRUMPET'};
-    
-    % get matrix of trials by stimulus content
-    trl_by_con = zeros(size(stim,1) ./ numel(conditions),numel(conditions));
-    for i = 1 : numel(conditions)
-        trl_by_con(:,i) = find(ismember(stim(:,2),conditions(i)));
-    end
+    % get matrix of trials by stimulus content at encoding
+    trl_by_con(:,1) = find(strcmpi(stim_details.dynamic,'bike') & stim_details.encoding == 1);
+    trl_by_con(:,2) = find(strcmpi(stim_details.dynamic,'farm') & stim_details.encoding == 1);
+    trl_by_con(:,3) = find(strcmpi(stim_details.dynamic,'underwater') & stim_details.encoding == 1);
+    trl_by_con(:,4) = find(strcmpi(stim_details.dynamic,'watermill') & stim_details.encoding == 1);
+    trl_by_con(:,5) = find(strcmpi(stim_details.dynamic,'accordian') & stim_details.encoding == 1);
+    trl_by_con(:,6) = find(strcmpi(stim_details.dynamic,'guitar') & stim_details.encoding == 1);
+    trl_by_con(:,7) = find(strcmpi(stim_details.dynamic,'piano') & stim_details.encoding == 1);
+    trl_by_con(:,8) = find(strcmpi(stim_details.dynamic,'trumpet') & stim_details.encoding == 1);
+        
+    % get matrix of trials by stimulus content at retrieval
+    trl_by_con(:,9) = find(strcmpi(stim_details.dynamic,'bike') & stim_details.encoding == 0);
+    trl_by_con(:,10) = find(strcmpi(stim_details.dynamic,'farm') & stim_details.encoding == 0);
+    trl_by_con(:,11) = find(strcmpi(stim_details.dynamic,'underwater') & stim_details.encoding == 0);
+    trl_by_con(:,12) = find(strcmpi(stim_details.dynamic,'watermill') & stim_details.encoding == 0);
+    trl_by_con(:,13) = find(strcmpi(stim_details.dynamic,'accordian') & stim_details.encoding == 0);
+    trl_by_con(:,14) = find(strcmpi(stim_details.dynamic,'guitar') & stim_details.encoding == 0);
+    trl_by_con(:,15) = find(strcmpi(stim_details.dynamic,'piano') & stim_details.encoding == 0);
+    trl_by_con(:,16) = find(strcmpi(stim_details.dynamic,'trumpet') & stim_details.encoding == 0);
     
     % get GLM for nuisance regressors
     X.n = X.raw(:,max(trl_by_con(:))+1:end);
     
     % get condition average GLM
-    for i = 1 : numel(conditions)
+    for i = 1 : size(trl_by_con,2)
         X.c(:,i) = sum(X.raw(:,trl_by_con(:,i)),2);
     end
     
     % clean up
-    clear conditions trl_by_con SPM stim
+    clear i trl_by_con SPM stim_details
     
     % split GLM into two groups (train and test data) [excluding nuisance regressors]
     X.at = X.raw(1:size(X.raw)/2,1:n_trials);
@@ -217,13 +415,13 @@ for subj = 1 : n_subj
     X.aa = X.c(1:size(X.raw)/2,:);
     X.ba = X.c((size(X.raw)/2)+1:end,:);
     
-    % add nuisance regressors (skipping constants)
-    X.at(:,end+1:end+size(X.n,2)-1) = X.n(1:size(X.raw)/2,1:end-1);
-    X.bt(:,end+1:end+size(X.n,2)-1) = X.n((size(X.raw)/2)+1:end,1:end-1);
+    % add nuisance regressors
+    X.at(:,end+1:end+size(X.n,2)) = X.n(1:size(X.raw)/2,1:end);
+    X.bt(:,end+1:end+size(X.n,2)) = X.n((size(X.raw)/2)+1:end,1:end);
     
     % repeat for condition average
-    X.aa(:,end+1:end+size(X.n,2)-1) = X.n(1:size(X.raw)/2,1:end-1);
-    X.ba(:,end+1:end+size(X.n,2)-1) = X.n((size(X.raw)/2)+1:end,1:end-1);
+    X.aa(:,end+1:end+size(X.n,2)) = X.n(1:size(X.raw)/2,1:end);
+    X.ba(:,end+1:end+size(X.n,2)) = X.n((size(X.raw)/2)+1:end,1:end);
     
     % find zero-value rows
     X.a_badRow = all(X.at(:,1:n_trials)==0,2);
@@ -265,11 +463,11 @@ for subj = 1 : n_subj
     Y.b(X.b_badRow,:) = [];
 
     % save data
-    save([dir_root,'data/fmri/rsa/data/',subjHandle,'/sl_volume_formatted.mat'],'X','Y')
+    save([dir_subj,'/rsa/',subj_handle,'_task-rf_rsa-FormattedVolume.mat'],'X','Y')
     
-    clear X Y i j fn patterns subjHandle
+    clear X Y i j fn patterns subj_handle dir_subj
     
-    fprintf('Subject %02.0f of %02.0f prepared.../n',subj,n_subj)
+    fprintf('Subject %02.0f of %02.0f prepared...\n',subj,n_subj)
 end
 
 %% Define Searchlight Characteristics

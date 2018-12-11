@@ -189,6 +189,9 @@ for subj = 1 : n_subj
     clear subj_handle source trl cfg tml subj_fft chan
 end
 
+% get t-difference
+t = mean(group_erp,1) ./ sqrt(var(group_erp)./size(group_erp,1));
+
 % create source data structure
 source                  = [];
 source.inside           = brainGeo.inside;
@@ -198,7 +201,7 @@ source.unit             = 'mm';
 
 % define powspctrm of cluster
 source.pow              = nan(size(brainGeo.pos,1),1);     
-source.pow(brainGeo.inside==1)	= nanmean(group_erp,1); 
+source.pow(brainGeo.inside==1)	= t; 
 
 % reshape data to 3D
 source.pow              = reshape(source.pow,source.dim);
