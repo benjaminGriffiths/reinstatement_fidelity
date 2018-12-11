@@ -513,12 +513,12 @@ tic
 for subj = 1 : n_subj
     
     % define subject name
-    subjHandle = sprintf('subj%02.0f',subj);
+    subj_handle = sprintf('sub-%02.0f',subj);
     
     % load data
-    load([dir_root,'data/fmri/rsa/data/',subjHandle,'/sl_volume_formatted.mat'])    
-    load([dir_root,'data/fmri/rsa/data/',subjHandle,'/sl_mask_indexed.mat'])    
-       
+    load([dir_root,'bids_data/derivatives/',subj_handle,'/rsa/',subj_handle,'_task-rf_rsa-FormattedVolume.mat'])
+    load([dir_root,'bids_data/derivatives/',subj_handle,'/rsa/',subj_handle,'_task-rf_rsa-mask.mat'])
+    
     % define empty brain map
     rdmBrain = zeros(scan_fov);
     
@@ -532,7 +532,7 @@ for subj = 1 : n_subj
     M = find(mask_idx);
     
     % update command line
-    fprintf('Defining searchlights.../n')
+    fprintf('Defining searchlights...\n')
     
     % run LDt analysis for every voxel
     for vox = 1 : numel(M)
@@ -581,18 +581,14 @@ for subj = 1 : n_subj
     % remove searchlights with less than threshold number of voxels
     sl_vox(goodSL==false) = [];
     
-    % define conditions to calculate similarity between
-    conditions = {'eBIKE','eFARM','eUNDERWATER','eWATERMILL','eACCORDIAN','eGUITAR','ePIANO','eTRUMPET',...
-        'rBIKE','rFARM','rUNDERWATER','rWATERMILL','rACCORDIAN','rGUITAR','rPIANO','rTRUMPET'};
-    
     % run LDt analysis
-    RDM_ldt = rsa.stat.fisherDiscrTRDM_searchlight(X.aa,Y.a,X.ba,Y.b,1:numel(conditions),sl_vox,model_rdm);
+    RDM_ldt = rsa.stat.fisherDiscrTRDM_searchlight(X.aa,Y.a,X.ba,Y.b,1:16,sl_vox,model_rdm);
 
     % clean up
-    clear X Y conditions model_rdm sl_vox
+    clear X Y model_rdm sl_vox
     
     % model names
-    mN = {'visual','auditory'};
+    mN = {'Visual','Auditory'};
     
     for i = 1 : size(RDM_ldt.ats,2)
         % get mean corrcoef
@@ -602,12 +598,11 @@ for subj = 1 : n_subj
         rdmBrain(M(goodSL)) = avgZ;
 
         % load template nifti
-        filename = [dir_root,'data/fmri/preprocessing/subj',sprintf('%02.0f',subj),...
-                '/uasubj',num2str(subj),scan_func{i},'_',sprintf('%05.0f',1),'.nii'];        
+        filename = [dir_root,'bids_data/derivatives/',subj_handle,'/func/meanua',subj_handle,'_task-rf_run-1_bold.nii'];        
         V = load_untouch_nii(filename);
 
         % change filename, datatype, and image
-        V.fileprefix = [dir_root,'data/fmri/rsa/data/',subjHandle,'/sl_ldt_',mN{i}];
+        V.fileprefix = [dir_root,'bids_data/derivatives/',subj_handle,'/rsa/',subj_handle,'_task-rf_rsa-searchlight',mN{i}];
         V.hdr.dime.datatype = 64;
         V.img = rdmBrain;
 
