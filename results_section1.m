@@ -626,21 +626,21 @@ clear subj tElapse tPerLoop loopsRem timeRem
 
 %% Normalise and Smooth
 % define images to analyse
-img = {'sl_ldt_auditory.nii','sl_ldt_visual.nii'};
+mN = {'Visual','Auditory'};
 
 % cycle through each subject
 for subj = 1 : n_subj
     
     % define subject name
-    subjHandle = sprintf('subj%02.0f',subj);
+    subj_handle = sprintf('sub-%02.0f',subj);
     
     % normalise functional
     matlabbatch{1}.spm.spatial.normalise.write.woptions.bb      = [-78 -112 -70; 78 76 85];    
     matlabbatch{1}.spm.spatial.normalise.write.woptions.vox     = [3 3 4];
     matlabbatch{1}.spm.spatial.normalise.write.woptions.interp  = 4;
-    matlabbatch{1}.spm.spatial.normalise.write.subj.def         = {[dir_root,'data/fmri/preprocessing/',subjHandle,'/y_subj',num2str(subj),'_7_1.nii']};
-    matlabbatch{1}.spm.spatial.normalise.write.subj.resample    = {[dir_root,'data/fmri/rsa/data/',subjHandle,'/',img{1},',1'];
-                                                                   [dir_root,'data/fmri/rsa/data/',subjHandle,'/',img{2},',1']};
+    matlabbatch{1}.spm.spatial.normalise.write.subj.def         = {[dir_root,'bids_data/derivatives/',subj_handle,'/anat/y_',subj_handle,'_T1w.nii']};
+    matlabbatch{1}.spm.spatial.normalise.write.subj.resample    = {[dir_root,'bids_data/derivatives/',subj_handle,'/rsa/',subj_handle,'_task-rf_rsa-searchlight',mN{1},',1'];
+                                                                   [dir_root,'bids_data/derivatives/',subj_handle,'/rsa/',subj_handle,'_task-rf_rsa-searchlight',mN{2},',1']};
 
     % run batch
     spm_jobman('run',matlabbatch)
@@ -650,12 +650,12 @@ for subj = 1 : n_subj
     matlabbatch{2}.spm.spatial.smooth.dtype                     = 0;
     matlabbatch{2}.spm.spatial.smooth.im                        = 0;
     matlabbatch{2}.spm.spatial.smooth.prefix                    = 's';
-    matlabbatch{2}.spm.spatial.smooth.data                      = {[dir_root,'data/fmri/rsa/data/',subjHandle,'/w',img{1},',1'];
-                                                                   [dir_root,'data/fmri/rsa/data/',subjHandle,'/w',img{2},',1']};
+    matlabbatch{2}.spm.spatial.smooth.data                      = {[dir_root,'bids_data/derivatives/',subj_handle,'/rsa/w',subj_handle,'_task-rf_rsa-searchlight',mN{1},',1'];
+                                                                   [dir_root,'bids_data/derivatives/',subj_handle,'/rsa/w',subj_handle,'_task-rf_rsa-searchlight',mN{2},',1']};
     
     % run batch
     spm_jobman('run',matlabbatch)
-    clear matlabbatch img subjHandle
+    clear matlabbatch
 end
 
 %% Run Second-Level Statistics

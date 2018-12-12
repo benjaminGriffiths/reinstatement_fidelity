@@ -8,8 +8,9 @@ clc
 if ispc;    dir_bids = 'Y:/projects/reinstatement_fidelity/bids_data/';
             dir_tool = 'Y:/projects/general/';
             dir_repos = 'E:/bjg335/projects/reinstatement_fidelity/'; % repository directory
-else;       dir_bids = '/media/bjg335/rds-share-2018-hanslmas-memory/projects/reinstatement_fidelity';
-            dir_tool = '/media/bjg335/rds-share-2018-hanslmas-memory/projects/general';
+else;       dir_bids = '/media/bjg335/rds-share-2018-hanslmas-memory/projects/reinstatement_fidelity/bids_data/';
+            dir_tool = '/media/bjg335/rds-share-2018-hanslmas-memory/projects/general/';
+            dir_repos = '/media/bjg335/rds-share-2018-hanslmas-memory/projects/reinstatement_fidelity/scripts/'; % repository directory
 end
 
 % add subfunctions
@@ -68,7 +69,7 @@ end
 group_freq = cell(n_subj,2);
 
 % load template grid
-load('Y:/projects/general/fieldtrip-20170319/template/sourcemodel/standard_sourcemodel3d4mm.mat'); 
+load([dir_tool,'fieldtrip-20170319/template/sourcemodel/standard_sourcemodel3d4mm.mat']); 
 template_grid = sourcemodel; clear sourcemodel
 
 % cycle through each subject
@@ -130,7 +131,7 @@ grand_misses.audio  = ft_sourcegrandaverage(cfg, group_freq{:,4});
 % save
 mkdir([dir_bids,'derivatives/group/eeg/'])
 save([dir_bids,'derivatives/group/eeg/group_task-rf_eeg-freq.mat'],'grand_hits','grand_misses')
-keep dir_root
+keep dir_root dir_bids
 
 %% Run Statistical Analysis across Whole Brain
 % load data
@@ -245,6 +246,7 @@ tbl = table(rse);
 writetable(tbl,[dir_bids,'derivatives/group/eeg/group_task-rf_eeg-cluster.csv'],'Delimiter',',')
 
 %% Get TF of Source Data
+% load stat
 load([dir_bids,'derivatives/group/eeg/group_task-rf_eeg-stat.mat'])
 
 % predefine group power matrix
@@ -267,9 +269,13 @@ for subj = 1 : n_subj
     cfg.channel     = source.label(stat.video.negclusterslabelmat(stat.video.inside==1)==1);
     source          = ft_selectdata(cfg,source);
         
+    % find audio/video hit/miss trials
+    [audio_bool,hit_bool]   = get_splits_eeg(source);
+    
     % get time-frequency representation of data
     cfg             = [];
     cfg.keeptrials  = 'yes';
+    cfg.trials      = find(audio_bool==0);
     cfg.method      = 'wavelet';
     cfg.width       = 6;
     cfg.output      = 'pow';
@@ -286,16 +292,19 @@ for subj = 1 : n_subj
     std_pow = repmat(nanstd(nanmean(freq.powspctrm,4),[],1),[size(freq.powspctrm,1) 1 1 size(freq.powspctrm,4)]);
     freq.powspctrm = (freq.powspctrm - avg_pow) ./ std_pow; clear avg_pow std_pow
     
-    % find audio/video hit/miss trials
-    [audio_bool,hit_bool]   = get_splits_eeg(freq);
+    % smooth data
+    cfg         = [];
+    cfg.fwhm_t  = 0.2;
+    cfg.fwhm_f  = 1;
+    freq        = smooth_TF_GA(cfg,freq);
     
     % split into hits and misses
     cfg         = [];
-    cfg.trials  = hit_bool==1 & audio_bool==0;
+    cfg.trials  = hit_bool(audio_bool==0)==1;
     freqtmp{1}  = ft_freqdescriptives(cfg, freq);
 
     cfg         = [];
-    cfg.trials  = hit_bool==0 & audio_bool==0;
+    cfg.trials  = hit_bool(audio_bool==0)==0;
     freqtmp{2}  = ft_freqdescriptives(cfg, freq);
         
     % take difference
@@ -308,14 +317,4 @@ end
 % save group timeseries
 save([dir_bids,'derivatives/group/eeg/group_task-rf_eeg-spectogram.mat'],'group_pow')
 
-%% Plot TF
-% load data
-load([dir_bids,'derivatives/group/eeg/group_task-rf_eeg-spectogram.mat'])
 
-% define time and frequecy
-toi         = -0.5 : 0.05 : 2;
-foi         = 4 : 1 : 40;
-
-% plot
-figure; hold on;
-imagesc(toi,foi,squeeze(mean(group_pow,1)))
