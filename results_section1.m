@@ -582,7 +582,7 @@ for subj = 1 : n_subj
         
         % caluculate number of voxels in searchlight
         percentIncluded = numel(sl_vox{vox})/sum(reshape(sphere==1,1,[]));
-        if percentIncluded < 0.9 % if less than 90% of max
+        if percentIncluded < 0.6 % if less than 60% of max
             goodSL(vox) = false;
         end        
     end       
@@ -684,7 +684,7 @@ end
 
 % create second-level glm
 matlabbatch{1}.spm.stats.factorial_design.dir                       = {[dir_root,'bids_data/derivatives/group/rsa/visual/']};
-matlabbatch{1}.spm.stats.factorial_design.des.t1.scans              = rMapFiles(:,2);
+matlabbatch{1}.spm.stats.factorial_design.des.t1.scans              = rMapFiles(:,1);
 matlabbatch{1}.spm.stats.factorial_design.cov                       = struct('c', {}, 'cname', {}, 'iCFI', {}, 'iCC', {});
 matlabbatch{1}.spm.stats.factorial_design.multi_cov                 = struct('files', {}, 'iCFI', {}, 'iCC', {});
 matlabbatch{1}.spm.stats.factorial_design.masking.tm.tm_none        = 1;
@@ -716,7 +716,7 @@ clear matlabbatch
 
 % create second-level glm
 matlabbatch{1}.spm.stats.factorial_design.dir                       = {[dir_root,'bids_data/derivatives/group/rsa/auditory/']};
-matlabbatch{1}.spm.stats.factorial_design.des.t1.scans              = rMapFiles(:,1);
+matlabbatch{1}.spm.stats.factorial_design.des.t1.scans              = rMapFiles(:,2);
 matlabbatch{1}.spm.stats.factorial_design.cov                       = struct('c', {}, 'cname', {}, 'iCFI', {}, 'iCC', {});
 matlabbatch{1}.spm.stats.factorial_design.multi_cov                 = struct('files', {}, 'iCFI', {}, 'iCC', {});
 matlabbatch{1}.spm.stats.factorial_design.masking.tm.tm_none        = 1;
