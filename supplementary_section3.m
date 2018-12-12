@@ -306,7 +306,7 @@ for subj = 1 : n_subj
         V = load_untouch_nii(filename);
 
         % change filename, datatype, and image
-        V.fileprefix = [dir_root,'bids_data/derivatives/',subj_handle,'/rsa/',subj_handle,'_task-rf_rsa-searchlight',mN{i}];
+        V.fileprefix = [dir_root,'bids_data/derivatives/',subj_handle,'/rsa/',subj_handle,'_task-percept_rsa-searchlight',mN{i}];
         V.hdr.dime.datatype = 64;
         V.img = rdmBrain;
 

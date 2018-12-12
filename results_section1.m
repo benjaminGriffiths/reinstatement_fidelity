@@ -7,12 +7,27 @@ clc
 spm('Defaults','fMRI');
 spm_jobman('initcfg');
 
+% define root directory
+if ispc;        
+    dir_root = 'Y:/projects/reinstatement_fidelity/';
+    dir_bids = [dir_root,'bids_data/'];
+    dir_tool = 'Y:/projects/general/';
+    dir_repos = 'E:/bjg335/projects/reinstatement_fidelity/'; % repository directory
+    
+    % add subfunctions
+    addpath([dir_repos,'subfunctions'])
+    
+else       
+    dir_root = '/media/bjg335/rds-share-2018-hanslmas-memory/projects/reinstatement_fidelity/';
+    dir_bids = [dir_root,'bids_data/'];
+    dir_tool = '/media/bjg335/rds-share-2018-hanslmas-memory/projects/general/';            
+    dir_repos = '/media/bjg335/rds-share-2018-hanslmas-memory/projects/reinstatement_fidelity/scripts/'; % repository directory
+end
+
 % add RSA toolbox to path
-addpath(genpath('Y:/projects/general/rsatoolbox-develop'))
+addpath(genpath([dir_tool,'rsatoolbox-develop']))
 
 %% Define Key Parameters
-dir_root    = 'Y:/projects/reinstatement_fidelity/';        % data directory
-dir_repos   = 'E:/bjg335/projects/reinstatement_fidelity/'; % repository directory
 n_subj      = 21;                                           % number of subjects
 n_trials    = 192;                                          % number of trials
 n_volumes   = 255;                                          % number of volumes
@@ -24,9 +39,6 @@ scan_vox    = [3 3 4];                                      % scan voxel size
 scan_search = 12;                                           % searchlight radius
 scan_func   = {'_3_1','_4_1','_5_1','_6_1',...
                '_8_1','_9_1','_10_1','_11_1'};              % functional scan suffix
-
-% add subfunctions
-addpath([dir_repos,'subfunctions'])
 
 %% Prepare Masks
 % cycle through each subject
@@ -585,7 +597,7 @@ for subj = 1 : n_subj
     RDM_ldt = rsa.stat.fisherDiscrTRDM_searchlight(X.aa,Y.a,X.ba,Y.b,1:16,sl_vox,model_rdm);
 
     % clean up
-    clear X Y model_rdm sl_vox
+    clear X Y sl_vox
     
     % model names
     mN = {'Visual','Auditory'};
@@ -615,7 +627,7 @@ for subj = 1 : n_subj
     tPerLoop = tElapse / subj;
     loopsRem = numel(n_subj) - subj;
     timeRem  = (tPerLoop * loopsRem)*3600;
-    fprintf('/nSubject %1.0f of %1.0f complete.../nApproximate time remaining: %1.0f hours.../n',subj,n_subj,timeRem)
+    fprintf('\nSubject %1.0f of %1.0f complete...\nApproximate time remaining: %1.0f hours...\n',subj,n_subj,timeRem)
            
     % tidy
     clear V filename rdmBrain avgZ mN i goodSL M mask_idx RDM_ldt subjHandle
