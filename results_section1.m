@@ -651,19 +651,16 @@ for subj = 1 : n_subj
     matlabbatch{1}.spm.spatial.normalise.write.woptions.vox     = [3 3 4];
     matlabbatch{1}.spm.spatial.normalise.write.woptions.interp  = 4;
     matlabbatch{1}.spm.spatial.normalise.write.subj.def         = {[dir_root,'bids_data/derivatives/',subj_handle,'/anat/y_',subj_handle,'_T1w.nii']};
-    matlabbatch{1}.spm.spatial.normalise.write.subj.resample    = {[dir_root,'bids_data/derivatives/',subj_handle,'/rsa/',subj_handle,'_task-rf_rsa-searchlight',mN{1},',1'];
-                                                                   [dir_root,'bids_data/derivatives/',subj_handle,'/rsa/',subj_handle,'_task-rf_rsa-searchlight',mN{2},',1']};
+    matlabbatch{1}.spm.spatial.normalise.write.subj.resample    = {[dir_root,'bids_data/derivatives/',subj_handle,'/rsa/',subj_handle,'_task-rf_rsa-searchlight',mN{1},'.nii,1'];
+                                                                   [dir_root,'bids_data/derivatives/',subj_handle,'/rsa/',subj_handle,'_task-rf_rsa-searchlight',mN{2},'.nii,1']};
 
-    % run batch
-    spm_jobman('run',matlabbatch)
-    
     % smooth
     matlabbatch{2}.spm.spatial.smooth.fwhm                      = [8 8 8];
     matlabbatch{2}.spm.spatial.smooth.dtype                     = 0;
     matlabbatch{2}.spm.spatial.smooth.im                        = 0;
     matlabbatch{2}.spm.spatial.smooth.prefix                    = 's';
-    matlabbatch{2}.spm.spatial.smooth.data                      = {[dir_root,'bids_data/derivatives/',subj_handle,'/rsa/w',subj_handle,'_task-rf_rsa-searchlight',mN{1},',1'];
-                                                                   [dir_root,'bids_data/derivatives/',subj_handle,'/rsa/w',subj_handle,'_task-rf_rsa-searchlight',mN{2},',1']};
+    matlabbatch{2}.spm.spatial.smooth.data                      = {[dir_root,'bids_data/derivatives/',subj_handle,'/rsa/w',subj_handle,'_task-rf_rsa-searchlight',mN{1},'.nii,1'];
+                                                                   [dir_root,'bids_data/derivatives/',subj_handle,'/rsa/w',subj_handle,'_task-rf_rsa-searchlight',mN{2},'.nii,1']};
     
     % run batch
     spm_jobman('run',matlabbatch)
@@ -678,16 +675,16 @@ rMapFiles = cell(n_subj,2);
 for subj = 1 : n_subj
     
     % define subject name
-    subjHandle = sprintf('subj%02.0f',subj);
+    subj_handle = sprintf('sub-%02.0f',subj);
     
     % get searchlight images
-    rMapFiles{subj,1}  = [dir_root,'data/fmri/rsa/data/',subjHandle,'/swsl_ldt_visual.nii'];
-    rMapFiles{subj,2}    = [dir_root,'data/fmri/rsa/data/',subjHandle,'/swsl_ldt_auditory.nii'];
+    rMapFiles{subj,1}  = [dir_root,'bids_data/derivatives/',subj_handle,'/rsa/sw',subj_handle,'_task-rf_rsa-searchlightVisual.nii,1'];
+    rMapFiles{subj,2}  = [dir_root,'bids_data/derivatives/',subj_handle,'/rsa/sw',subj_handle,'_task-rf_rsa-searchlightAuditory.nii,1'];
 end
 
 % create second-level glm
-matlabbatch{1}.spm.stats.factorial_design.dir                       = {[dir_root,'data/fmri/rsa/stats/sl_visual']};
-matlabbatch{1}.spm.stats.factorial_design.des.t1.scans              = rMapFiles(:,1);
+matlabbatch{1}.spm.stats.factorial_design.dir                       = {[dir_root,'bids_data/derivatives/group/rsa/visual/']};
+matlabbatch{1}.spm.stats.factorial_design.des.t1.scans              = rMapFiles(:,2);
 matlabbatch{1}.spm.stats.factorial_design.cov                       = struct('c', {}, 'cname', {}, 'iCFI', {}, 'iCC', {});
 matlabbatch{1}.spm.stats.factorial_design.multi_cov                 = struct('files', {}, 'iCFI', {}, 'iCC', {});
 matlabbatch{1}.spm.stats.factorial_design.masking.tm.tm_none        = 1;
@@ -700,7 +697,7 @@ spm_jobman('run',matlabbatch)
 clear matlabbatch subjHandle subj
 
 % estimate model
-matlabbatch{1}.spm.stats.fmri_est.spmmat            = {[dir_root,'data/fmri/rsa/stats/sl_visual/SPM.mat']};
+matlabbatch{1}.spm.stats.fmri_est.spmmat            = {[dir_root,'bids_data/derivatives/group/rsa/visual/SPM.mat']};
 matlabbatch{1}.spm.stats.fmri_est.write_residuals   = 0;
 matlabbatch{1}.spm.stats.fmri_est.method.Classical  = 1;
 
@@ -708,9 +705,9 @@ spm_jobman('run',matlabbatch)
 clear matlabbatch
 
 % define contrasts
-matlabbatch{1}.spm.stats.con.spmmat(1)                  = {[dir_root,'data/fmri/rsa/stats/sl_visual/SPM.mat']};   
+matlabbatch{1}.spm.stats.con.spmmat(1)                  = {[dir_root,'bids_data/derivatives/group/rsa/visual/SPM.mat']};   
 matlabbatch{1}.spm.stats.con.delete                     = 0;    
-matlabbatch{1}.spm.stats.con.consess{1}.tcon.name       = 'VideoSimiliarity';
+matlabbatch{1}.spm.stats.con.consess{1}.tcon.name       = 'within>between';
 matlabbatch{1}.spm.stats.con.consess{1}.tcon.convec     = 1;
 matlabbatch{1}.spm.stats.con.consess{1}.tcon.sessrep    = 'none';  
 
@@ -718,8 +715,8 @@ spm_jobman('run',matlabbatch)
 clear matlabbatch
 
 % create second-level glm
-matlabbatch{1}.spm.stats.factorial_design.dir                       = {[dir_root,'data/fmri/rsa/stats/sl_auditory']};
-matlabbatch{1}.spm.stats.factorial_design.des.t1.scans              = rMapFiles(:,2);
+matlabbatch{1}.spm.stats.factorial_design.dir                       = {[dir_root,'bids_data/derivatives/group/rsa/auditory/']};
+matlabbatch{1}.spm.stats.factorial_design.des.t1.scans              = rMapFiles(:,1);
 matlabbatch{1}.spm.stats.factorial_design.cov                       = struct('c', {}, 'cname', {}, 'iCFI', {}, 'iCC', {});
 matlabbatch{1}.spm.stats.factorial_design.multi_cov                 = struct('files', {}, 'iCFI', {}, 'iCC', {});
 matlabbatch{1}.spm.stats.factorial_design.masking.tm.tm_none        = 1;
@@ -732,7 +729,7 @@ spm_jobman('run',matlabbatch)
 clear matlabbatch
 
 % estimate model
-matlabbatch{1}.spm.stats.fmri_est.spmmat            = {[dir_root,'data/fmri/rsa/stats/sl_auditory/SPM.mat']};
+matlabbatch{1}.spm.stats.fmri_est.spmmat            = {[dir_root,'bids_data/derivatives/group/rsa/auditory/SPM.mat']};
 matlabbatch{1}.spm.stats.fmri_est.write_residuals   = 0;
 matlabbatch{1}.spm.stats.fmri_est.method.Classical  = 1;
 
@@ -740,9 +737,9 @@ spm_jobman('run',matlabbatch)
 clear matlabbatch
 
 % define contrasts
-matlabbatch{1}.spm.stats.con.spmmat(1)                  = {[dir_root,'data/fmri/rsa/stats/sl_auditory/SPM.mat']};   
+matlabbatch{1}.spm.stats.con.spmmat(1)                  = {[dir_root,'bids_data/derivatives/group/rsa/auditory/SPM.mat']};   
 matlabbatch{1}.spm.stats.con.delete                     = 0;    
-matlabbatch{1}.spm.stats.con.consess{1}.tcon.name       = 'AudioSimiliarity';
+matlabbatch{1}.spm.stats.con.consess{1}.tcon.name       = 'within>between';
 matlabbatch{1}.spm.stats.con.consess{1}.tcon.convec     = 1;
 matlabbatch{1}.spm.stats.con.consess{1}.tcon.sessrep    = 'none';  
 
