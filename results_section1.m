@@ -433,9 +433,19 @@ for subj = 1 : n_subj
     X.a(:,end+1:end+size(X.n_a,2)) = X.n_a;
     X.b(:,end+1:end+size(X.n_b,2)) = X.n_b;
         
-    % find zero-value columns
-    X.a_badCol = all(X.a==0,1);
-    X.b_badCol = all(X.b==0,1);   
+    % cycle through A/B avg/trl combinations
+    fn = {'a','b'};
+    for i = 1 : 2
+        for j = 1 : size(X.(fn{i}),2)
+            
+            % if column is singular
+            if numel(unique(X.(fn{i})(:,j))) == 1
+                X.([fn{i},'_badCol'])(j,1) = true;
+            else
+                X.([fn{i},'_badCol'])(j,1) = false;
+            end
+        end
+    end
     
     % remove single-valued columns
     X.a(:,X.a_badCol) = [];
@@ -470,26 +480,19 @@ dist2Perimeter = floor(voxRadInSearchLight);
 sphere  = ((x*scan_vox(1)).^2+(y*scan_vox(2)).^2+(z*scan_vox(3)).^2)<=(scan_search^2);
 
 % predefine model rdm
-model_rdm{1} = nan(16,16);
-model_rdm{2} = nan(16,16);
+model_rdm{1} = nan(8,8);
 
 % set items that belong to the different category to 1
-model_rdm{1}(9:12,1:4) = 1;
-model_rdm{2}(13:16,5:8) = 1;
+model_rdm{1}(5:8,1:4) = 1;
 
 % set items that belong to a same category to -1
-model_rdm{1}(9,1)  = -1;
-model_rdm{1}(10,2) = -1;
-model_rdm{1}(11,3) = -1;
-model_rdm{1}(12,4) = -1;
-model_rdm{2}(13,5) = -1;
-model_rdm{2}(14,6) = -1;
-model_rdm{2}(15,7) = -1;
-model_rdm{2}(16,8) = -1;
+model_rdm{1}(5,1) = -1;
+model_rdm{1}(6,2) = -1;
+model_rdm{1}(7,3) = -1;
+model_rdm{1}(8,4) = -1;
 
 % set diagonal to NaN
 model_rdm{1}(logical(eye(size(model_rdm{1},1)))) = 0; 
-model_rdm{2}(logical(eye(size(model_rdm{2},1)))) = 0; 
 
 % clean up
 clear x y z voxRadInSearchLight
@@ -570,7 +573,7 @@ for subj = 1 : n_subj
     sl_vox(goodSL==false) = [];
     
     % run LDt analysis
-    RDM_ldt = rsa.stat.fisherDiscrTRDM_searchlight(X.aa,Y.a,X.ba,Y.b,1:16,sl_vox,model_rdm);
+    RDM_ldt = rsa.stat.fisherDiscrTRDM_searchlight(X.a,Y.a,X.b,Y.b,1:8,sl_vox,model_rdm);
 
     % clean up
     clear X Y sl_vox
@@ -578,25 +581,23 @@ for subj = 1 : n_subj
     % model names
     mN = {'Visual','Auditory'};
     
-    for i = 1 : size(RDM_ldt.ats,2)
-        % get mean corrcoef
-        avgZ = mean(cat(2,RDM_ldt.ats(:,i),RDM_ldt.bts(:,i)),2);
+    % get mean corrcoef
+    avgZ = mean(cat(2,RDM_ldt.ats(:,i),RDM_ldt.bts(:,i)),2);
 
-        % add z-value to rdmBrain
-        rdmBrain(M(goodSL)) = avgZ;
+    % add z-value to rdmBrain
+    rdmBrain(M(goodSL)) = avgZ;
 
-        % load template nifti
-        filename = [dir_root,'bids_data/derivatives/',subj_handle,'/func/meanua',subj_handle,'_task-rf_run-1_bold.nii'];        
-        V = load_untouch_nii(filename);
+    % load template nifti
+    filename = [dir_root,'bids_data/derivatives/',subj_handle,'/func/meanua',subj_handle,'_task-rf_run-1_bold.nii'];        
+    V = load_untouch_nii(filename);
 
-        % change filename, datatype, and image
-        V.fileprefix = [dir_root,'bids_data/derivatives/',subj_handle,'/rsa/',subj_handle,'_task-rf_rsa-searchlight',mN{i}];
-        V.hdr.dime.datatype = 64;
-        V.img = rdmBrain;
+    % change filename, datatype, and image
+    V.fileprefix = [dir_root,'bids_data/derivatives/',subj_handle,'/rsa/',subj_handle,'_task-rf_rsa-searchlight',mN{i}];
+    V.hdr.dime.datatype = 64;
+    V.img = rdmBrain;
 
-        % save z-value brain
-        save_untouch_nii(V,[V.fileprefix,'.nii']);       
-    end
+    % save z-value brain
+    save_untouch_nii(V,[V.fileprefix,'.nii']);  
     
     % update command line
     tElapse  = toc;
