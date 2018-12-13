@@ -389,81 +389,57 @@ for subj = 1 : n_subj
     X.raw = SPM.xX.X;
     
     % get matrix of trials by stimulus content at encoding
-    trl_by_con(:,1) = find(strcmpi(stim_details.dynamic,'bike') & stim_details.encoding == 1);
-    trl_by_con(:,2) = find(strcmpi(stim_details.dynamic,'farm') & stim_details.encoding == 1);
-    trl_by_con(:,3) = find(strcmpi(stim_details.dynamic,'underwater') & stim_details.encoding == 1);
-    trl_by_con(:,4) = find(strcmpi(stim_details.dynamic,'watermill') & stim_details.encoding == 1);
-    trl_by_con(:,5) = find(strcmpi(stim_details.dynamic,'accordian') & stim_details.encoding == 1);
-    trl_by_con(:,6) = find(strcmpi(stim_details.dynamic,'guitar') & stim_details.encoding == 1);
-    trl_by_con(:,7) = find(strcmpi(stim_details.dynamic,'piano') & stim_details.encoding == 1);
-    trl_by_con(:,8) = find(strcmpi(stim_details.dynamic,'trumpet') & stim_details.encoding == 1);
+    trl_by_con{1} = find(strcmpi(stim_details.dynamic,'bike') & stim_details.encoding == 1 & stim_details.remembered == 1);
+    trl_by_con{2} = find(strcmpi(stim_details.dynamic,'farm') & stim_details.encoding == 1 & stim_details.remembered == 1);
+    trl_by_con{3} = find(strcmpi(stim_details.dynamic,'underwater') & stim_details.encoding == 1 & stim_details.remembered == 1);
+    trl_by_con{4} = find(strcmpi(stim_details.dynamic,'watermill') & stim_details.encoding == 1 & stim_details.remembered == 1);
         
     % get matrix of trials by stimulus content at retrieval
-    trl_by_con(:,9) = find(strcmpi(stim_details.dynamic,'bike') & stim_details.encoding == 0);
-    trl_by_con(:,10) = find(strcmpi(stim_details.dynamic,'farm') & stim_details.encoding == 0);
-    trl_by_con(:,11) = find(strcmpi(stim_details.dynamic,'underwater') & stim_details.encoding == 0);
-    trl_by_con(:,12) = find(strcmpi(stim_details.dynamic,'watermill') & stim_details.encoding == 0);
-    trl_by_con(:,13) = find(strcmpi(stim_details.dynamic,'accordian') & stim_details.encoding == 0);
-    trl_by_con(:,14) = find(strcmpi(stim_details.dynamic,'guitar') & stim_details.encoding == 0);
-    trl_by_con(:,15) = find(strcmpi(stim_details.dynamic,'piano') & stim_details.encoding == 0);
-    trl_by_con(:,16) = find(strcmpi(stim_details.dynamic,'trumpet') & stim_details.encoding == 0);
+    trl_by_con{5} = find(strcmpi(stim_details.dynamic,'bike') & stim_details.encoding == 0 & stim_details.remembered == 1);
+    trl_by_con{6} = find(strcmpi(stim_details.dynamic,'farm') & stim_details.encoding == 0 & stim_details.remembered == 1);
+    trl_by_con{7} = find(strcmpi(stim_details.dynamic,'underwater') & stim_details.encoding == 0 & stim_details.remembered == 1);
+    trl_by_con{8} = find(strcmpi(stim_details.dynamic,'watermill') & stim_details.encoding == 0 & stim_details.remembered == 1);
     
     % get GLM for nuisance regressors
-    X.n = X.raw(:,max(trl_by_con(:))+1:end);
+    X.n = X.raw(:,385:end);
     
     % get condition average GLM
-    for i = 1 : size(trl_by_con,2)
-        X.c(:,i) = sum(X.raw(:,trl_by_con(:,i)),2);
+    for i = 1 : numel(trl_by_con)
+        X.c(:,i) = sum(X.raw(:,trl_by_con{i}),2);
     end
     
     % clean up
     clear i trl_by_con SPM stim_details
     
     % split GLM into two groups (train and test data) [excluding nuisance regressors]
-    X.at = X.raw(1:size(X.raw)/2,1:n_trials);
-    X.bt = X.raw((size(X.raw)/2)+1:end,n_trials+1:n_trials*2);
+    X.a = X.c(1:size(X.raw)/2,:);
+    X.b = X.c((size(X.raw)/2)+1:end,:);
     
-    % repeat for condition-average GLM
-    X.aa = X.c(1:size(X.raw)/2,:);
-    X.ba = X.c((size(X.raw)/2)+1:end,:);
-    
-    % add nuisance regressors
-    X.at(:,end+1:end+size(X.n,2)) = X.n(1:size(X.raw)/2,1:end);
-    X.bt(:,end+1:end+size(X.n,2)) = X.n((size(X.raw)/2)+1:end,1:end);
-    
-    % repeat for condition average
-    X.aa(:,end+1:end+size(X.n,2)) = X.n(1:size(X.raw)/2,1:end);
-    X.ba(:,end+1:end+size(X.n,2)) = X.n((size(X.raw)/2)+1:end,1:end);
+    % split nuisance regressors into two groups
+    X.n_a = X.n(1:size(X.raw)/2,:);
+    X.n_b = X.n((size(X.raw)/2)+1:end,:);
     
     % find zero-value rows
-    X.a_badRow = all(X.at(:,1:n_trials)==0,2);
-    X.b_badRow = all(X.bt(:,1:n_trials)==0,2);
+    X.a_badRow = all(X.a==0,2);
+    X.b_badRow = all(X.b==0,2);
     
     % remove zero-value rows
-    X.at(X.a_badRow,:) = [];
-    X.aa(X.a_badRow,:) = [];
-    X.bt(X.b_badRow,:) = [];
-    X.ba(X.b_badRow,:) = [];
+    X.a(X.a_badRow,:)   = [];
+    X.b(X.b_badRow,:)   = [];    
+    X.n_a(X.a_badRow,:) = [];
+    X.n_b(X.b_badRow,:) = [];
     
-    % cycle through A/B avg/trl combinations
-    fn = {'at','aa','bt','ba'};
-    for i = 1 : 4
-        for j = 1 : size(X.(fn{i}),2)
-            
-            % if column is singular
-            if numel(unique(X.(fn{i})(:,j))) == 1
-                X.([fn{i},'_badCol'])(j,1) = true;
-            else
-                X.([fn{i},'_badCol'])(j,1) = false;
-            end
-        end
-    end
+    % add nuisance regressors
+    X.a(:,end+1:end+size(X.n_a,2)) = X.n_a;
+    X.b(:,end+1:end+size(X.n_b,2)) = X.n_b;
+        
+    % find zero-value columns
+    X.a_badCol = all(X.a==0,1);
+    X.b_badCol = all(X.b==0,1);   
     
     % remove single-valued columns
-    X.at(:,X.at_badCol) = [];
-    X.aa(:,X.aa_badCol) = [];
-    X.bt(:,X.bt_badCol) = [];
-    X.ba(:,X.ba_badCol) = [];
+    X.a(:,X.a_badCol) = [];
+    X.b(:,X.b_badCol) = [];
     
     % get activation matrix (Y) and split into two groups (Ya and Yb)
     Y.raw = patterns;
