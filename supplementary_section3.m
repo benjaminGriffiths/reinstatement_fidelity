@@ -7,12 +7,27 @@ clc
 spm('Defaults','fMRI');
 spm_jobman('initcfg');
 
+% define root directory
+if ispc;        
+    dir_root = 'Y:/projects/reinstatement_fidelity/';
+    dir_bids = [dir_root,'bids_data/'];
+    dir_tool = 'Y:/projects/general/';
+    dir_repos = 'E:/bjg335/projects/reinstatement_fidelity/'; % repository directory
+    
+    % add subfunctions
+    addpath([dir_repos,'subfunctions'])
+    
+else       
+    dir_root = '/media/bjg335/rds-share-2018-hanslmas-memory/projects/reinstatement_fidelity/';
+    dir_bids = [dir_root,'bids_data/'];
+    dir_tool = '/media/bjg335/rds-share-2018-hanslmas-memory/projects/general/';            
+    dir_repos = '/media/bjg335/rds-share-2018-hanslmas-memory/projects/reinstatement_fidelity/scripts/'; % repository directory
+end
+
 % add RSA toolbox to path
-addpath(genpath('Y:/projects/general/rsatoolbox-develop'))
+addpath(genpath([dir_tool,'rsatoolbox-develop']))
 
 %% Define Key Parameters
-dir_root    = 'Y:/projects/reinstatement_fidelity/';        % data directory
-dir_repos   = 'E:/bjg335/projects/reinstatement_fidelity/'; % repository directory
 n_subj      = 21;                                           % number of subjects
 n_trials    = 192;                                          % number of trials
 n_volumes   = 255;                                          % number of volumes
@@ -24,9 +39,6 @@ scan_vox    = [3 3 4];                                      % scan voxel size
 scan_search = 12;                                           % searchlight radius
 scan_func   = {'_3_1','_4_1','_5_1','_6_1',...
                '_8_1','_9_1','_10_1','_11_1'};              % functional scan suffix
-
-% add subfunctions
-addpath([dir_repos,'subfunctions'])
 
 %% Prepare GLM and Data for Searchlight Analysis
 % cycle through each subject
@@ -212,13 +224,13 @@ for subj = 1 : n_subj
     load([dir_root,'bids_data/derivatives/',subj_handle,'/rsa/',subj_handle,'_task-rf_rsa-mask.mat'])
     
     % predefine model rdm
-    model_rdm{1} = zeros(48,48)-1;
+    model_rdm{1} = zeros(48,48)+1;
     
     % set items that belong to the same category to -1
-    model_rdm{1}(1:12,1:12)     = 1;
-    model_rdm{1}(13:24,13:24) = 1;
-    model_rdm{1}(25:36,25:36) = 1;
-    model_rdm{1}(37:48,37:48) = 1;
+    model_rdm{1}(1:12,1:12)   = -1;
+    model_rdm{1}(13:24,13:24) = -1;
+    model_rdm{1}(25:36,25:36) = -1;
+    model_rdm{1}(37:48,37:48) = -1;
     
     % set diagonal to zero (so it can be collapsed)
     model_rdm{1}(logical(eye(size(model_rdm{1},1)))) = 0; 
@@ -274,7 +286,7 @@ for subj = 1 : n_subj
         
         % caluculate number of voxels in searchlight
         percentIncluded = numel(sl_vox{vox})/sum(reshape(sphere==1,1,[]));
-        if percentIncluded < 0.9 % if less than 90% of max
+        if percentIncluded < 0.6 % if less than 60% of max
             goodSL(vox) = false;
         end        
     end       
@@ -291,28 +303,23 @@ for subj = 1 : n_subj
     % clean up
     clear X Y sl_vox
     
-    % model names
-    mN = {'Visual','Auditory'};
-    
-    for i = 1 : size(RDM_ldt.ats,2)
-        % get mean corrcoef
-        avgZ = mean(cat(2,RDM_ldt.ats(:,i),RDM_ldt.bts(:,i)),2);
+    % get mean corrcoef
+    avgZ = mean(cat(2,RDM_ldt.ats(:,1),RDM_ldt.bts(:,1)),2);
 
-        % add z-value to rdmBrain
-        rdmBrain(M(goodSL)) = avgZ;
+    % add z-value to rdmBrain
+    rdmBrain(M(goodSL)) = avgZ;
 
-        % load template nifti
-        filename = [dir_root,'bids_data/derivatives/',subj_handle,'/func/meanua',subj_handle,'_task-rf_run-1_bold.nii'];        
-        V = load_untouch_nii(filename);
+    % load template nifti
+    filename = [dir_root,'bids_data/derivatives/',subj_handle,'/func/meanua',subj_handle,'_task-rf_run-1_bold.nii'];        
+    V = load_untouch_nii(filename);
 
-        % change filename, datatype, and image
-        V.fileprefix = [dir_root,'bids_data/derivatives/',subj_handle,'/rsa/',subj_handle,'_task-percept_rsa-searchlight',mN{i}];
-        V.hdr.dime.datatype = 64;
-        V.img = rdmBrain;
+    % change filename, datatype, and image
+    V.fileprefix = [dir_root,'bids_data/derivatives/',subj_handle,'/rsa/',subj_handle,'_task-percept_rsa-searchlightVisual'];
+    V.hdr.dime.datatype = 64;
+    V.img = rdmBrain;
 
-        % save z-value brain
-        save_untouch_nii(V,[V.fileprefix,'.nii']);       
-    end
+    % save z-value brain
+    save_untouch_nii(V,[V.fileprefix,'.nii']);  
     
     % update command line
     tElapse  = toc;
@@ -343,19 +350,14 @@ for subj = 1 : n_subj
     matlabbatch{1}.spm.spatial.normalise.write.woptions.vox     = [3 3 4];
     matlabbatch{1}.spm.spatial.normalise.write.woptions.interp  = 4;
     matlabbatch{1}.spm.spatial.normalise.write.subj.def         = {[dir_root,'bids_data/derivatives/',subj_handle,'/anat/y_',subj_handle,'_T1w.nii']};
-    matlabbatch{1}.spm.spatial.normalise.write.subj.resample    = {[dir_root,'bids_data/derivatives/',subj_handle,'/rsa/',subj_handle,'_task-rf_rsa-searchlight',mN{1},',1'];
-                                                                   [dir_root,'bids_data/derivatives/',subj_handle,'/rsa/',subj_handle,'_task-rf_rsa-searchlight',mN{2},',1']};
+    matlabbatch{1}.spm.spatial.normalise.write.subj.resample    = {[dir_root,'bids_data/derivatives/',subj_handle,'/rsa/',subj_handle,'_task-percept_rsa-searchlightVisual.nii,1']};
 
-    % run batch
-    spm_jobman('run',matlabbatch)
-    
     % smooth
     matlabbatch{2}.spm.spatial.smooth.fwhm                      = [8 8 8];
     matlabbatch{2}.spm.spatial.smooth.dtype                     = 0;
     matlabbatch{2}.spm.spatial.smooth.im                        = 0;
     matlabbatch{2}.spm.spatial.smooth.prefix                    = 's';
-    matlabbatch{2}.spm.spatial.smooth.data                      = {[dir_root,'bids_data/derivatives/',subj_handle,'/rsa/w',subj_handle,'_task-rf_rsa-searchlight',mN{1},',1'];
-                                                                   [dir_root,'bids_data/derivatives/',subj_handle,'/rsa/w',subj_handle,'_task-rf_rsa-searchlight',mN{2},',1']};
+    matlabbatch{2}.spm.spatial.smooth.data                      = {[dir_root,'bids_data/derivatives/',subj_handle,'/rsa/w',subj_handle,'_task-percept_rsa-searchlightVisual.nii,1']};
     
     % run batch
     spm_jobman('run',matlabbatch)
@@ -370,15 +372,15 @@ rMapFiles = cell(n_subj,2);
 for subj = 1 : n_subj
     
     % define subject name
-    subjHandle = sprintf('subj%02.0f',subj);
+    subj_handle = sprintf('sub-%02.0f',subj);
     
     % get searchlight images
-    rMapFiles{subj,1}  = [dir_root,'data/fmri/rsa/data/',subjHandle,'/swsl_ldt_visual.nii'];
-    rMapFiles{subj,2}    = [dir_root,'data/fmri/rsa/data/',subjHandle,'/swsl_ldt_auditory.nii'];
+    rMapFiles{subj,1}  = [dir_root,'bids_data/derivatives/',subj_handle,'/rsa/sw',subj_handle,'_task-percept_rsa-searchlightVisual.nii,1'];
+    rMapFiles{subj,2}  = [dir_root,'bids_data/derivatives/',subj_handle,'/rsa/sw',subj_handle,'_task-percept_rsa-searchlightAuditory.nii,1'];
 end
 
 % create second-level glm
-matlabbatch{1}.spm.stats.factorial_design.dir                       = {[dir_root,'data/fmri/rsa/stats/sl_visual']};
+matlabbatch{1}.spm.stats.factorial_design.dir                       = {[dir_root,'bids_data/derivatives/group/rsa/visual-percept/']};
 matlabbatch{1}.spm.stats.factorial_design.des.t1.scans              = rMapFiles(:,1);
 matlabbatch{1}.spm.stats.factorial_design.cov                       = struct('c', {}, 'cname', {}, 'iCFI', {}, 'iCC', {});
 matlabbatch{1}.spm.stats.factorial_design.multi_cov                 = struct('files', {}, 'iCFI', {}, 'iCC', {});
@@ -392,7 +394,7 @@ spm_jobman('run',matlabbatch)
 clear matlabbatch subjHandle subj
 
 % estimate model
-matlabbatch{1}.spm.stats.fmri_est.spmmat            = {[dir_root,'data/fmri/rsa/stats/sl_visual/SPM.mat']};
+matlabbatch{1}.spm.stats.fmri_est.spmmat            = {[dir_root,'bids_data/derivatives/group/rsa/visual-percept/SPM.mat']};
 matlabbatch{1}.spm.stats.fmri_est.write_residuals   = 0;
 matlabbatch{1}.spm.stats.fmri_est.method.Classical  = 1;
 
@@ -400,9 +402,9 @@ spm_jobman('run',matlabbatch)
 clear matlabbatch
 
 % define contrasts
-matlabbatch{1}.spm.stats.con.spmmat(1)                  = {[dir_root,'data/fmri/rsa/stats/sl_visual/SPM.mat']};   
+matlabbatch{1}.spm.stats.con.spmmat(1)                  = {[dir_root,'bids_data/derivatives/group/rsa/visual-percept/SPM.mat']};   
 matlabbatch{1}.spm.stats.con.delete                     = 0;    
-matlabbatch{1}.spm.stats.con.consess{1}.tcon.name       = 'VideoSimiliarity';
+matlabbatch{1}.spm.stats.con.consess{1}.tcon.name       = 'within>between';
 matlabbatch{1}.spm.stats.con.consess{1}.tcon.convec     = 1;
 matlabbatch{1}.spm.stats.con.consess{1}.tcon.sessrep    = 'none';  
 
@@ -410,7 +412,7 @@ spm_jobman('run',matlabbatch)
 clear matlabbatch
 
 % create second-level glm
-matlabbatch{1}.spm.stats.factorial_design.dir                       = {[dir_root,'data/fmri/rsa/stats/sl_auditory']};
+matlabbatch{1}.spm.stats.factorial_design.dir                       = {[dir_root,'bids_data/derivatives/group/rsa/auditory-percept/']};
 matlabbatch{1}.spm.stats.factorial_design.des.t1.scans              = rMapFiles(:,2);
 matlabbatch{1}.spm.stats.factorial_design.cov                       = struct('c', {}, 'cname', {}, 'iCFI', {}, 'iCC', {});
 matlabbatch{1}.spm.stats.factorial_design.multi_cov                 = struct('files', {}, 'iCFI', {}, 'iCC', {});
@@ -424,7 +426,7 @@ spm_jobman('run',matlabbatch)
 clear matlabbatch
 
 % estimate model
-matlabbatch{1}.spm.stats.fmri_est.spmmat            = {[dir_root,'data/fmri/rsa/stats/sl_auditory/SPM.mat']};
+matlabbatch{1}.spm.stats.fmri_est.spmmat            = {[dir_root,'bids_data/derivatives/group/rsa/auditory-percept/SPM.mat']};
 matlabbatch{1}.spm.stats.fmri_est.write_residuals   = 0;
 matlabbatch{1}.spm.stats.fmri_est.method.Classical  = 1;
 
@@ -432,9 +434,9 @@ spm_jobman('run',matlabbatch)
 clear matlabbatch
 
 % define contrasts
-matlabbatch{1}.spm.stats.con.spmmat(1)                  = {[dir_root,'data/fmri/rsa/stats/sl_auditory/SPM.mat']};   
+matlabbatch{1}.spm.stats.con.spmmat(1)                  = {[dir_root,'bids_data/derivatives/group/rsa/auditory-percept/SPM.mat']};   
 matlabbatch{1}.spm.stats.con.delete                     = 0;    
-matlabbatch{1}.spm.stats.con.consess{1}.tcon.name       = 'AudioSimiliarity';
+matlabbatch{1}.spm.stats.con.consess{1}.tcon.name       = 'within>between';
 matlabbatch{1}.spm.stats.con.consess{1}.tcon.convec     = 1;
 matlabbatch{1}.spm.stats.con.consess{1}.tcon.sessrep    = 'none';  
 

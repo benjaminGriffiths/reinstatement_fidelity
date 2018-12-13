@@ -252,6 +252,8 @@ load([dir_bids,'derivatives/group/eeg/group_task-rf_eeg-stat.mat'])
 % predefine group power matrix
 toi         = -0.5 : 0.05 : 2;
 foi         = 4 : 1 : 40;
+group_freq  = nan(n_subj,numel(foi),2);
+group_time  = nan(n_subj,numel(toi),2);
 group_pow   = nan(n_subj,numel(foi),numel(toi));
 
 % cycle through each subject
@@ -294,7 +296,7 @@ for subj = 1 : n_subj
     
     % smooth data
     cfg         = [];
-    cfg.fwhm_t  = 0.2;
+    cfg.fwhm_t  = 0.1;
     cfg.fwhm_f  = 1;
     freq        = smooth_TF_GA(cfg,freq);
     
@@ -307,6 +309,16 @@ for subj = 1 : n_subj
     cfg.trials  = hit_bool(audio_bool==0)==0;
     freqtmp{2}  = ft_freqdescriptives(cfg, freq);
         
+    % extract time series
+    foi = cfg.time>=0.5 & cfg.time<=1.5;
+    group_time(subj,:,1) = nanmean(nanmean(freqtmp{1}.powspctrm(:,:,foi),2),1);
+    group_time(subj,:,2) = nanmean(nanmean(freqtmp{2}.powspctrm(:,:,foi),2),1);
+    
+    % extract frequency spectrum
+    foi = cfg.freq>=8 & cfg.freq<=30;
+    group_freq(subj,:,1) = nanmean(nanmean(freqtmp{1}.powspctrm(:,:,toi),3),1);
+    group_freq(subj,:,2) = nanmean(nanmean(freqtmp{2}.powspctrm(:,:,toi),3),1);
+    
     % take difference
     group_pow(subj,:,:) = squeeze(nanmean(freqtmp{1}.powspctrm - freqtmp{2}.powspctrm,1));
     
@@ -315,6 +327,43 @@ for subj = 1 : n_subj
 end
 
 % save group timeseries
-save([dir_bids,'derivatives/group/eeg/group_task-rf_eeg-spectogram.mat'],'group_pow')
+save([dir_bids,'derivatives/group/eeg/group_task-rf_eeg-spectogram.mat'],'group_time','group_freq','group_pow')
 
+%%
+load([dir_bids,'derivatives/group/eeg/group_task-rf_eeg-spectogram.mat'])
+
+% predefine group power matrix
+pow         = squeeze(mean(group_pow,1));% ./ sqrt(var(group_pow,1)/size(group_pow,1)));
+toi         = linspace(-0.5,2,size(pow,2));
+foi         = linspace(4,40,size(pow,1));
+
+% define colormap
+map = flipud(brewermap(10,'RdBu'));
+
+% plot specto
+imagesc(toi,foi,pow); axis xy; hold on
+plot([0 0],[4 40],'k--')
+colorbar();
+colormap(map)
+caxis([-0.3 0.3])
+
+% plot timeseies
+figure; hold on
+shadedErrorBar(toi,mean(group_time(:,:,2)),sem(group_time(:,:,2)),{'color',[0.4,0.4,0.4]});
+shadedErrorBar(toi,mean(group_time(:,:,1)),sem(group_time(:,:,1)),{'color',map(2,:)});
+plot([0 0],[-0.2 0.2],'k--')
+plot([-0.5 2],[0 0],'k-')
+xlim([-0.5 2]); ylim([-0.2 0.2])
+xlabel('Time (s)'); ylabel('Power (z)')
+set(gca,'box','off','tickdir','out','ytick',[-0.2 0 0.2])
+
+% plot freq spectrum
+figure; hold on
+shadedErrorBar(foi,mean(group_freq(:,:,2)),sem(group_freq(:,:,2)),{'color',[0.4,0.4,0.4]});
+shadedErrorBar(foi,mean(group_freq(:,:,1)),sem(group_freq(:,:,1)),{'color',map(2,:)});
+%plot([0 0],[-0.2 0.2],'k--')
+%plot([-0.5 2],[0 0],'k-')
+%xlim([-0.5 2]); ylim([-0.2 0.2])
+xlabel('Time (s)'); ylabel('Power (z)')
+set(gca,'box','off','tickdir','out','ytick',[-0.2 0 0.2])
 

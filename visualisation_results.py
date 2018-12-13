@@ -168,7 +168,7 @@ def custom_timeseriesplot(data,variables,axes,colour,labels):
 wdir = os.path.dirname(os.path.realpath(__file__))
 
 # move up one directory
-wdir = wdir[:-13]
+#wdir = wdir[:-13]
 
 # set context
 sns.set_context("talk")
@@ -219,11 +219,11 @@ colour = colour[1:4]
 labels = {'title':'Similarity per Cluster',
           'ylabel':'Similarity Index\n(Same > Different; z)',
           'xticklabel':['Left Fusiform','Right Fusiform','Right Parieto-Occipital\nFissure'],
-          'yticks':[-5,0,5,10,15,20],
-          'yticklabel':['-5','0','5','10','15','20']}
+          'yticks':[-0.05,0,0.05,0.10,0.15,0.20],
+          'yticklabel':['-0.05','0','0.05','0.10','0.15','0.20']}
 
 # plot
-custom_rainplot(data_raincloud,colour,ax,'Calibri',labels,[-5,20],0.55)
+custom_rainplot(data_raincloud,colour,ax,'Calibri',labels,[-0.05,0.20],0.55)
 
 # save image
 pyplot.savefig(wdir + "/figures/fig1a.jpg",bbox_inches='tight',transparent=True,dpi='figure')

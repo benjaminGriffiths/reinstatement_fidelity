@@ -307,4 +307,5 @@ for i = 1 : numel(contrast_labels)
 
     spm_jobman('run',matlabbatch)
     clear matlabbatch
+            
 end

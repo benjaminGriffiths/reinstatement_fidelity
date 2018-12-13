@@ -497,11 +497,11 @@ sphere  = ((x*scan_vox(1)).^2+(y*scan_vox(2)).^2+(z*scan_vox(3)).^2)<=(scan_sear
 model_rdm{1} = nan(16,16);
 model_rdm{2} = nan(16,16);
 
-% set items that belong to the same category to -1
+% set items that belong to the different category to 1
 model_rdm{1}(9:12,1:4) = 1;
 model_rdm{2}(13:16,5:8) = 1;
 
-% set items that belong to a different category to 1
+% set items that belong to a same category to -1
 model_rdm{1}(9,1)  = -1;
 model_rdm{1}(10,2) = -1;
 model_rdm{1}(11,3) = -1;
@@ -748,16 +748,13 @@ clear matlabbatch rMapFiles
 
 %% Extract Data from Cluster
 % load SPM details
-load([dir_root,'data/fmri/rsa/stats/sl_visual/SPM.mat'])
-
-% define cluster name
-cluster_name = {'left_fusiform_181120','right_fusiform_181120','right_pof_181120'};
+load([dir_root,'bids_data/derivatives/group/rsa/visual/SPM.mat'])
 
 % cycle through each cluster
-for c = 1 : 3
+for c = 1 : 2
 
     % load in cluster
-    nii = load_nii([dir_root,'data/fmri/rsa/stats/sl_visual/',cluster_name{c},'.nii']);
+    nii = load_nii([dir_root,'bids_data/derivatives/group/rsa/visual/cluster',num2str(c),'.nii']);
 
     % get 3 x m representation of cluster
     roi = [];
@@ -770,13 +767,12 @@ end
 % rename each beta and add to table
 leftFusiform    = betas(1,:)';
 rightFusiform   = betas(2,:)';
-rightPOF        = betas(3,:)';
 
 % add to table
-data = table(leftFusiform,rightFusiform,rightPOF);
+data = table(leftFusiform,rightFusiform);
 
 % calculate cohens d
-for b = 1 : 3
+for b = 1 : 2
     
     % calculate cohen's dz
     X = betas(b,:);
