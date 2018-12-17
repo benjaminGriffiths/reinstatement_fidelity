@@ -578,13 +578,13 @@ for subj = 1 : n_subj
     sl_vox(goodSL==false) = [];
     
     % run LDt analysis
-    RDM_ldt = rsa.stat.fisherDiscrTRDM_searchlight(X.a,Y.a,X.b,Y.b,1:96,sl_vox,model_rdm);
+    RDM_ldt = rsa.stat.fisherDiscrTRDM_searchlight(X.a,Y.a,X.b,Y.b,1:96,sl_vox,model_rdm,true);
 
     % clean up
     clear X Y sl_vox
     
     % get mean corrcoef
-    avgZ = mean(cat(2,RDM_ldt.ats(:,1),RDM_ldt.bts(:,1)),2);
+    avgZ = RDM_ldt.bts;
 
     % add z-value to rdmBrain
     rdmBrain(M(goodSL)) = avgZ;
