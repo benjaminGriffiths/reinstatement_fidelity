@@ -197,39 +197,6 @@ for subj = 1 : n_subj
     clear matlabbatch all_scans bad_scans subj_handle button_onset events_onset trl    
 end
 
-%% Prepare Masks
-% cycle through each subject
-for subj = 1 : n_subj
-    
-    % define key subject strings
-    subj_handle = sprintf('sub-%02.0f',subj);
-    dir_subj = [dir_root,'bids_data/',subj_handle,'/'];
-    
-    % make directory for masks
-    mkdir([dir_root,'bids_data/derivatives/',subj_handle,'/masks/'])
-    
-    % prepare deformation batch
-    matlabbatch{1}.spm.util.defs.comp{1}.inv.comp{1}.def        = {[dir_root,'bids_data/derivatives/',subj_handle,'/anat/iy_',subj_handle,'_T1w.nii']};
-    matlabbatch{1}.spm.util.defs.comp{1}.inv.space              = {[dir_root,'bids_data/',subj_handle,'/anat/',subj_handle,'_T1w.nii']};
-    matlabbatch{1}.spm.util.defs.out{1}.push.fnames             = {[dir_root,'bids_data/derivatives/',subj_handle,'/rsa/mask.nii']};
-    matlabbatch{1}.spm.util.defs.out{1}.push.weight             = {''};
-    matlabbatch{1}.spm.util.defs.out{1}.push.savedir.saveusr    = {[dir_root,'bids_data/derivatives/',subj_handle,'/masks/']};
-    matlabbatch{1}.spm.util.defs.out{1}.push.fov.file           = {[dir_root,'bids_data/derivatives/',subj_handle,'/func/meanua',subj_handle,'_task-rf_run-1_bold.nii']};
-    matlabbatch{1}.spm.util.defs.out{1}.push.preserve           = 0;
-    matlabbatch{1}.spm.util.defs.out{1}.push.fwhm               = [0 0 0];
-    matlabbatch{1}.spm.util.defs.out{1}.push.prefix             = '';
-    
-    % run
-    spm_jobman('run',matlabbatch)
-    clear matlabbatch
-    
-    % move file to subject directory
-    movefile([dir_root,'bids_data/derivatives/',subj_handle,'/masks/wmask.nii'],...
-        [dir_root,'bids_data/derivatives/',subj_handle,'/masks/whole_brain.nii'])
-    
-    clear matlabbatch
-end
-
 %% Read Data
 % cycle through each subject
 for subj = 1 : n_subj
@@ -244,8 +211,8 @@ for subj = 1 : n_subj
     % predefine matrix for mask data
     maskImg = zeros(1, prod(scan_fov));
     
-    % load mask and add to matrix
-    nii = load_untouch_nii([dir_root,'bids_data/derivatives/',subj_handle,'/masks/whole_brain.nii']);
+    % load mask and add to matrix    
+    nii = load_untouch_nii([dir_root,'bids_data/derivatives/',subj_handle,'/rsa/mask.nii']);
     maskImg(1,:) = reshape(nii.img,1,[]);
 
     % predefine matrix for functional data
@@ -301,7 +268,7 @@ for subj = 1 : n_subj
     % locate "dead voxels" (functional data within mask that has zero values; e.g. where mask captures skull)
     deadIdx = any(patterns == 0);
 
-    % set these voxels to zero across all scans
+    % set "dead voxels" to zero across all scans
     patterns(:,deadIdx) = 0;
     
     % get a boolean vector of non-zero voxels in patterns matrix
