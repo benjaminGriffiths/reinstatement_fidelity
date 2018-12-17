@@ -8,7 +8,7 @@ spm('Defaults','fMRI');
 spm_jobman('initcfg');
 
 % define root directory
-if ispc;        
+if ispc        
     dir_root = 'Y:/projects/reinstatement_fidelity/';
     dir_bids = [dir_root,'bids_data/'];
     dir_tool = 'Y:/projects/general/';
