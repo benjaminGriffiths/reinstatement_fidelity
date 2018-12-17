@@ -432,20 +432,24 @@ for subj = 1 : n_subj
     X.t = X.t(scan_details.modality==1,stim_details.modality==1);
     X.n = X.n(scan_details.modality==1,:);
          
-    % split GLM into two groups (train and test data) [excluding nuisance regressors]
-    X.a = X.t(1:size(X.t)/2,1:(n_trials/2));
-    X.b = X.t((size(X.t)/2)+1:end,(n_trials/2)+1:n_trials);
+    % get scan/stim index for encoding/retrieval-visual index
+    er_stimidx = stim_details.encoding(stim_details.modality==1)==1;
+    er_scanidx = scan_details.encoding(scan_details.modality==1)==1;
+    
+    % split GLM into two groups (train [encoding] and test [retrieval] data)
+    X.a = X.t(er_scanidx==1,er_stimidx==1);
+    X.b = X.t(er_scanidx==0,er_stimidx==0);
     
     % add nuisance regressors
-    X.a(:,end+1:end+size(X.n,2)) = X.n(1:size(X.t)/2,:);
-    X.b(:,end+1:end+size(X.n,2)) = X.n((size(X.t)/2)+1:end,:);
+    X.a(:,end+1:end+size(X.n,2)) = X.n(er_scanidx==1,:);
+    X.b(:,end+1:end+size(X.n,2)) = X.n(er_scanidx==0,:);
     
     % get stimulus values for encoding-visual
     stim_vals = stim_details.stimulus(stim_details.modality==1);
         
     % split into A and B
-    X.sav = stim_vals(1:n_trials/2);
-    X.sbv = stim_vals(n_trials/2+1:end);
+    X.sav = stim_vals(er_stimidx==1);
+    X.sbv = stim_vals(er_stimidx==0);
     
     % get ordered index
     [~,X.sai] = sort(X.sav);
@@ -460,8 +464,8 @@ for subj = 1 : n_subj
     Y.raw = patterns(scan_details.modality==1,:);
     
     % split into two groups (Ya and Yb)
-    Y.a = Y.raw(1:size(Y.raw,1)/2,:);
-    Y.b = Y.raw((size(Y.raw,1)/2)+1:end,:);
+    Y.a = Y.raw(er_scanidx==1,:);
+    Y.b = Y.raw(er_scanidx==0,:);
         
     % --- remove singular dimensions --- %
     % find zero-value rows
@@ -513,21 +517,6 @@ dist2Perimeter = ceil(voxRadInSearchLight);
 [x,y,z] = meshgrid(-dist2Perimeter(1):dist2Perimeter(1),-dist2Perimeter(2):dist2Perimeter(2),-dist2Perimeter(3):dist2Perimeter(3));
 sphere  = ((x*scan_vox(1)).^2+(y*scan_vox(2)).^2+(z*scan_vox(3)).^2)<=(scan_search^2);
 
-% predefine model rdm
-model_rdm{1} = nan(8,8);
-
-% set items that belong to the different category to 1
-model_rdm{1}(5:8,1:4) = 1;
-
-% set items that belong to a same category to -1
-model_rdm{1}(5,1) = -1;
-model_rdm{1}(6,2) = -1;
-model_rdm{1}(7,3) = -1;
-model_rdm{1}(8,4) = -1;
-
-% set diagonal to NaN
-model_rdm{1}(logical(eye(size(model_rdm{1},1)))) = 0; 
-
 % clean up
 clear x y z voxRadInSearchLight
 
@@ -544,6 +533,21 @@ for subj = 1 : n_subj
     load([dir_root,'bids_data/derivatives/',subj_handle,'/rsa/',subj_handle,'_task-rf_rsa-FormattedVolume.mat'])
     load([dir_root,'bids_data/derivatives/',subj_handle,'/rsa/',subj_handle,'_task-rf_rsa-mask.mat'])
     
+    % predefine model rdm
+    model_rdm{1}                = nan(96,96);
+
+    % set items that belong to the different category to 1
+    model_rdm{1}(49:96,1:48)    = 1;
+
+    % set items that belong to a same category to -1
+    model_rdm{1}(49:60,1:12)    = -1;
+    model_rdm{1}(61:72,13:24)   = -1;
+    model_rdm{1}(73:84,25:36)   = -1;
+    model_rdm{1}(85:96,37:48)   = -1;
+
+    % set diagonal to NaN
+    model_rdm{1}(logical(eye(size(model_rdm{1},1)))) = 0; 
+
     % define empty brain map
     rdmBrain = zeros(scan_fov);
     
@@ -607,7 +611,7 @@ for subj = 1 : n_subj
     sl_vox(goodSL==false) = [];
     
     % run LDt analysis
-    RDM_ldt = rsa.stat.fisherDiscrTRDM_searchlight(X.a,Y.a,X.b,Y.b,1:8,sl_vox,model_rdm);
+    RDM_ldt = rsa.stat.fisherDiscrTRDM_searchlight(X.a,Y.a,X.b,Y.b,1:96,sl_vox,model_rdm);
 
     % clean up
     clear X Y sl_vox
