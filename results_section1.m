@@ -358,10 +358,12 @@ for subj = 1 : n_subj
     load([dir_subj,'/rsa/SPM.mat'])
     
     % create table to record stimulus detail
-    stim_details  = array2table(zeros(n_trials*2,2),'VariableNames', {'encoding','remembered'});
-    stim_details.word = cell(n_trials*2,1);
-    stim_details.dynamic = cell(n_trials*2,1);
-    count = 1;
+    stim_details  = array2table(zeros(n_trials*2,2),'VariableNames', {'encoding','modality'});
+    stim_count = 1;
+    
+    % create table to record scan details
+    scan_details  = array2table(zeros(n_volumes*8,2),'VariableNames', {'encoding','modality'});
+    scan_count = 1;  
     
     % cycle through each run
     for run = 1 : n_runs
@@ -369,73 +371,110 @@ for subj = 1 : n_subj
         % load event table
         tbl = readtable([dir_root,'bids_data/',subj_handle,'/func/',subj_handle,'_task-rf_run-',num2str(run),'_events.tsv'],'FileType','text','Delimiter','\t');
         
-        % cut table to stimulus onset
-        tbl = tbl(ismember(tbl.trial_type,'Stimulus Onset'),:);
-         
+        % check block types
+        block_encoding  = double(any(ismember(tbl.operation,'encoding')));
+        block_visual    = double(any(ismember(tbl.modality,'Visual')));
+        
         % cycle through every event
         for e = 1 : size(tbl,1)
             
-            % add key values
-            stim_details.word(count)       = tbl.word(e);
-            stim_details.dynamic(count)    = tbl.stimulus(e);
-            stim_details.encoding(count)   = strcmpi(tbl.operation(e),'encoding');
-            stim_details.remembered(count) = tbl.recalled(e);
-                       
-            % update counter
-            count = count + 1;            
+            % if an event
+            if strcmpi(tbl.trial_type(e),'Stimulus Onset')
+            
+                % add key values
+                stim_details.encoding(stim_count) = strcmpi(tbl.operation(e),'encoding');
+                stim_details.modality(stim_count) = strcmpi(tbl.modality(e),'Visual');
+                
+                % get stimulus values
+                switch tbl.stimulus{e}
+                    case 'WATERMILL';   stim_details.stimulus(stim_count,1) = 1;
+                    case 'UNDERWATER';  stim_details.stimulus(stim_count,1) = 2;
+                    case 'BIKE';        stim_details.stimulus(stim_count,1) = 3;
+                    case 'FARM';        stim_details.stimulus(stim_count,1) = 4;
+                end
+                
+                % change value if retrieval
+                if stim_details.encoding(stim_count) ~= 1 && stim_details.modality(stim_count) == 1
+                    stim_details.stimulus(stim_count,1) = stim_details.stimulus(stim_count,1) + 4;
+                end
+                
+                % update counter
+                stim_count = stim_count + 1; 
+                
+            % else if a volume
+            elseif strncmpi(tbl.trial_type(e),'Volume',6)
+                
+                % add key values
+                scan_details.encoding(scan_count) = block_encoding;
+                scan_details.modality(scan_count) = block_visual;
+
+                % update counter
+                scan_count = scan_count + 1;                 
+            end          
         end
     end
     
+    % kick out first three/last five scans of each run
+    scan_details([1:3 251:258 506:513 761:768 1016:1023 1271:1278 1526:1533 1781:1788 2036:2040],:) = [];
+    
     % clean up
-    clear run tbl e count
+    clear run tbl e stim_count
     
     % get design matrix (X) and split into two groups (Xa and Xb)
     X.raw = SPM.xX.X;
     
-    % get matrix of trials by stimulus content at encoding
-    trl_by_con{1} = find(strcmpi(stim_details.dynamic,'bike') & stim_details.encoding == 1);
-    trl_by_con{2} = find(strcmpi(stim_details.dynamic,'farm') & stim_details.encoding == 1);
-    trl_by_con{3} = find(strcmpi(stim_details.dynamic,'underwater') & stim_details.encoding == 1);
-    trl_by_con{4} = find(strcmpi(stim_details.dynamic,'watermill') & stim_details.encoding == 1);
-        
-    % get matrix of trials by stimulus content at retrieval
-    trl_by_con{5} = find(strcmpi(stim_details.dynamic,'bike') & stim_details.encoding == 0);
-    trl_by_con{6} = find(strcmpi(stim_details.dynamic,'farm') & stim_details.encoding == 0);
-    trl_by_con{7} = find(strcmpi(stim_details.dynamic,'underwater') & stim_details.encoding == 0);
-    trl_by_con{8} = find(strcmpi(stim_details.dynamic,'watermill') & stim_details.encoding == 0);
-    
     % get GLM for nuisance regressors
-    X.n = X.raw(:,385:end);
+    X.n = X.raw(:,385:end);  
+    X.t = X.raw(:,1:384);
     
-    % get condition average GLM
-    for i = 1 : numel(trl_by_con)
-        X.c(:,i) = sum(X.raw(:,trl_by_con{i}),2);
-    end
-    
-    % clean up
-    clear i trl_by_con SPM stim_details
-    
+    % remove scans/regressors that are not visual (to
+    % computationally demanding to anything more than this)
+    X.t = X.t(scan_details.modality==1,stim_details.modality==1);
+    X.n = X.n(scan_details.modality==1,:);
+         
     % split GLM into two groups (train and test data) [excluding nuisance regressors]
-    X.a = X.c(1:size(X.raw)/2,:);
-    X.b = X.c((size(X.raw)/2)+1:end,:);
-    
-    % split nuisance regressors into two groups
-    X.n_a = X.n(1:size(X.raw)/2,:);
-    X.n_b = X.n((size(X.raw)/2)+1:end,:);
-    
-    % find zero-value rows
-    X.a_badRow = all(X.a==0,2);
-    X.b_badRow = all(X.b==0,2);
-    
-    % remove zero-value rows
-    X.a(X.a_badRow,:)   = [];
-    X.b(X.b_badRow,:)   = [];    
-    X.n_a(X.a_badRow,:) = [];
-    X.n_b(X.b_badRow,:) = [];
+    X.a = X.t(1:size(X.t)/2,1:(n_trials/2));
+    X.b = X.t((size(X.t)/2)+1:end,(n_trials/2)+1:n_trials);
     
     % add nuisance regressors
-    X.a(:,end+1:end+size(X.n_a,2)) = X.n_a;
-    X.b(:,end+1:end+size(X.n_b,2)) = X.n_b;
+    X.a(:,end+1:end+size(X.n,2)) = X.n(1:size(X.t)/2,:);
+    X.b(:,end+1:end+size(X.n,2)) = X.n((size(X.t)/2)+1:end,:);
+    
+    % get stimulus values for encoding-visual
+    stim_vals = stim_details.stimulus(stim_details.modality==1);
+        
+    % split into A and B
+    X.sav = stim_vals(1:n_trials/2);
+    X.sbv = stim_vals(n_trials/2+1:end);
+    
+    % get ordered index
+    [~,X.sai] = sort(X.sav);
+    [~,X.sbi] = sort(X.sbv);
+    
+    % re-organise regressors
+    X.a(:,1:n_trials/2) = X.a(:,X.sai);
+    X.b(:,1:n_trials/2) = X.b(:,X.sbi);
+        
+    % --- prepare patterns --- %
+    % get activation matrix (Y) and 
+    Y.raw = patterns(scan_details.modality==1,:);
+    
+    % split into two groups (Ya and Yb)
+    Y.a = Y.raw(1:size(Y.raw,1)/2,:);
+    Y.b = Y.raw((size(Y.raw,1)/2)+1:end,:);
+        
+    % --- remove singular dimensions --- %
+    % find zero-value rows
+    X.a_badRow = all(X.a(:,1:n_trials/2)==0,2);
+    X.b_badRow = all(X.b(:,1:n_trials/2)==0,2);
+    
+    % remove zero-value rows
+    X.a(X.a_badRow,:) = [];
+    X.b(X.a_badRow,:) = [];
+    
+    % remove zero-value rows
+    Y.a(X.a_badRow,:) = [];
+    Y.b(X.b_badRow,:) = [];
         
     % cycle through A/B avg/trl combinations
     fn = {'a','b'};
@@ -455,15 +494,6 @@ for subj = 1 : n_subj
     X.a(:,X.a_badCol) = [];
     X.b(:,X.b_badCol) = [];
     
-    % get activation matrix (Y) and split into two groups (Ya and Yb)
-    Y.raw = patterns;
-    Y.a = Y.raw(1:size(Y.raw,1)/2,:);
-    Y.b = Y.raw((size(Y.raw,1)/2)+1:end,:);
-
-    % remove zero-value rows
-    Y.a(X.a_badRow,:) = [];
-    Y.b(X.b_badRow,:) = [];
-
     % save data
     save([dir_subj,'/rsa/',subj_handle,'_task-rf_rsa-FormattedVolume.mat'],'X','Y')
     
