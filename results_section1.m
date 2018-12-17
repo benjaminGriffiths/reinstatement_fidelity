@@ -40,152 +40,6 @@ scan_search = 8;                                           % searchlight radius
 scan_func   = {'_3_1','_4_1','_5_1','_6_1',...
                '_8_1','_9_1','_10_1','_11_1'};              % functional scan suffix
 
-%% Prepare Masks
-% cycle through each subject
-for subj = 1 : n_subj
-    
-    % define key subject strings
-    subj_handle = sprintf('sub-%02.0f',subj);
-    dir_subj = [dir_root,'bids_data/',subj_handle,'/'];
-    
-    % make directory for masks
-    mkdir([dir_root,'bids_data/derivatives/',subj_handle,'/masks/'])
-    
-    % prepare deformation batch
-    matlabbatch{1}.spm.util.defs.comp{1}.inv.comp{1}.def        = {[dir_root,'bids_data/derivatives/',subj_handle,'/anat/iy_',subj_handle,'_T1w.nii']};
-    matlabbatch{1}.spm.util.defs.comp{1}.inv.space              = {[dir_root,'bids_data/',subj_handle,'/anat/',subj_handle,'_T1w.nii']};
-    matlabbatch{1}.spm.util.defs.out{1}.push.fnames             = {[dir_root,'bids_data/sourcedata/masks/whole_brain.nii']};
-    matlabbatch{1}.spm.util.defs.out{1}.push.weight             = {''};
-    matlabbatch{1}.spm.util.defs.out{1}.push.savedir.saveusr    = {[dir_root,'bids_data/derivatives/',subj_handle,'/masks/']};
-    matlabbatch{1}.spm.util.defs.out{1}.push.fov.file           = {[dir_root,'bids_data/derivatives/',subj_handle,'/func/meanua',subj_handle,'_task-rf_run-1_bold.nii']};
-    matlabbatch{1}.spm.util.defs.out{1}.push.preserve           = 0;
-    matlabbatch{1}.spm.util.defs.out{1}.push.fwhm               = [0 0 0];
-    matlabbatch{1}.spm.util.defs.out{1}.push.prefix             = '';
-    
-    % run
-    spm_jobman('run',matlabbatch)
-    clear matlabbatch
-    
-    % move file to subject directory
-    movefile([dir_root,'bids_data/derivatives/',subj_handle,'/masks/wwhole_brain.nii'],...
-        [dir_root,'bids_data/derivatives/',subj_handle,'/masks/whole_brain.nii'])
-    
-    clear matlabbatch
-end
-
-%% Read Data
-% cycle through each subject
-for subj = 1 : n_subj
-    
-    % update command line
-    fprintf('\n--- Working on Subject %d ---------\n',subj)
-    
-    % define key subject strings
-    subj_handle = sprintf('sub-%02.0f',subj);
-    dir_subj = [dir_root,'bids_data/',subj_handle,'/'];
-    
-    % predefine matrix for mask data
-    maskImg = zeros(1, prod(scan_fov));
-    
-    % load mask and add to matrix
-    nii = load_untouch_nii([dir_root,'bids_data/derivatives/',subj_handle,'/masks/whole_brain.nii']);
-    maskImg(1,:) = reshape(nii.img,1,[]);
-
-    % predefine matrix for functional data
-    scanVec = zeros((n_volumes-8).*numel(scan_func),numel(nii.img));
-    
-    % start scan counter
-    scanCount = 1;
-    
-    % cycle through each run
-    for i = 1 : numel(scan_func)
-        
-        % define functional filenames
-        filename = [dir_root,'bids_data/derivatives/',subj_handle,'/func/',...
-            'ua',subj_handle,'_task-rf_run-',num2str(i),'_bold.nii'];
-
-        % read in nifti file
-        nii = load_untouch_nii(filename);
-        
-        % define good scans
-        good_scans = 4 : n_volumes-5;
-        
-        % cycle through each scan (excluding first three and last five)
-        for j = 1 : numel(good_scans)
-            
-            % extract image
-            scanVec(scanCount,:) = reshape(nii.img(:,:,:,good_scans(j)),1,[]);
-            
-            % count scan as read in
-            scanCount = scanCount + 1;            
-        end
-        
-        % update command line
-        fprintf('Run %d of %d read in...\n',i,numel(scan_func))
-    end
-    
-    % clear up
-    clear i j filename scanCount nii
-    
-    % save
-    fprintf('\nSaving full volume...\n')
-    mkdir([dir_root,'bids_data/derivatives/',subj_handle,'/rsa/'])
-    save([dir_root,'bids_data/derivatives/',subj_handle,'/rsa/',subj_handle,'_task-rf_rsa-fullVolume.mat'],'scanVec')
-    
-    % apply mask to scans
-    fprintf('Masking data...\n')
-    
-    % define patterns for mask
-    patterns = scanVec;
-
-    % mask functional data (set all zero-element voxels in mask to zero)
-    patterns(:,maskImg(1,:)==0) = 0;
-
-    % locate "dead voxels" (functional data within mask that has zero values; e.g. where mask captures skull)
-    deadIdx = any(patterns == 0);
-
-    % set these voxels to zero across all scans
-    patterns(:,deadIdx) = 0;
-    
-    % get a boolean vector of non-zero voxels in patterns matrix
-    mask_idx = all(patterns~=0);
-    
-    % remove zero elements from patterns
-    patterns(:,any(patterns == 0)) = [];
-    
-    % save
-    fprintf('Saving masked volumes...\n')
-    save([dir_root,'bids_data/derivatives/',subj_handle,'/rsa/',subj_handle,'_task-rf_rsa-maskedVolume.mat'],'patterns')
-    save([dir_root,'bids_data/derivatives/',subj_handle,'/rsa/',subj_handle,'_task-rf_rsa-mask.mat'],'mask_idx')
-    
-    % clear excess variables
-    clear scanVec nii deadIdx patterns mask_idx subjHandle maskImg
-end
-
-%% Mean Pattern Subtraction
-% cycle through each subject
-for subj = 1 : n_subj
-    
-    % define key subject strings
-    subj_handle = sprintf('sub-%02.0f',subj);
-    dir_subj = [dir_root,'bids_data/',subj_handle,'/'];
-    
-    % load pattern data
-    load([dir_root,'bids_data/derivatives/',subj_handle,'/rsa/',subj_handle,'_task-rf_rsa-maskedVolume.mat'])
-    
-    % get mean pattern across all trials and replicate matrix
-    meanPattern = repmat(mean(patterns,1),[size(patterns,1), 1]);
-
-    % subtract mean pattern from data
-    patterns = patterns - meanPattern;
-    
-    % save patterns
-    save([dir_root,'bids_data/derivatives/',subj_handle,'/rsa/',subj_handle,'_task-rf_rsa-maskedDemeanedVolume.mat'],'patterns')
-    
-    % clean up
-    clear subjHandle meanPattern patterns
-end
-
 %% Create GLM Model
 % cycle through each subject
 for subj = 1 : n_subj
@@ -333,10 +187,160 @@ for subj = 1 : n_subj
     matlabbatch{1}.spm.stats.fmri_spec.sess.cond(end).orth        = 1;
     matlabbatch{1}.spm.stats.fmri_spec.sess.cond(end).pmod        = struct('name',{},'param',{},'poly',{});
     
-    % specify model
+    % estimate model
+    matlabbatch{2}.spm.stats.fmri_est.write_residuals                   = 0;
+    matlabbatch{2}.spm.stats.fmri_est.method.Classical                  = 1;
+    matlabbatch{2}.spm.stats.fmri_est.spmmat                            = {[dir_root,'bids_data/derivatives/',subj_handle,'/rsa/SPM.mat']};
+
+    % run batch
     spm_jobman('run',matlabbatch)
-    clear matlabbatch all_scans bad_scans subj_handle button_onset events_onset trl
+    clear matlabbatch all_scans bad_scans subj_handle button_onset events_onset trl    
+end
+
+%% Prepare Masks
+% cycle through each subject
+for subj = 1 : n_subj
     
+    % define key subject strings
+    subj_handle = sprintf('sub-%02.0f',subj);
+    dir_subj = [dir_root,'bids_data/',subj_handle,'/'];
+    
+    % make directory for masks
+    mkdir([dir_root,'bids_data/derivatives/',subj_handle,'/masks/'])
+    
+    % prepare deformation batch
+    matlabbatch{1}.spm.util.defs.comp{1}.inv.comp{1}.def        = {[dir_root,'bids_data/derivatives/',subj_handle,'/anat/iy_',subj_handle,'_T1w.nii']};
+    matlabbatch{1}.spm.util.defs.comp{1}.inv.space              = {[dir_root,'bids_data/',subj_handle,'/anat/',subj_handle,'_T1w.nii']};
+    matlabbatch{1}.spm.util.defs.out{1}.push.fnames             = {[dir_root,'bids_data/derivatives/',subj_handle,'/rsa/mask.nii']};
+    matlabbatch{1}.spm.util.defs.out{1}.push.weight             = {''};
+    matlabbatch{1}.spm.util.defs.out{1}.push.savedir.saveusr    = {[dir_root,'bids_data/derivatives/',subj_handle,'/masks/']};
+    matlabbatch{1}.spm.util.defs.out{1}.push.fov.file           = {[dir_root,'bids_data/derivatives/',subj_handle,'/func/meanua',subj_handle,'_task-rf_run-1_bold.nii']};
+    matlabbatch{1}.spm.util.defs.out{1}.push.preserve           = 0;
+    matlabbatch{1}.spm.util.defs.out{1}.push.fwhm               = [0 0 0];
+    matlabbatch{1}.spm.util.defs.out{1}.push.prefix             = '';
+    
+    % run
+    spm_jobman('run',matlabbatch)
+    clear matlabbatch
+    
+    % move file to subject directory
+    movefile([dir_root,'bids_data/derivatives/',subj_handle,'/masks/wmask.nii'],...
+        [dir_root,'bids_data/derivatives/',subj_handle,'/masks/whole_brain.nii'])
+    
+    clear matlabbatch
+end
+
+%% Read Data
+% cycle through each subject
+for subj = 1 : n_subj
+    
+    % update command line
+    fprintf('\n--- Working on Subject %d ---------\n',subj)
+    
+    % define key subject strings
+    subj_handle = sprintf('sub-%02.0f',subj);
+    dir_subj = [dir_root,'bids_data/',subj_handle,'/'];
+    
+    % predefine matrix for mask data
+    maskImg = zeros(1, prod(scan_fov));
+    
+    % load mask and add to matrix
+    nii = load_untouch_nii([dir_root,'bids_data/derivatives/',subj_handle,'/masks/whole_brain.nii']);
+    maskImg(1,:) = reshape(nii.img,1,[]);
+
+    % predefine matrix for functional data
+    scanVec = zeros((n_volumes-8).*numel(scan_func),numel(nii.img));
+    
+    % start scan counter
+    scanCount = 1;
+    
+    % cycle through each run
+    for i = 1 : numel(scan_func)
+        
+        % define functional filenames
+        filename = [dir_root,'bids_data/derivatives/',subj_handle,'/func/',...
+            'ua',subj_handle,'_task-rf_run-',num2str(i),'_bold.nii'];
+
+        % read in nifti file
+        nii = load_untouch_nii(filename);
+        
+        % define good scans
+        good_scans = 4 : n_volumes-5;
+        
+        % cycle through each scan (excluding first three and last five)
+        for j = 1 : numel(good_scans)
+            
+            % extract image
+            scanVec(scanCount,:) = reshape(nii.img(:,:,:,good_scans(j)),1,[]);
+            
+            % count scan as read in
+            scanCount = scanCount + 1;            
+        end
+        
+        % update command line
+        fprintf('Run %d of %d read in...\n',i,numel(scan_func))
+    end
+    
+    % clear up
+    clear i j filename scanCount nii
+    
+    % save
+    fprintf('\nSaving full volume...\n')
+    mkdir([dir_root,'bids_data/derivatives/',subj_handle,'/rsa/'])
+    save([dir_root,'bids_data/derivatives/',subj_handle,'/rsa/',subj_handle,'_task-rf_rsa-fullVolume.mat'],'scanVec')
+    
+    % apply mask to scans
+    fprintf('Masking data...\n')
+    
+    % define patterns for mask
+    patterns = scanVec;
+
+    % mask functional data (set all zero-element voxels in mask to zero)
+    patterns(:,maskImg(1,:)==0) = 0;
+
+    % locate "dead voxels" (functional data within mask that has zero values; e.g. where mask captures skull)
+    deadIdx = any(patterns == 0);
+
+    % set these voxels to zero across all scans
+    patterns(:,deadIdx) = 0;
+    
+    % get a boolean vector of non-zero voxels in patterns matrix
+    mask_idx = all(patterns~=0);
+    
+    % remove zero elements from patterns
+    patterns(:,any(patterns == 0)) = [];
+    
+    % save
+    fprintf('Saving masked volumes...\n')
+    save([dir_root,'bids_data/derivatives/',subj_handle,'/rsa/',subj_handle,'_task-rf_rsa-maskedVolume.mat'],'patterns')
+    save([dir_root,'bids_data/derivatives/',subj_handle,'/rsa/',subj_handle,'_task-rf_rsa-mask.mat'],'mask_idx')
+    
+    % clear excess variables
+    clear scanVec nii deadIdx patterns mask_idx subjHandle maskImg
+end
+
+%% Mean Pattern Subtraction
+% cycle through each subject
+for subj = 1 : n_subj
+    
+    % define key subject strings
+    subj_handle = sprintf('sub-%02.0f',subj);
+    dir_subj = [dir_root,'bids_data/',subj_handle,'/'];
+    
+    % load pattern data
+    load([dir_root,'bids_data/derivatives/',subj_handle,'/rsa/',subj_handle,'_task-rf_rsa-maskedVolume.mat'])
+    
+    % get mean pattern across all trials and replicate matrix
+    meanPattern = repmat(mean(patterns,1),[size(patterns,1), 1]);
+
+    % subtract mean pattern from data
+    patterns = patterns - meanPattern;
+    
+    % save patterns
+    save([dir_root,'bids_data/derivatives/',subj_handle,'/rsa/',subj_handle,'_task-rf_rsa-maskedDemeanedVolume.mat'],'patterns')
+    
+    % clean up
+    clear subjHandle meanPattern patterns
 end
 
 %% Prepare GLM and Data for Searchlight Analysis
