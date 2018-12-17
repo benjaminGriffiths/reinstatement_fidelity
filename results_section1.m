@@ -36,7 +36,7 @@ TR          = 2;
 EEG_sample  = 5000;
 scan_fov    = [64 64 32];                                   % scan field of view
 scan_vox    = [3 3 4];                                      % scan voxel size
-scan_search = 12;                                           % searchlight radius
+scan_search = 8;                                           % searchlight radius
 scan_func   = {'_3_1','_4_1','_5_1','_6_1',...
                '_8_1','_9_1','_10_1','_11_1'};              % functional scan suffix
 
@@ -389,16 +389,16 @@ for subj = 1 : n_subj
     X.raw = SPM.xX.X;
     
     % get matrix of trials by stimulus content at encoding
-    trl_by_con{1} = find(strcmpi(stim_details.dynamic,'bike') & stim_details.encoding == 1 & stim_details.remembered == 1);
-    trl_by_con{2} = find(strcmpi(stim_details.dynamic,'farm') & stim_details.encoding == 1 & stim_details.remembered == 1);
-    trl_by_con{3} = find(strcmpi(stim_details.dynamic,'underwater') & stim_details.encoding == 1 & stim_details.remembered == 1);
-    trl_by_con{4} = find(strcmpi(stim_details.dynamic,'watermill') & stim_details.encoding == 1 & stim_details.remembered == 1);
+    trl_by_con{1} = find(strcmpi(stim_details.dynamic,'bike') & stim_details.encoding == 1);
+    trl_by_con{2} = find(strcmpi(stim_details.dynamic,'farm') & stim_details.encoding == 1);
+    trl_by_con{3} = find(strcmpi(stim_details.dynamic,'underwater') & stim_details.encoding == 1);
+    trl_by_con{4} = find(strcmpi(stim_details.dynamic,'watermill') & stim_details.encoding == 1);
         
     % get matrix of trials by stimulus content at retrieval
-    trl_by_con{5} = find(strcmpi(stim_details.dynamic,'bike') & stim_details.encoding == 0 & stim_details.remembered == 1);
-    trl_by_con{6} = find(strcmpi(stim_details.dynamic,'farm') & stim_details.encoding == 0 & stim_details.remembered == 1);
-    trl_by_con{7} = find(strcmpi(stim_details.dynamic,'underwater') & stim_details.encoding == 0 & stim_details.remembered == 1);
-    trl_by_con{8} = find(strcmpi(stim_details.dynamic,'watermill') & stim_details.encoding == 0 & stim_details.remembered == 1);
+    trl_by_con{5} = find(strcmpi(stim_details.dynamic,'bike') & stim_details.encoding == 0);
+    trl_by_con{6} = find(strcmpi(stim_details.dynamic,'farm') & stim_details.encoding == 0);
+    trl_by_con{7} = find(strcmpi(stim_details.dynamic,'underwater') & stim_details.encoding == 0);
+    trl_by_con{8} = find(strcmpi(stim_details.dynamic,'watermill') & stim_details.encoding == 0);
     
     % get GLM for nuisance regressors
     X.n = X.raw(:,385:end);
@@ -473,7 +473,7 @@ end
 voxRadInSearchLight = scan_search ./ scan_vox;
 
 % define distance from searchlight centre to perimeter in voxels
-dist2Perimeter = floor(voxRadInSearchLight);
+dist2Perimeter = ceil(voxRadInSearchLight);
 
 % create boolean searchlight sphere
 [x,y,z] = meshgrid(-dist2Perimeter(1):dist2Perimeter(1),-dist2Perimeter(2):dist2Perimeter(2),-dist2Perimeter(3):dist2Perimeter(3));
@@ -579,7 +579,7 @@ for subj = 1 : n_subj
     clear X Y sl_vox
     
     % get mean corrcoef
-    avgZ = mean(cat(2,RDM_ldt.ats(:,i),RDM_ldt.bts(:,i)),2);
+    avgZ = mean(cat(2,RDM_ldt.ats(:,1),RDM_ldt.bts(:,1)),2);
 
     % add z-value to rdmBrain
     rdmBrain(M(goodSL)) = avgZ;

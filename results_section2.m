@@ -333,7 +333,7 @@ save([dir_bids,'derivatives/group/eeg/group_task-rf_eeg-spectogram.mat'],'group_
 load([dir_bids,'derivatives/group/eeg/group_task-rf_eeg-spectogram.mat'])
 
 % predefine group power matrix
-pow         = squeeze(mean(group_pow,1));% ./ sqrt(var(group_pow,1)/size(group_pow,1)));
+pow         = squeeze(mean(group_pow,1) ./ sqrt(var(group_pow,1)/size(group_pow,1)));
 toi         = linspace(-0.5,2,size(pow,2));
 foi         = linspace(4,40,size(pow,1));
 
