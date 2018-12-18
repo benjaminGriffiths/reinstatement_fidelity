@@ -602,7 +602,7 @@ for subj = 1 : n_subj
     tElapse  = toc;
     tPerLoop = tElapse / subj;
     loopsRem = n_subj - subj;
-    timeRem  = (tPerLoop * loopsRem)*3600;
+    timeRem  = (tPerLoop * loopsRem)/3600;
     fprintf('\nSubject %1.0f of %1.0f complete...\nApproximate time remaining: %1.0f hours...\n',subj,n_subj,timeRem)
            
     % tidy

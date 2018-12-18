@@ -325,8 +325,8 @@ for subj = 1 : n_subj
     tElapse  = toc;
     tPerLoop = tElapse / subj;
     loopsRem = n_subj - subj;
-    timeRem  = (tPerLoop * loopsRem)*3600;
-    fprintf('/nSubject %1.0f of %1.0f complete.../nApproximate time remaining: %1.0f hours.../n',subj,n_subj,timeRem)
+    timeRem  = (tPerLoop * loopsRem)/3600;
+    fprintf('\nSubject %1.0f of %1.0f complete...\nApproximate time remaining: %1.0f hours...\n',subj,n_subj,timeRem)
            
     % tidy
     clear V filename rdmBrain avgZ mN i goodSL M mask_idx RDM_ldt subjHandle
