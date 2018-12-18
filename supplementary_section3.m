@@ -376,7 +376,6 @@ for subj = 1 : n_subj
     
     % get searchlight images
     rMapFiles{subj,1}  = [dir_root,'bids_data/derivatives/',subj_handle,'/rsa/sw',subj_handle,'_task-percept_rsa-searchlightVisual.nii,1'];
-    rMapFiles{subj,2}  = [dir_root,'bids_data/derivatives/',subj_handle,'/rsa/sw',subj_handle,'_task-percept_rsa-searchlightAuditory.nii,1'];
 end
 
 % create second-level glm
@@ -410,7 +409,6 @@ matlabbatch{1}.spm.stats.con.consess{1}.tcon.sessrep    = 'none';
 
 spm_jobman('run',matlabbatch)
 clear matlabbatch
-
 
 %% Extract Data from Cluster
 % load SPM details

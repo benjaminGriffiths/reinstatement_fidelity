@@ -266,10 +266,10 @@ for subj = 1 : n_subj
     patterns(:,maskImg(1,:)==0) = 0;
 
     % locate "dead voxels" (functional data within mask that has zero values; e.g. where mask captures skull)
-    deadIdx = any(patterns == 0);
+    %deadIdx = any(patterns == 0);
 
     % set "dead voxels" to zero across all scans
-    patterns(:,deadIdx) = 0;
+    %patterns(:,deadIdx) = 0;
     
     % get a boolean vector of non-zero voxels in patterns matrix
     mask_idx = all(patterns~=0);
@@ -587,7 +587,7 @@ for subj = 1 : n_subj
     rdmBrain(M(goodSL)) = RDM_ldt.bts;
 
     % load template nifti
-    filename = [dir_root,'bids_data/derivatives/',subj_handle,'/func/meanua',subj_handle,'_task-rf_run-1_bold.nii'];        
+    filename = [dir_root,'bids_data/derivatives/',subj_handle,'/rsa/mask.nii'];        
     V = load_untouch_nii(filename);
 
     % change filename, datatype, and image
