@@ -583,11 +583,8 @@ for subj = 1 : n_subj
     % clean up
     clear X Y sl_vox
     
-    % get mean corrcoef
-    avgZ = RDM_ldt.bts;
-
     % add z-value to rdmBrain
-    rdmBrain(M(goodSL)) = avgZ;
+    rdmBrain(M(goodSL)) = RDM_ldt.bts;
 
     % load template nifti
     filename = [dir_root,'bids_data/derivatives/',subj_handle,'/func/meanua',subj_handle,'_task-rf_run-1_bold.nii'];        
@@ -604,7 +601,7 @@ for subj = 1 : n_subj
     % update command line
     tElapse  = toc;
     tPerLoop = tElapse / subj;
-    loopsRem = numel(n_subj) - subj;
+    loopsRem = n_subj - subj;
     timeRem  = (tPerLoop * loopsRem)*3600;
     fprintf('\nSubject %1.0f of %1.0f complete...\nApproximate time remaining: %1.0f hours...\n',subj,n_subj,timeRem)
            
@@ -616,9 +613,6 @@ end
 clear subj tElapse tPerLoop loopsRem timeRem
 
 %% Normalise and Smooth
-% define images to analyse
-mN = {'Visual','Auditory'};
-
 % cycle through each subject
 for subj = 1 : n_subj
     
@@ -630,16 +624,14 @@ for subj = 1 : n_subj
     matlabbatch{1}.spm.spatial.normalise.write.woptions.vox     = [3 3 4];
     matlabbatch{1}.spm.spatial.normalise.write.woptions.interp  = 4;
     matlabbatch{1}.spm.spatial.normalise.write.subj.def         = {[dir_root,'bids_data/derivatives/',subj_handle,'/anat/y_',subj_handle,'_T1w.nii']};
-    matlabbatch{1}.spm.spatial.normalise.write.subj.resample    = {[dir_root,'bids_data/derivatives/',subj_handle,'/rsa/',subj_handle,'_task-rf_rsa-searchlight',mN{1},'.nii,1'];
-                                                                   [dir_root,'bids_data/derivatives/',subj_handle,'/rsa/',subj_handle,'_task-rf_rsa-searchlight',mN{2},'.nii,1']};
+    matlabbatch{1}.spm.spatial.normalise.write.subj.resample    = {[dir_root,'bids_data/derivatives/',subj_handle,'/rsa/',subj_handle,'_task-rf_rsa-searchlight.nii,1']};
 
     % smooth
     matlabbatch{2}.spm.spatial.smooth.fwhm                      = [8 8 8];
     matlabbatch{2}.spm.spatial.smooth.dtype                     = 0;
     matlabbatch{2}.spm.spatial.smooth.im                        = 0;
     matlabbatch{2}.spm.spatial.smooth.prefix                    = 's';
-    matlabbatch{2}.spm.spatial.smooth.data                      = {[dir_root,'bids_data/derivatives/',subj_handle,'/rsa/w',subj_handle,'_task-rf_rsa-searchlight',mN{1},'.nii,1'];
-                                                                   [dir_root,'bids_data/derivatives/',subj_handle,'/rsa/w',subj_handle,'_task-rf_rsa-searchlight',mN{2},'.nii,1']};
+    matlabbatch{2}.spm.spatial.smooth.data                      = {[dir_root,'bids_data/derivatives/',subj_handle,'/rsa/w',subj_handle,'_task-rf_rsa-searchlight.nii,1']};
     
     % run batch
     spm_jobman('run',matlabbatch)
