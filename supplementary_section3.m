@@ -8,7 +8,7 @@ spm('Defaults','fMRI');
 spm_jobman('initcfg');
 
 % define root directory
-if ispc;        
+if ispc     
     dir_root = 'Y:/projects/reinstatement_fidelity/';
     dir_bids = [dir_root,'bids_data/'];
     dir_tool = 'Y:/projects/general/';
@@ -36,7 +36,7 @@ TR          = 2;
 EEG_sample  = 5000;
 scan_fov    = [64 64 32];                                   % scan field of view
 scan_vox    = [3 3 4];                                      % scan voxel size
-scan_search = 12;                                           % searchlight radius
+scan_search = 8;                                           % searchlight radius
 scan_func   = {'_3_1','_4_1','_5_1','_6_1',...
                '_8_1','_9_1','_10_1','_11_1'};              % functional scan suffix
 
@@ -201,7 +201,7 @@ end
 voxRadInSearchLight = scan_search ./ scan_vox;
 
 % define distance from searchlight centre to perimeter in voxels
-dist2Perimeter = floor(voxRadInSearchLight);
+dist2Perimeter = ceil(voxRadInSearchLight);
 
 % create boolean searchlight sphere
 [x,y,z] = meshgrid(-dist2Perimeter(1):dist2Perimeter(1),-dist2Perimeter(2):dist2Perimeter(2),-dist2Perimeter(3):dist2Perimeter(3));
