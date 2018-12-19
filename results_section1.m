@@ -580,6 +580,9 @@ for subj = 1 : n_subj
     % run LDt analysis
     RDM_ldt = rsa.stat.fisherDiscrTRDM_searchlight(X.a,Y.a,X.b,Y.b,1:96,sl_vox,model_rdm,true);
 
+    % save raw output
+    save([dir_root,'bids_data/derivatives/',subj_handle,'/rsa/',subj_handle,'_task-rf_rsa-rawRDM.mat'],'RDM_ldt')
+    
     % clean up
     clear X Y sl_vox
     
@@ -620,18 +623,18 @@ for subj = 1 : n_subj
     subj_handle = sprintf('sub-%02.0f',subj);
     
     % normalise functional
-    matlabbatch{1}.spm.spatial.normalise.write.woptions.bb      = [-78 -112 -70; 78 76 85];    
-    matlabbatch{1}.spm.spatial.normalise.write.woptions.vox     = [3 3 4];
-    matlabbatch{1}.spm.spatial.normalise.write.woptions.interp  = 4;
-    matlabbatch{1}.spm.spatial.normalise.write.subj.def         = {[dir_root,'bids_data/derivatives/',subj_handle,'/anat/y_',subj_handle,'_T1w.nii']};
-    matlabbatch{1}.spm.spatial.normalise.write.subj.resample    = {[dir_root,'bids_data/derivatives/',subj_handle,'/rsa/',subj_handle,'_task-rf_rsa-searchlight.nii,1']};
+    %matlabbatch{1}.spm.spatial.normalise.write.woptions.bb      = [-78 -112 -70; 78 76 85];    
+    %matlabbatch{1}.spm.spatial.normalise.write.woptions.vox     = [3 3 4];
+    %matlabbatch{1}.spm.spatial.normalise.write.woptions.interp  = 4;
+    %matlabbatch{1}.spm.spatial.normalise.write.subj.def         = {[dir_root,'bids_data/derivatives/',subj_handle,'/anat/y_',subj_handle,'_T1w.nii']};
+    %matlabbatch{1}.spm.spatial.normalise.write.subj.resample    = {[dir_root,'bids_data/derivatives/',subj_handle,'/rsa/',subj_handle,'_task-rf_rsa-searchlight.nii,1']};
 
     % smooth
-    matlabbatch{2}.spm.spatial.smooth.fwhm                      = [8 8 8];
-    matlabbatch{2}.spm.spatial.smooth.dtype                     = 0;
-    matlabbatch{2}.spm.spatial.smooth.im                        = 0;
-    matlabbatch{2}.spm.spatial.smooth.prefix                    = 's';
-    matlabbatch{2}.spm.spatial.smooth.data                      = {[dir_root,'bids_data/derivatives/',subj_handle,'/rsa/w',subj_handle,'_task-rf_rsa-searchlight.nii,1']};
+    matlabbatch{1}.spm.spatial.smooth.fwhm                      = [8 8 8];
+    matlabbatch{1}.spm.spatial.smooth.dtype                     = 0;
+    matlabbatch{1}.spm.spatial.smooth.im                        = 0;
+    matlabbatch{1}.spm.spatial.smooth.prefix                    = 's';
+    matlabbatch{1}.spm.spatial.smooth.data                      = {[dir_root,'bids_data/derivatives/',subj_handle,'/rsa/w',subj_handle,'_task-rf_rsa-searchlight.nii,1']};
     
     % run batch
     spm_jobman('run',matlabbatch)
