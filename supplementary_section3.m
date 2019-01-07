@@ -378,7 +378,7 @@ for subj = 1 : n_subj
     rMapFiles{subj,1}  = [dir_root,'bids_data/derivatives/',subj_handle,'/rsa/sw',subj_handle,'_task-percept_rsa-searchlightVisual.nii,1'];
 end
 
-% create second-level glm
+% create second-level glms
 matlabbatch{1}.spm.stats.factorial_design.dir                       = {[dir_root,'bids_data/derivatives/group/rsa/visual-percept/']};
 matlabbatch{1}.spm.stats.factorial_design.des.t1.scans              = rMapFiles(:,1);
 matlabbatch{1}.spm.stats.factorial_design.cov                       = struct('c', {}, 'cname', {}, 'iCFI', {}, 'iCC', {});

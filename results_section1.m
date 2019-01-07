@@ -652,12 +652,11 @@ for subj = 1 : n_subj
     subj_handle = sprintf('sub-%02.0f',subj);
     
     % get searchlight images
-    rMapFiles{subj,1}  = [dir_root,'bids_data/derivatives/',subj_handle,'/rsa/sw',subj_handle,'_task-rf_rsa-searchlightVisual.nii,1'];
-    rMapFiles{subj,2}  = [dir_root,'bids_data/derivatives/',subj_handle,'/rsa/sw',subj_handle,'_task-rf_rsa-searchlightAuditory.nii,1'];
+    rMapFiles{subj,1}  = [dir_root,'bids_data/derivatives/',subj_handle,'/rsa/sw',subj_handle,'_task-rf_rsa-searchlight.nii,1'];
 end
 
-% create second-level glm
-matlabbatch{1}.spm.stats.factorial_design.dir                       = {[dir_root,'bids_data/derivatives/group/rsa/visual/']};
+% create second-level glms
+matlabbatch{1}.spm.stats.factorial_design.dir                       = {[dir_root,'bids_data/derivatives/group/rsa/visual-ers/']};
 matlabbatch{1}.spm.stats.factorial_design.des.t1.scans              = rMapFiles(:,1);
 matlabbatch{1}.spm.stats.factorial_design.cov                       = struct('c', {}, 'cname', {}, 'iCFI', {}, 'iCC', {});
 matlabbatch{1}.spm.stats.factorial_design.multi_cov                 = struct('files', {}, 'iCFI', {}, 'iCC', {});
@@ -671,7 +670,7 @@ spm_jobman('run',matlabbatch)
 clear matlabbatch subjHandle subj
 
 % estimate model
-matlabbatch{1}.spm.stats.fmri_est.spmmat            = {[dir_root,'bids_data/derivatives/group/rsa/visual/SPM.mat']};
+matlabbatch{1}.spm.stats.fmri_est.spmmat            = {[dir_root,'bids_data/derivatives/group/rsa/visual-ers/SPM.mat']};
 matlabbatch{1}.spm.stats.fmri_est.write_residuals   = 0;
 matlabbatch{1}.spm.stats.fmri_est.method.Classical  = 1;
 
@@ -679,7 +678,7 @@ spm_jobman('run',matlabbatch)
 clear matlabbatch
 
 % define contrasts
-matlabbatch{1}.spm.stats.con.spmmat(1)                  = {[dir_root,'bids_data/derivatives/group/rsa/visual/SPM.mat']};   
+matlabbatch{1}.spm.stats.con.spmmat(1)                  = {[dir_root,'bids_data/derivatives/group/rsa/visual-ers/SPM.mat']};   
 matlabbatch{1}.spm.stats.con.delete                     = 0;    
 matlabbatch{1}.spm.stats.con.consess{1}.tcon.name       = 'within>between';
 matlabbatch{1}.spm.stats.con.consess{1}.tcon.convec     = 1;
@@ -687,38 +686,6 @@ matlabbatch{1}.spm.stats.con.consess{1}.tcon.sessrep    = 'none';
 
 spm_jobman('run',matlabbatch)
 clear matlabbatch
-
-% create second-level glm
-matlabbatch{1}.spm.stats.factorial_design.dir                       = {[dir_root,'bids_data/derivatives/group/rsa/auditory/']};
-matlabbatch{1}.spm.stats.factorial_design.des.t1.scans              = rMapFiles(:,2);
-matlabbatch{1}.spm.stats.factorial_design.cov                       = struct('c', {}, 'cname', {}, 'iCFI', {}, 'iCC', {});
-matlabbatch{1}.spm.stats.factorial_design.multi_cov                 = struct('files', {}, 'iCFI', {}, 'iCC', {});
-matlabbatch{1}.spm.stats.factorial_design.masking.tm.tm_none        = 1;
-matlabbatch{1}.spm.stats.factorial_design.masking.im                = 1;
-matlabbatch{1}.spm.stats.factorial_design.masking.em                = {''};
-matlabbatch{1}.spm.stats.factorial_design.globalc.g_omit            = 1;
-matlabbatch{1}.spm.stats.factorial_design.globalm.gmsca.gmsca_no    = 1;
-matlabbatch{1}.spm.stats.factorial_design.globalm.glonorm           = 1;
-spm_jobman('run',matlabbatch)
-clear matlabbatch
-
-% estimate model
-matlabbatch{1}.spm.stats.fmri_est.spmmat            = {[dir_root,'bids_data/derivatives/group/rsa/auditory/SPM.mat']};
-matlabbatch{1}.spm.stats.fmri_est.write_residuals   = 0;
-matlabbatch{1}.spm.stats.fmri_est.method.Classical  = 1;
-
-spm_jobman('run',matlabbatch)
-clear matlabbatch
-
-% define contrasts
-matlabbatch{1}.spm.stats.con.spmmat(1)                  = {[dir_root,'bids_data/derivatives/group/rsa/auditory/SPM.mat']};   
-matlabbatch{1}.spm.stats.con.delete                     = 0;    
-matlabbatch{1}.spm.stats.con.consess{1}.tcon.name       = 'within>between';
-matlabbatch{1}.spm.stats.con.consess{1}.tcon.convec     = 1;
-matlabbatch{1}.spm.stats.con.consess{1}.tcon.sessrep    = 'none';  
-
-spm_jobman('run',matlabbatch)
-clear matlabbatch rMapFiles
 
 %% Extract Data from Cluster
 % load SPM details
