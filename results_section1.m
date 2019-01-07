@@ -687,41 +687,20 @@ matlabbatch{1}.spm.stats.con.consess{1}.tcon.sessrep    = 'none';
 spm_jobman('run',matlabbatch)
 clear matlabbatch
 
-%% Extract Data from Cluster
+%% Extract Metrics for Visualisation
+% combine visual cluster and save
+combine_spm_cluster([dir_root,'bids_data/derivatives/group/rsa/visual-ers/'])
+
 % load SPM details
-load([dir_root,'bids_data/derivatives/group/rsa/visual/SPM.mat'])
+load([dir_root,'bids_data/derivatives/group/rsa/visual-ers/SPM.mat'])
 
-% cycle through each cluster
-for c = 1 : 2
+% extract subject values for each cluster
+[betas,d] = extract_sample_points([dir_root,'bids_data/derivatives/group/rsa/visual-ers/'],SPM);
 
-    % load in cluster
-    nii = load_nii([dir_root,'bids_data/derivatives/group/rsa/visual/cluster',num2str(c),'.nii']);
+% save betas as table
+tbl = array2table(betas','VariableNames',{'Occipital','Central','Parietal'});
+writetable(tbl,[dir_repos,'data/ers_betas.csv'],'Delimiter',',')
 
-    % get 3 x m representation of cluster
-    roi = [];
-    [roi(1,:),roi(2,:),roi(3,:)] = ind2sub(size(nii.img),find(nii.img>0));
-
-    % get average of cluster
-    betas(c,:) = mean(spm_get_data(SPM.xY.P,roi),2); 
-end
-
-% rename each beta and add to table
-leftFusiform    = betas(1,:)';
-rightFusiform   = betas(2,:)';
-
-% add to table
-data = table(leftFusiform,rightFusiform);
-
-% calculate cohens d
-for b = 1 : 2
-    
-    % calculate cohen's dz
-    X = betas(b,:);
-    numer = mean(X);
-    denom = sqrt(sum((X - mean(X)).^2) ./ (numel(X)-1));
-    d(b,1) = numer ./ denom;
-end
-
-% export
-writetable(data,[dir_repos,'data/searchlight_betas.csv'],'Delimiter',',')
-
+% save effect size as table
+tbl = array2table(d','VariableNames',{'Occipital','Central','Parietal'});
+writetable(tbl,[dir_repos,'data/ers_cohensD.csv'],'Delimiter',',')
