@@ -698,9 +698,9 @@ load([dir_root,'bids_data/derivatives/group/rsa/visual-ers/SPM.mat'])
 [betas,d] = extract_sample_points([dir_root,'bids_data/derivatives/group/rsa/visual-ers/'],SPM);
 
 % save betas as table
-tbl = array2table(betas','VariableNames',{'Occipital','Central','Parietal'});
+tbl = array2table(betas','VariableNames',{'Occipital','Central'});
 writetable(tbl,[dir_repos,'data/ers_betas.csv'],'Delimiter',',')
 
 % save effect size as table
-tbl = array2table(d','VariableNames',{'Occipital','Central','Parietal'});
+tbl = array2table(d','VariableNames',{'Occipital','Central'});
 writetable(tbl,[dir_repos,'data/ers_cohensD.csv'],'Delimiter',',')
