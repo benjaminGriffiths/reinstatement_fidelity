@@ -404,19 +404,19 @@ for subj = 1 : n_subj
     er_scanidx = scan_details.encoding(scan_details.modality==1)==1;
     
     % split GLM into two groups (train [encoding] and test [retrieval] data)
-    X.a = X.t(er_scanidx==1,er_stimidx==1);
-    X.b = X.t(er_scanidx==0,er_stimidx==0);
+    X.a = X.t(1:size(X.t,1)/2,1:size(X.t,2)/2);
+    X.b = X.t(size(X.t,1)/2+1:end,size(X.t,2)/2+1:end);
     
     % add nuisance regressors
-    X.a(:,end+1:end+size(X.n,2)) = X.n(er_scanidx==1,:);
-    X.b(:,end+1:end+size(X.n,2)) = X.n(er_scanidx==0,:);
+    X.a(:,end+1:end+size(X.n,2)) = X.n(1:size(X.t,1)/2,:);
+    X.b(:,end+1:end+size(X.n,2)) = X.n(size(X.t,1)/2+1:end,:);
     
     % get stimulus values for encoding-visual
     stim_vals = stim_details.stimulus(stim_details.modality==1);
         
     % split into A and B
-    X.sav = stim_vals(er_stimidx==1);
-    X.sbv = stim_vals(er_stimidx==0);
+    X.sav = stim_vals(1:size(X.t,2)/2);
+    X.sbv = stim_vals(size(X.t,2)/2+1:end);
     
     % get ordered index
     [~,X.sai] = sort(X.sav);
@@ -431,8 +431,8 @@ for subj = 1 : n_subj
     Y.raw = patterns(scan_details.modality==1,:);
     
     % split into two groups (Ya and Yb)
-    Y.a = Y.raw(er_scanidx==1,:);
-    Y.b = Y.raw(er_scanidx==0,:);
+    Y.a = Y.raw(1:size(Y.raw,1)/2,:);
+    Y.b = Y.raw(size(Y.raw,1)/2+1:end,:);
         
     % --- remove singular dimensions --- %
     % find zero-value rows
