@@ -578,7 +578,7 @@ for subj = 1 : n_subj
     sl_vox(goodSL==false) = [];
     
     % run LDt analysis
-    RDM_ldt = rsa.stat.fisherDiscrTRDM_searchlight(X.a,Y.a,X.b,Y.b,1:96,sl_vox,model_rdm,true);
+    RDM_ldt = rsa.stat.fisherDiscrTRDM_searchlight(X.a,Y.a,X.b,Y.b,1:96,sl_vox,model_rdm,false);
 
     % save raw output
     save([dir_root,'bids_data/derivatives/',subj_handle,'/rsa/',subj_handle,'_task-rf_rsa-rawRDM.mat'],'RDM_ldt')
@@ -587,7 +587,7 @@ for subj = 1 : n_subj
     clear X Y sl_vox
     
     % add z-value to rdmBrain
-    rdmBrain(M(goodSL)) = RDM_ldt.bts;
+    rdmBrain(M(goodSL)) = mean(cat(2,RDM_ldt.ats,RDM_ldt.bts),2);
 
     % load template nifti
     filename = [dir_root,'bids_data/derivatives/',subj_handle,'/rsa/mask.nii'];        
