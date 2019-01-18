@@ -52,8 +52,8 @@ for subj = 1 : n_subj
     if exist([dir_root,'bids_data/derivatives/',subj_handle,'/rsa/SPM.mat'],'file'); delete([dir_root,'bids_data/derivatives/',subj_handle,'/rsa/SPM.mat']); end
     
     % create cell to hold events data
-    events_onset  = zeros(n_trials*2,1);
-    count = 1;
+    events_onset  = zeros(24,8);
+    count = ones(1,8);
     
     % create array to hold button press onsets
     button_onset = [];
@@ -85,14 +85,28 @@ for subj = 1 : n_subj
         % cycle through every event
         for e = 1 : size(tbl,1)
             
+            % check if encoding
+            if strcmpi(tbl.operation{e},'encoding'); offset = 0;
+            else; offset = 4;
+            end
+            
+            % switch according to string
+            switch tbl.stimulus{e}
+                case 'WATERMILL';   idx = 1 + offset;
+                case 'BIKE';        idx = 2 + offset;
+                case 'UNDERWATER';  idx = 3 + offset;
+                case 'FARM';        idx = 4 + offset;
+                otherwise;          continue
+            end
+            
             % add key values
-            events_onset(count) = tbl.onset(e);
+            events_onset(count(1,idx),idx) = tbl.onset(e);
             
             % get button press onset (if pressed)
             if ~isnan(tbl.rt(e)); button_onset(end+1,1) = tbl.onset(e) + tbl.rt(e); end %#ok<SAGROW>
                 
             % update counter
-            count = count + 1;
+            count(1,idx) = count(1,idx) + 1;
             
         end
     end
@@ -170,9 +184,9 @@ for subj = 1 : n_subj
     matlabbatch{1}.spm.stats.fmri_spec.timing.fmri_t0   = 16;  
                    
     % cycle through and define each condition
-    for trl = 1 : numel(events_onset)
+    for trl = 1 : size(events_onset,2)
         matlabbatch{1}.spm.stats.fmri_spec.sess.cond(trl).name        = ['trl',sprintf('%03.0f',trl)];
-        matlabbatch{1}.spm.stats.fmri_spec.sess.cond(trl).onset       = events_onset(trl,1);
+        matlabbatch{1}.spm.stats.fmri_spec.sess.cond(trl).onset       = events_onset(:,trl);
         matlabbatch{1}.spm.stats.fmri_spec.sess.cond(trl).duration    = 3;
         matlabbatch{1}.spm.stats.fmri_spec.sess.cond(trl).tmod        = 0;
         matlabbatch{1}.spm.stats.fmri_spec.sess.cond(trl).orth        = 1;
@@ -265,12 +279,6 @@ for subj = 1 : n_subj
     % mask functional data (set all zero-element voxels in mask to zero)
     patterns(:,maskImg(1,:)==0) = 0;
 
-    % locate "dead voxels" (functional data within mask that has zero values; e.g. where mask captures skull)
-    %deadIdx = any(patterns == 0);
-
-    % set "dead voxels" to zero across all scans
-    %patterns(:,deadIdx) = 0;
-    
     % get a boolean vector of non-zero voxels in patterns matrix
     mask_idx = all(patterns~=0);
     
@@ -389,42 +397,45 @@ for subj = 1 : n_subj
     
     % get design matrix (X) and split into two groups (Xa and Xb)
     X.raw = SPM.xX.X;
-    
-    % get GLM for nuisance regressors
-    X.n = X.raw(:,385:end);  
-    X.t = X.raw(:,1:384);
-    
+        
     % remove scans/regressors that are not visual (to
     % computationally demanding to anything more than this)
-    X.t = X.t(scan_details.modality==1,stim_details.modality==1);
-    X.n = X.n(scan_details.modality==1,:);
-         
-    % get scan/stim index for encoding/retrieval-visual index
-    er_stimidx = stim_details.encoding(stim_details.modality==1)==1;
-    er_scanidx = scan_details.encoding(scan_details.modality==1)==1;
+    X.raw = X.raw(scan_details.modality==1,:);
     
     % split GLM into two groups (train [encoding] and test [retrieval] data)
-    X.a = X.t(1:size(X.t,1)/2,1:size(X.t,2)/2);
-    X.b = X.t(size(X.t,1)/2+1:end,size(X.t,2)/2+1:end);
+    X.a = X.raw(1:size(X.raw,1)/2,:);
+    X.b = X.raw((size(X.raw,1)/2)+1:end,:);
+    
+    % get GLM for nuisance regressors
+    %X.n = X.raw(:,9:end);  
+    %X.t = X.raw(:,1:8);
+        
+    % get scan/stim index for encoding/retrieval-visual index
+    %er_stimidx = stim_details.encoding(stim_details.modality==1)==1;
+    %er_scanidx = scan_details.encoding(scan_details.modality==1)==1;
+    
+    % split GLM into two groups (train [encoding] and test [retrieval] data)
+    %X.a = X.t(1:size(X.t,1)/2,1:size(X.t,2)/2);
+    %X.b = X.t(size(X.t,1)/2+1:end,size(X.t,2)/2+1:end);
     
     % add nuisance regressors
-    X.a(:,end+1:end+size(X.n,2)) = X.n(1:size(X.t,1)/2,:);
-    X.b(:,end+1:end+size(X.n,2)) = X.n(size(X.t,1)/2+1:end,:);
+    %X.a(:,end+1:end+size(X.n,2)) = X.n(1:size(X.t,1)/2,:);
+    %X.b(:,end+1:end+size(X.n,2)) = X.n(size(X.t,1)/2+1:end,:);
     
     % get stimulus values for encoding-visual
-    stim_vals = stim_details.stimulus(stim_details.modality==1);
+    %stim_vals = stim_details.stimulus(stim_details.modality==1);
         
     % split into A and B
-    X.sav = stim_vals(1:size(X.t,2)/2);
-    X.sbv = stim_vals(size(X.t,2)/2+1:end);
+    %X.sav = stim_vals(1:size(X.t,2)/2);
+    %X.sbv = stim_vals(size(X.t,2)/2+1:end);
     
     % get ordered index
-    [~,X.sai] = sort(X.sav);
-    [~,X.sbi] = sort(X.sbv);
+    %[~,X.sai] = sort(X.sav);
+    %[~,X.sbi] = sort(X.sbv);
     
     % re-organise regressors
-    X.a(:,1:n_trials/2) = X.a(:,X.sai);
-    X.b(:,1:n_trials/2) = X.b(:,X.sbi);
+    %X.a(:,1:n_trials/2) = X.a(:,X.sai);
+    %X.b(:,1:n_trials/2) = X.b(:,X.sbi);
         
     % --- prepare patterns --- %
     % get activation matrix (Y) and 
@@ -436,8 +447,8 @@ for subj = 1 : n_subj
         
     % --- remove singular dimensions --- %
     % find zero-value rows
-    X.a_badRow = all(X.a(:,1:n_trials/2)==0,2);
-    X.b_badRow = all(X.b(:,1:n_trials/2)==0,2);
+    X.a_badRow = all(X.a(:,1:8)==0,2);
+    X.b_badRow = all(X.b(:,1:8)==0,2);
     
     % remove zero-value rows
     X.a(X.a_badRow,:) = [];
@@ -501,17 +512,17 @@ for subj = 1 : n_subj
     load([dir_root,'bids_data/derivatives/',subj_handle,'/rsa/',subj_handle,'_task-rf_rsa-mask.mat'])
     
     % predefine model rdm
-    model_rdm{1}                = nan(96,96);
+    model_rdm{1}        	= nan(8,8);
 
     % set items that belong to the different category to 1
-    model_rdm{1}(49:96,1:48)    = 1;
+    model_rdm{1}(5:8,1:4)	= 1;
 
     % set items that belong to a same category to -1
-    model_rdm{1}(49:60,1:12)    = -1;
-    model_rdm{1}(61:72,13:24)   = -1;
-    model_rdm{1}(73:84,25:36)   = -1;
-    model_rdm{1}(85:96,37:48)   = -1;
-
+    model_rdm{1}(5,1)       = -1;
+    model_rdm{1}(6,2)       = -1;
+    model_rdm{1}(7,3)       = -1;
+    model_rdm{1}(8,4)       = -1;
+    
     % set diagonal to NaN
     model_rdm{1}(logical(eye(size(model_rdm{1},1)))) = 0; 
 
@@ -578,7 +589,7 @@ for subj = 1 : n_subj
     sl_vox(goodSL==false) = [];
     
     % run LDt analysis
-    RDM_ldt = rsa.stat.fisherDiscrTRDM_searchlight(X.a,Y.a,X.b,Y.b,1:96,sl_vox,model_rdm,false);
+    RDM_ldt = rsa.stat.fisherDiscrTRDM_searchlight(X.a,Y.a,X.b,Y.b,1:8,sl_vox,model_rdm,false);
 
     % save raw output
     save([dir_root,'bids_data/derivatives/',subj_handle,'/rsa/',subj_handle,'_task-rf_rsa-rawRDM.mat'],'RDM_ldt')
