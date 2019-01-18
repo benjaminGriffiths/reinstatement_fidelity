@@ -144,14 +144,14 @@ for subj = 1 : n_subj
     R(1+(n_volumes_adj*7):n_volumes_adj*8,14) = linspace(0,1,n_volumes_adj);
     
     % add regressors that model the per-block constant
-    R(1+(n_volumes_adj*0):n_volumes_adj*1,15) = zeros(1,n_volumes_adj);
-    R(1+(n_volumes_adj*2):n_volumes_adj*3,16) = zeros(1,n_volumes_adj);
-    R(1+(n_volumes_adj*4):n_volumes_adj*5,17) = zeros(1,n_volumes_adj);
-    R(1+(n_volumes_adj*6):n_volumes_adj*7,18) = zeros(1,n_volumes_adj);
-    R(1+(n_volumes_adj*1):n_volumes_adj*2,19) = zeros(1,n_volumes_adj);
-    R(1+(n_volumes_adj*3):n_volumes_adj*4,20) = zeros(1,n_volumes_adj);
-    R(1+(n_volumes_adj*5):n_volumes_adj*6,21) = zeros(1,n_volumes_adj);
-    R(1+(n_volumes_adj*7):n_volumes_adj*8,21) = zeros(1,n_volumes_adj); 
+    R(1+(n_volumes_adj*0):n_volumes_adj*1,15) = ones(1,n_volumes_adj);
+    R(1+(n_volumes_adj*2):n_volumes_adj*3,16) = ones(1,n_volumes_adj);
+    R(1+(n_volumes_adj*4):n_volumes_adj*5,17) = ones(1,n_volumes_adj);
+    R(1+(n_volumes_adj*6):n_volumes_adj*7,18) = ones(1,n_volumes_adj);
+    R(1+(n_volumes_adj*1):n_volumes_adj*2,19) = ones(1,n_volumes_adj);
+    R(1+(n_volumes_adj*3):n_volumes_adj*4,20) = ones(1,n_volumes_adj);
+    R(1+(n_volumes_adj*5):n_volumes_adj*6,21) = ones(1,n_volumes_adj);
+    R(1+(n_volumes_adj*7):n_volumes_adj*8,21) = ones(1,n_volumes_adj); 
     
     % save nuisance regressors
     save([dir_root,'bids_data/derivatives/',subj_handle,'/rsa/R.mat'],'R')            
@@ -406,37 +406,6 @@ for subj = 1 : n_subj
     X.a = X.raw(1:size(X.raw,1)/2,:);
     X.b = X.raw((size(X.raw,1)/2)+1:end,:);
     
-    % get GLM for nuisance regressors
-    %X.n = X.raw(:,9:end);  
-    %X.t = X.raw(:,1:8);
-        
-    % get scan/stim index for encoding/retrieval-visual index
-    %er_stimidx = stim_details.encoding(stim_details.modality==1)==1;
-    %er_scanidx = scan_details.encoding(scan_details.modality==1)==1;
-    
-    % split GLM into two groups (train [encoding] and test [retrieval] data)
-    %X.a = X.t(1:size(X.t,1)/2,1:size(X.t,2)/2);
-    %X.b = X.t(size(X.t,1)/2+1:end,size(X.t,2)/2+1:end);
-    
-    % add nuisance regressors
-    %X.a(:,end+1:end+size(X.n,2)) = X.n(1:size(X.t,1)/2,:);
-    %X.b(:,end+1:end+size(X.n,2)) = X.n(size(X.t,1)/2+1:end,:);
-    
-    % get stimulus values for encoding-visual
-    %stim_vals = stim_details.stimulus(stim_details.modality==1);
-        
-    % split into A and B
-    %X.sav = stim_vals(1:size(X.t,2)/2);
-    %X.sbv = stim_vals(size(X.t,2)/2+1:end);
-    
-    % get ordered index
-    %[~,X.sai] = sort(X.sav);
-    %[~,X.sbi] = sort(X.sbv);
-    
-    % re-organise regressors
-    %X.a(:,1:n_trials/2) = X.a(:,X.sai);
-    %X.b(:,1:n_trials/2) = X.b(:,X.sbi);
-        
     % --- prepare patterns --- %
     % get activation matrix (Y) and 
     Y.raw = patterns(scan_details.modality==1,:);
