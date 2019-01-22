@@ -1,5 +1,5 @@
-%% EEG: Source Analysis
-% prepare workspace
+%% Power Analysis
+% clear workspace
 clearvars
 close all
 clc
@@ -19,189 +19,106 @@ addpath([dir_repos,'subfunctions'])
 % define number of subjects
 n_subj = 21;
 
-%% Get TF of Source Data
-% cycle through each subject
-for subj = 1 : n_subj
-    
-    % define subject handle
-    subj_handle = sprintf('sub-%02.0f',subj);
-    dir_subj = [dir_bids,'sourcedata/',subj_handle,'/eeg/'];
-    
-    % load
-    load([dir_bids,'sourcedata/',subj_handle,'/eeg/',subj_handle,'_task-rf_eeg.mat'])
-    
-    % get time-frequency representation of data
-    cfg             = [];
-    cfg.keeptrials  = 'yes';
-    cfg.method      = 'wavelet';
-    cfg.width       = 6;
-    cfg.output      = 'pow';
-    cfg.toi         = -1:0.1:3;
-    cfg.foi         = 8:2:30; % 100hz sampling
-    cfg.pad         = 'nextpow2';
-    freq            = ft_freqanalysis(cfg, source); clear source
+%% Prepare ROI
+% load sourcemodel
+load([dir_tool,'fieldtrip-20170319/template/sourcemodel/standard_sourcemodel3d10mm.mat']);
 
-    % convert powspctrm to single
-    freq.powspctrm = single(freq.powspctrm);
-    
-    % z-transform
-    avg_pow = repmat(nanmean(nanmean(freq.powspctrm,4),1),[size(freq.powspctrm,1) 1 1 size(freq.powspctrm,4)]);
-    std_pow = repmat(nanstd(nanmean(freq.powspctrm,4),[],1),[size(freq.powspctrm,1) 1 1 size(freq.powspctrm,4)]);
-    freq.powspctrm = (freq.powspctrm - avg_pow) ./ std_pow; clear avg_pow std_pow
-    
-    % average over time and frequency
-    cfg             = [];
-    cfg.avgovertime = 'yes';
-    cfg.avgoverfreq = 'yes';
-    cfg.latency     = [0.5 1.5];
-    freq            = ft_selectdata(cfg,freq);
-        
-    % save    
-    mkdir([dir_bids,'derivatives/',subj_handle,'/eeg/'])
-    save([dir_bids,'derivatives/',subj_handle,'/eeg/',subj_handle,'_task-rf_eeg-freq.mat'],'freq','brainGeo')    
-    
-    % clean workspace
-    clear subj_handle freq avg_pow std_pow
-end
+% load AAL atlas
+mri = ft_read_mri([dir_bids,'sourcedata/masks/aal.nii']);
+ 
+% interpolate clusters with grid
+cfg             = [];
+cfg.parameter	= 'anatomy';
+roi             = ft_sourceinterpolate(cfg,mri,sourcemodel);
 
-%% Get Group Averages
-% predefine group data matrix
+% define additional roi parameters
+roi.inside      = ~isnan(roi.anatomy) & roi.anatomy > 0;
+roi.anatomy     = double(~isnan(roi.anatomy) & roi.anatomy > 0);
+roi.pos         = sourcemodel.pos;
+
+%% Get Timelocked Representation of Each Condition
+% predefine cell for group data
 group_freq = cell(n_subj,2);
 
-% load template grid
-load([dir_tool,'fieldtrip-20170319/template/sourcemodel/standard_sourcemodel3d4mm.mat']); 
-template_grid = sourcemodel; clear sourcemodel
-
 % cycle through each subject
 for subj = 1 : n_subj
     
-    % define subject handle
-    subj_handle = sprintf('sub-%02.0f',subj);
-   
-    % load data
-    load([dir_bids,'derivatives/',subj_handle,'/eeg/',subj_handle,'_task-rf_eeg-freq.mat']);
+    % define subject data directory
+    dir_subj = [dir_bids,'sourcedata/',sprintf('sub-%02.0f',subj),'/eeg/'];
     
-    % find audio/video hit/miss trials
-    [audio_bool,hit_bool]   = get_splits_eeg(freq);
+    % load in raw data
+    load([dir_subj,sprintf('sub-%02.0f',subj),'_task-rf_eeg-source.mat'])  
     
-    % split video data
-    cfg                     = [];
-    cfg.trials              = hit_bool==1 & audio_bool==0;
-    group_freq{subj,1}      = ft_freqdescriptives(cfg, freq);
-
-    cfg                     = [];
-    cfg.trials              = hit_bool==0 & audio_bool==0;
-    group_freq{subj,2}      = ft_freqdescriptives(cfg, freq);
-    
-    % split audio data
-    cfg                     = [];
-    cfg.trials              = hit_bool==1 & audio_bool==1;
-    group_freq{subj,3}      = ft_freqdescriptives(cfg, freq);
-
-    cfg                     = [];
-    cfg.trials              = hit_bool==0 & audio_bool==1;
-    group_freq{subj,4}      = ft_freqdescriptives(cfg, freq);
-    
-    % add source details for each conditon
-    for condition = 1 : size(group_freq,2)
-        
-        % add source fields
-        group_freq{subj,condition}.pos          = template_grid.pos;
-        group_freq{subj,condition}.dim          = brainGeo.dim;
-        group_freq{subj,condition}.inside       = brainGeo.inside;
-        group_freq{subj,condition}.powdimord	= 'pos';
-        group_freq{subj,condition}.pow          = group_freq{subj,condition}.powspctrm;
-        group_freq{subj,condition}              = rmfield(group_freq{subj,condition},{'dimord','powspctrm','time','freq','cumtapcnt'});
-        
-        % add 'outside' co-ordinates to powspctrm
-        x                                       = nan(size(group_freq{subj,condition}.inside));
-        x(group_freq{subj,condition}.inside==1) = group_freq{subj,condition}.pow;
-        group_freq{subj,condition}.pow          = x;        
-    end
+    % get time-frequency representaiton of data for specified conditions
+    group_freq{subj,1} = get_basediff_timefrequency(source,'encoding','visual');
+    group_freq{subj,2} = get_memdiff_timefrequency(source,'retrieval','visual');
 end
-   
-% get grand average
-cfg                 = [];
-cfg.keepindividual  = 'yes';
-grand_hits.video    = ft_sourcegrandaverage(cfg, group_freq{:,1});
-grand_misses.video  = ft_sourcegrandaverage(cfg, group_freq{:,2});
-grand_hits.audio    = ft_sourcegrandaverage(cfg, group_freq{:,3});
-grand_misses.audio  = ft_sourcegrandaverage(cfg, group_freq{:,4});
-
-% save
-mkdir([dir_bids,'derivatives/group/eeg/'])
-save([dir_bids,'derivatives/group/eeg/group_task-rf_eeg-freq.mat'],'grand_hits','grand_misses')
-keep dir_root dir_bids
-
-%% Run Statistical Analysis across Whole Brain
-% load data
-load([dir_bids,'derivatives/group/eeg/group_task-rf_eeg-freq.mat'])
-
-% get modality names
-modality = fieldnames(grand_hits);
-
-% cycle through each modality
-for i = 1 : numel(modality)
-
-    % run statisitics
-    cfg                   = [];
-    cfg.dim               = grand_hits.(modality{i}).dim;  % specify dimensions of your source grid
-    cfg.design            = [1:size(grand_hits.(modality{i}).pow,1), 1:size(grand_hits.(modality{i}).pow,1); ones(1,size(grand_hits.(modality{i}).pow,1)), ones(1,size(grand_hits.(modality{i}).pow,1))+1];
-    cfg.uvar              = 1;
-    cfg.ivar              = 2;
-    cfg.method            = 'montecarlo';
-    cfg.parameter         = 'pow';
-    cfg.statistic         = 'ft_statfun_depsamplesT';
-    cfg.correctm          = 'cluster';
-    cfg.clusteralpha      = 0.05;
-    cfg.numrandomization  = 2000;
-    cfg.alpha             = 0.05;
-    cfg.tail              = -1;
-    cfg.clustertail       = -1;
-    stat.(modality{i})    = ft_sourcestatistics(cfg, grand_hits.(modality{i}), grand_misses.(modality{i}));
     
-    % extract key values
-    p(i,1)  = round(stat.(modality{i}).negclusters(1).prob,3); %#ok<SAGROW>
-    t(i,1)  = round(stat.(modality{i}).negclusters(1).clusterstat ./ sum(stat.(modality{i}).negclusterslabelmat == 1),3); %#ok<SAGROW>
-    ci(i,1) = round(stat.(modality{i}).negclusters(1).cirange,3); %#ok<SAGROW>
+% predefine cells to house concatenated group data
+grand_freq = cell(size(group_freq,2),1);
+
+% cycle through conditions
+for i = 1 : size(group_freq,2)
     
-    % calculate cohen's dz
-    dz(i,1) = round(t(i,1)./ sqrt(size(grand_hits.(modality{i}).pow,1)),3); %#ok<SAGROW>
-    stat.(modality{i}).cohens_dz = dz(i,1);
+    % get grand average of subjects
+    cfg                 = [];
+    cfg.keepindividual  = 'yes';
+    grand_freq{i,1}     = ft_freqgrandaverage(cfg,group_freq{:,i});
+    
+    % collapse over time/frequency
+    grand_freq{i,1}.pow = mean(mean(grand_freq{i,1}.powspctrm,4),3);
+    
+    % add in source model details
+    grand_freq{i,1}.powdimord   = 'rpt_pos';
+    grand_freq{i,1}.dim         = roi.dim;
+    grand_freq{i,1}.inside      = roi.inside(:);
+    grand_freq{i,1}.pos         = roi.pos;
+    grand_freq{i,1}.cfg         = [];
+    
+    % add in "outside" virtual electrods
+    tmp_pow = zeros(size(grand_freq{i,1}.pow,1),size(grand_freq{i,1}.inside,1));
+    tmp_pow(:,grand_freq{i,1}.inside) = grand_freq{i,1}.pow;
+    grand_freq{i,1}.pow = tmp_pow;
+    
+    % remove freq details
+    grand_freq{i,1} = rmfield(grand_freq{i,1},{'powspctrm','label','freq','time','dimord'});
 end
+    
+% save data
+save([dir_bids,'derivatives/group/eeg/group_task-rf_eeg-source.mat'],'grand_freq');
 
-% create results table
-results_table = table(modality,p,ci,t,dz) %#ok<NOPTS>
+%% Run Statistics
+% predefine cell for statistics
+cfg.tail        = -1;
+cfg.parameter   = 'pow';
+[stat,tbl]      = run_oneSampleT(cfg, grand_freq);
 
-% save
-save([dir_bids,'derivatives/group/eeg/group_task-rf_eeg-stat.mat'],'stat','results_table')
+% save data
+save([dir_bids,'derivatives/group/eeg/group_task-all_eeg-stat.mat'],'stat','tbl');
 
-%% Create Masked Source and Export
-% load data
-load([dir_bids,'derivatives/group/eeg/group_task-rf_eeg-stat.mat'])
-
+%% Plot Data
 % load template MRI
-mri = ft_read_mri('Y:/projects/general/fieldtrip-20170319/template/anatomy/single_subj_T1_1mm.nii');
+load([dir_tool,'fieldtrip-20170319/template/sourcemodel/standard_sourcemodel3d10mm.mat']);
 
-% get modality names
-modality = fieldnames(stat);
+% define plot names
+plot_names = {'encoding','retrieval'};
 
-% cycle through each modality
-for i = 1 : numel(modality)
-
+% cycle through conditions
+for i = 1 : numel(stat)
+        
     % get indices of clusters
-    clus_idx = stat.(modality{i}).negclusterslabelmat==1;
+    clus_idx = stat{i}.negclusterslabelmat==1;
 
     % create source data structure
     source                  = [];
-    source.inside           = stat.(modality{i}).inside;
-    source.dim              = stat.(modality{i}).dim;
-    source.pos              = stat.(modality{i}).pos*10;
+    source.inside           = stat{i}.inside;
+    source.dim              = stat{i}.dim;
+    source.pos              = stat{i}.pos*10;
     source.unit             = 'mm';
     
     % define powspctrm of cluster
-    source.pow              = nan(size(stat.(modality{i}).pos,1),1);     
-    source.pow(clus_idx)	= stat.(modality{i}).stat(clus_idx); 
+    source.pow              = nan(size(stat{i}.pos,1),1);     
+    source.pow(clus_idx)	= stat{i}.stat(clus_idx); 
     
     % reshape data to 3D
     source.pow              = reshape(source.pow,source.dim);
@@ -216,7 +133,7 @@ for i = 1 : numel(modality)
     % export
     cfg = [];
     cfg.parameter     = 'pow';               % specify the functional parameter to write to the .nii file
-    cfg.filename      = [dir_bids,'derivatives/group/eeg/group_task-rf_eeg-',modality{i},'map.nii'];  % enter the desired file name
+    cfg.filename      = [dir_bids,'derivatives/group/eeg/group_task-rf_eeg-',plot_names{i},'map.nii'];  % enter the desired file name
     cfg.filetype      = 'nifti';
     cfg.coordsys      = 'spm';
     cfg.vmpversion    = 2;
@@ -224,146 +141,23 @@ for i = 1 : numel(modality)
     ft_volumewrite(cfg,source);      % be sure to use your interpolated source data
     
     % reslice to 1mm isometric to match template MRI
-    reslice_nii([dir_bids,'derivatives/group/eeg/group_task-rf_eeg-',modality{i},'map.nii'],[dir_bids,'derivatives/group/eeg/group_task-rf_eeg-',modality{i},'map.nii'],[1 1 1]);
+    reslice_nii([dir_bids,'derivatives/group/eeg/group_task-rf_eeg-',plot_names{i},'map.nii'],[dir_bids,'derivatives/group/eeg/group_task-rf_eeg-',plot_names{i},'map.nii'],[1 1 1]);    
 end
 
 %% Extract Raw Power of Cluster 
-% load data
-load([dir_bids,'derivatives/group/eeg/group_task-rf_eeg-freq.mat'])
+% prepare table for stat values
+tbl = array2table(zeros(n_subj,2),'VariableNames',plot_names);
 
-% get indices of clusters
-clus_idx = stat.video.negclusterslabelmat==1;
+% cycle through conditions
+for i = 1 : numel(stat)
+     
+    % get indices of clusters
+    clus_idx = stat{i}.negclusterslabelmat==1;
 
-% get mean magnitude of cluster
-hits = nanmean(grand_hits.video.pow(:,clus_idx),2);
-misses = nanmean(grand_misses.video.pow(:,clus_idx),2);
-rse = hits - misses;
+    % create table
+    tbl.(plot_names{i})(:,1) = nanmean(grand_freq{i}.pow(:,clus_idx),2);
 
-% create table
-tbl = table(rse);
+end
 
 % write table
 writetable(tbl,[dir_bids,'derivatives/group/eeg/group_task-rf_eeg-cluster.csv'],'Delimiter',',')
-
-%% Get TF of Source Data
-% load stat
-load([dir_bids,'derivatives/group/eeg/group_task-rf_eeg-stat.mat'])
-
-% predefine group power matrix
-toi         = -0.5 : 0.05 : 2;
-foi         = 4 : 1 : 40;
-group_freq  = nan(n_subj,numel(foi),2);
-group_time  = nan(n_subj,numel(toi),2);
-group_pow   = nan(n_subj,numel(foi),numel(toi));
-
-% cycle through each subject
-for subj = 1 : n_subj
-    
-    % define subject handle
-    subj_handle = sprintf('sub-%02.0f',subj);
-    dir_subj = [dir_bids,'sourcedata/',subj_handle,'/eeg/'];
-    
-    % load
-    load([dir_bids,'sourcedata/',subj_handle,'/eeg/',subj_handle,'_task-rf_eeg.mat'])
-    
-    % restrict source to channels in cluster
-    cfg             = [];
-    cfg.channel     = source.label(stat.video.negclusterslabelmat(stat.video.inside==1)==1);
-    source          = ft_selectdata(cfg,source);
-        
-    % find audio/video hit/miss trials
-    [audio_bool,hit_bool]   = get_splits_eeg(source);
-    
-    % get time-frequency representation of data
-    cfg             = [];
-    cfg.keeptrials  = 'yes';
-    cfg.trials      = find(audio_bool==0);
-    cfg.method      = 'wavelet';
-    cfg.width       = 6;
-    cfg.output      = 'pow';
-    cfg.toi         = toi;
-    cfg.foi         = foi; % 100hz sampling
-    cfg.pad         = 'nextpow2';
-    freq            = ft_freqanalysis(cfg, source); clear source
-
-    % convert powspctrm to single
-    freq.powspctrm = single(freq.powspctrm);
-    
-    % z-transform
-    avg_pow = repmat(nanmean(nanmean(freq.powspctrm,4),1),[size(freq.powspctrm,1) 1 1 size(freq.powspctrm,4)]);
-    std_pow = repmat(nanstd(nanmean(freq.powspctrm,4),[],1),[size(freq.powspctrm,1) 1 1 size(freq.powspctrm,4)]);
-    freq.powspctrm = (freq.powspctrm - avg_pow) ./ std_pow; clear avg_pow std_pow
-    
-    % smooth data
-    cfg         = [];
-    cfg.fwhm_t  = 0.1;
-    cfg.fwhm_f  = 1;
-    freq        = smooth_TF_GA(cfg,freq);
-    
-    % split into hits and misses
-    cfg         = [];
-    cfg.trials  = hit_bool(audio_bool==0)==1;
-    freqtmp{1}  = ft_freqdescriptives(cfg, freq);
-
-    cfg         = [];
-    cfg.trials  = hit_bool(audio_bool==0)==0;
-    freqtmp{2}  = ft_freqdescriptives(cfg, freq);
-        
-    % extract time series
-    foi = cfg.time>=0.5 & cfg.time<=1.5;
-    group_time(subj,:,1) = nanmean(nanmean(freqtmp{1}.powspctrm(:,:,foi),2),1);
-    group_time(subj,:,2) = nanmean(nanmean(freqtmp{2}.powspctrm(:,:,foi),2),1);
-    
-    % extract frequency spectrum
-    foi = cfg.freq>=8 & cfg.freq<=30;
-    group_freq(subj,:,1) = nanmean(nanmean(freqtmp{1}.powspctrm(:,:,toi),3),1);
-    group_freq(subj,:,2) = nanmean(nanmean(freqtmp{2}.powspctrm(:,:,toi),3),1);
-    
-    % take difference
-    group_pow(subj,:,:) = squeeze(nanmean(freqtmp{1}.powspctrm - freqtmp{2}.powspctrm,1));
-    
-    % clean workspace
-    clear subj_handle freq freqtmp cfg brainGeo avg_pow std_pow
-end
-
-% save group timeseries
-save([dir_bids,'derivatives/group/eeg/group_task-rf_eeg-spectogram.mat'],'group_time','group_freq','group_pow')
-
-%%
-load([dir_bids,'derivatives/group/eeg/group_task-rf_eeg-spectogram.mat'])
-
-% predefine group power matrix
-pow         = squeeze(mean(group_pow,1) ./ sqrt(var(group_pow,1)/size(group_pow,1)));
-toi         = linspace(-0.5,2,size(pow,2));
-foi         = linspace(4,40,size(pow,1));
-
-% define colormap
-map = flipud(brewermap(10,'RdBu'));
-
-% plot specto
-imagesc(toi,foi,pow); axis xy; hold on
-plot([0 0],[4 40],'k--')
-colorbar();
-colormap(map)
-caxis([-0.3 0.3])
-
-% plot timeseies
-figure; hold on
-shadedErrorBar(toi,mean(group_time(:,:,2)),sem(group_time(:,:,2)),{'color',[0.4,0.4,0.4]});
-shadedErrorBar(toi,mean(group_time(:,:,1)),sem(group_time(:,:,1)),{'color',map(2,:)});
-plot([0 0],[-0.2 0.2],'k--')
-plot([-0.5 2],[0 0],'k-')
-xlim([-0.5 2]); ylim([-0.2 0.2])
-xlabel('Time (s)'); ylabel('Power (z)')
-set(gca,'box','off','tickdir','out','ytick',[-0.2 0 0.2])
-
-% plot freq spectrum
-figure; hold on
-shadedErrorBar(foi,mean(group_freq(:,:,2)),sem(group_freq(:,:,2)),{'color',[0.4,0.4,0.4]});
-shadedErrorBar(foi,mean(group_freq(:,:,1)),sem(group_freq(:,:,1)),{'color',map(2,:)});
-%plot([0 0],[-0.2 0.2],'k--')
-%plot([-0.5 2],[0 0],'k-')
-%xlim([-0.5 2]); ylim([-0.2 0.2])
-xlabel('Time (s)'); ylabel('Power (z)')
-set(gca,'box','off','tickdir','out','ytick',[-0.2 0 0.2])
-
