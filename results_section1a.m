@@ -46,14 +46,15 @@ for subj = 1 : n_subj
     
     % define key subject strings
     subj_handle = sprintf('sub-%02.0f',subj);
-    dir_subj = [dir_root,'bids_data/',subj_handle,'/'];
+    dir_subj = [dir_root,'bids_data/derivatives/',subj_handle,'/'];
+    mkdir([dir_subj,'rsa-percept/'])
     
     % delete old SPM file if it exists
-    if exist([dir_root,'bids_data/derivatives/',subj_handle,'/rsa/SPM.mat'],'file'); delete([dir_root,'bids_data/derivatives/',subj_handle,'/rsa/SPM.mat']); end
+    if exist([dir_subj,'rsa-percept/SPM.mat'],'file'); delete([dir_subj,'rsa-percept/SPM.mat']); end
     
     % create cell to hold events data
-    events_onset  = zeros(24,8);
-    count = ones(1,8);
+    events_onset  = zeros(n_trials/2,1);
+    count = 1;
     
     % create array to hold button press onsets
     button_onset = [];
@@ -85,32 +86,25 @@ for subj = 1 : n_subj
         % cycle through every event
         for e = 1 : size(tbl,1)
             
-            % check if encoding
-            if strcmpi(tbl.operation{e},'encoding'); offset = 0;
-            else; offset = 4;
+            % check if encoding adn visual
+            if strcmpi(tbl.operation{e},'encoding') && strcmpi(tbl.modality{e},'visual')
+
+                % switch according to string
+                switch tbl.stimulus{e}
+                    case 'WATERMILL';   idx = 1;
+                    case 'BIKE';        idx = 2;
+                    case 'UNDERWATER';  idx = 3;
+                    case 'FARM';        idx = 4;
+                    otherwise;          continue
+                end
+
+                % add key values
+                events_onset(count,1) = tbl.onset(e);
+                count = count + 1;
             end
-            
-            % switch according to string
-            switch tbl.stimulus{e}
-                case 'WATERMILL';   idx = 1 + offset;
-                case 'BIKE';        idx = 2 + offset;
-                case 'UNDERWATER';  idx = 3 + offset;
-                case 'FARM';        idx = 4 + offset;
-                otherwise;          continue
-            end
-            
-            % add key values
-            events_onset(count(1,idx),idx) = tbl.onset(e);
-            
-            % mark forgotten items
-            if tbl.recalled(e)~=1; events_onset(count(1,idx),idx) = NaN; end
-            
+
             % get button press onset (if pressed)
-            if ~isnan(tbl.rt(e)); button_onset(end+1,1) = tbl.onset(e) + tbl.rt(e); end %#ok<SAGROW>
-                
-            % update counter
-            count(1,idx) = count(1,idx) + 1;
-            
+            if ~isnan(tbl.rt(e)); button_onset(end+1,1) = tbl.onset(e) + tbl.rt(e); end %#ok<SAGROW>            
         end
     end
     
@@ -122,7 +116,7 @@ for subj = 1 : n_subj
     button_onset = button_onset ./ EEG_sample;    
     
     % load movement parameters
-    R = load([dir_root,'bids_data/derivatives/',subj_handle,'/func/rp_a',subj_handle,'_task-rf_run-1_bold.txt']);
+    R = load([dir_subj,'/func/rp_a',subj_handle,'_task-rf_run-1_bold.txt']);
     
     % find first three volumes and last five volumes of each run
     bad_scans = zeros(8*n_runs,1);
@@ -157,11 +151,11 @@ for subj = 1 : n_subj
     R(1+(n_volumes_adj*7):n_volumes_adj*8,21) = ones(1,n_volumes_adj); 
     
     % save nuisance regressors
-    save([dir_root,'bids_data/derivatives/',subj_handle,'/rsa/R.mat'],'R')            
+    save([dir_subj,'/rsa-percept/R.mat'],'R')            
     clear R n_volumes_adj run
     
     % get all scans for GLM
-    all_scans = get_functional_files([dir_root,'bids_data/derivatives/',subj_handle,'/'],'ua');
+    all_scans = get_functional_files(dir_subj,'ua');
     all_scans = all_scans{1};
     
     % remove bad scans
@@ -173,23 +167,23 @@ for subj = 1 : n_subj
     matlabbatch{1}.spm.stats.fmri_spec.mthresh          = 0.8;
     matlabbatch{1}.spm.stats.fmri_spec.mask             = {''};
     matlabbatch{1}.spm.stats.fmri_spec.cvi              = 'AR(1)';
-    matlabbatch{1}.spm.stats.fmri_spec.dir              = {[dir_root,'bids_data/derivatives/',subj_handle,'/rsa']};
+    matlabbatch{1}.spm.stats.fmri_spec.dir              = {[dir_subj,'/rsa-percept']};
     matlabbatch{1}.spm.stats.fmri_spec.fact             = struct('name', {}, 'levels', {});
     matlabbatch{1}.spm.stats.fmri_spec.bases.hrf.derivs = [0 0];
     matlabbatch{1}.spm.stats.fmri_spec.sess.multi       = {''};
     matlabbatch{1}.spm.stats.fmri_spec.sess.regress     = struct('name', {}, 'val', {});
     matlabbatch{1}.spm.stats.fmri_spec.sess.hpf         = 128;
     matlabbatch{1}.spm.stats.fmri_spec.sess.scans       = all_scans;
-    matlabbatch{1}.spm.stats.fmri_spec.sess.multi_reg   = {[dir_root,'bids_data/derivatives/',subj_handle,'/rsa/R.mat']};   
+    matlabbatch{1}.spm.stats.fmri_spec.sess.multi_reg   = {[dir_subj,'/rsa-percept/R.mat']};   
     matlabbatch{1}.spm.stats.fmri_spec.timing.units     = 'secs';
     matlabbatch{1}.spm.stats.fmri_spec.timing.RT        = 2;
     matlabbatch{1}.spm.stats.fmri_spec.timing.fmri_t    = 32;
     matlabbatch{1}.spm.stats.fmri_spec.timing.fmri_t0   = 16;  
                    
     % cycle through and define each condition
-    for trl = 1 : size(events_onset,2)
+    for trl = 1 : size(events_onset,1)
         matlabbatch{1}.spm.stats.fmri_spec.sess.cond(trl).name        = ['trl',sprintf('%03.0f',trl)];
-        matlabbatch{1}.spm.stats.fmri_spec.sess.cond(trl).onset       = events_onset(:,trl);
+        matlabbatch{1}.spm.stats.fmri_spec.sess.cond(trl).onset       = events_onset(trl,1);
         matlabbatch{1}.spm.stats.fmri_spec.sess.cond(trl).duration    = 3;
         matlabbatch{1}.spm.stats.fmri_spec.sess.cond(trl).tmod        = 0;
         matlabbatch{1}.spm.stats.fmri_spec.sess.cond(trl).orth        = 1;
@@ -207,7 +201,7 @@ for subj = 1 : n_subj
     % estimate model
     matlabbatch{2}.spm.stats.fmri_est.write_residuals                   = 0;
     matlabbatch{2}.spm.stats.fmri_est.method.Classical                  = 1;
-    matlabbatch{2}.spm.stats.fmri_est.spmmat                            = {[dir_root,'bids_data/derivatives/',subj_handle,'/rsa/SPM.mat']};
+    matlabbatch{2}.spm.stats.fmri_est.spmmat                            = {[dir_subj,'/rsa-percept/SPM.mat']};
 
     % run batch
     spm_jobman('run',matlabbatch)
@@ -395,26 +389,13 @@ for subj = 1 : n_subj
     % get design matrix (X) and split into two groups (Xa and Xb)
     X.raw = SPM.xX.X;
     
-    % extract nusiance regressors (button press and 6 movement)
-    X.n = X.raw(:,385:391);    
-    X.t = X.raw(:,1:384);
-    
-    % remove scans/regressors that are not encoding-visual (to
+    % remove scans/regressors that are not visual (to
     % computationally demanding to anything more than this)
-    X.t = X.t(scan_details.encoding==1&scan_details.modality==1,stim_details.encoding==1&stim_details.modality==1);
-    X.n = X.n(scan_details.encoding==1&scan_details.modality==1,:);
-      
-    % split GLM into two groups (train and test data) [excluding nuisance regressors]
-    X.a = X.t(1:size(X.t)/2,1:(n_trials/4));
-    X.b = X.t((size(X.t)/2)+1:end,(n_trials/4)+1:n_trials/2);
+    X.raw = X.raw(scan_details.modality==1&scan_details.encoding,:);
     
-    % add nuisance regressors
-    X.a(:,end+1:end+size(X.n,2)) = X.n(1:size(X.t)/2,:);
-    X.b(:,end+1:end+size(X.n,2)) = X.n((size(X.t)/2)+1:end,:);
-    
-    % add linear nuisance reg.
-    X.a(:,end+1) = linspace(0,1,size(X.a,1));
-    X.b(:,end+1) = linspace(0,1,size(X.b,1));
+    % split GLM into two groups (train [encoding] and test [retrieval] data)
+    X.a = X.raw(1:size(X.raw,1)/2,:);
+    X.b = X.raw((size(X.raw,1)/2)+1:end,:);
     
     % get stimulus values for encoding-visual
     stim_vals = stim_details.stimulus(stim_details.encoding==1&stim_details.modality==1);

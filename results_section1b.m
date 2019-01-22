@@ -40,6 +40,180 @@ scan_search = 12;                                           % searchlight radius
 scan_func   = {'_3_1','_4_1','_5_1','_6_1',...
                '_8_1','_9_1','_10_1','_11_1'};              % functional scan suffix
 
+%% Create GLM Model
+% cycle through each subject
+for subj = 1 : n_subj
+    
+    % define key subject strings
+    subj_handle = sprintf('sub-%02.0f',subj);
+    dir_subj = [dir_root,'bids_data/',subj_handle,'/'];
+    
+    % delete old SPM file if it exists
+    if exist([dir_root,'bids_data/derivatives/',subj_handle,'/rsa/SPM.mat'],'file'); delete([dir_root,'bids_data/derivatives/',subj_handle,'/rsa-ers/SPM.mat']); end
+    
+    % create cell to hold events data
+    events_onset  = zeros(24,8);
+    count = ones(1,8);
+    
+    % create array to hold button press onsets
+    button_onset = [];
+    
+    % define 'length of scan'
+    LoS = 0;
+        
+    % cycle through each run
+    for run = 1 : n_runs
+
+        % load event table
+        tbl = readtable([dir_root,'bids_data/',subj_handle,'/func/',subj_handle,'_task-rf_run-',num2str(run),'_events.tsv'],'FileType','text','Delimiter','\t');
+        
+        % remove first three volumes and last five volumes
+        tbl = tbl(4:end-5,:);
+        
+        % adjust time accordingly
+        tbl.onset = tbl.onset - 30000;
+        
+        % add length of prior scans to this event table
+        tbl.onset = tbl.onset + LoS;
+        
+        % extract 'length of scan' and add on additional scan for next iteration
+        LoS = max(tbl.onset) + (TR*EEG_sample)-1;
+        
+        % cut table to stimulus onset
+        tbl = tbl(ismember(tbl.trial_type,'Stimulus Onset'),:);
+        
+        % cycle through every event
+        for e = 1 : size(tbl,1)
+            
+            % check if encoding
+            if strcmpi(tbl.operation{e},'encoding'); offset = 0;
+            else; offset = 4;
+            end
+            
+            % switch according to string
+            switch tbl.stimulus{e}
+                case 'WATERMILL';   idx = 1 + offset;
+                case 'BIKE';        idx = 2 + offset;
+                case 'UNDERWATER';  idx = 3 + offset;
+                case 'FARM';        idx = 4 + offset;
+                otherwise;          continue
+            end
+            
+            % add key values
+            events_onset(count(1,idx),idx) = tbl.onset(e);
+            
+            % mark forgotten items
+            if tbl.recalled(e)~=1; events_onset(count(1,idx),idx) = NaN; end
+            
+            % get button press onset (if pressed)
+            if ~isnan(tbl.rt(e)); button_onset(end+1,1) = tbl.onset(e) + tbl.rt(e); end %#ok<SAGROW>
+                
+            % update counter
+            count(1,idx) = count(1,idx) + 1;
+            
+        end
+    end
+    
+    % tidy up
+    clear count e tbl LoS run
+       
+    % convert event onsets and button presses from EEG samples to seconds
+    events_onset = events_onset ./ EEG_sample;
+    button_onset = button_onset ./ EEG_sample;    
+    
+    % load movement parameters
+    R = load([dir_root,'bids_data/derivatives/',subj_handle,'/func/rp_a',subj_handle,'_task-rf_run-1_bold.txt']);
+    
+    % find first three volumes and last five volumes of each run
+    bad_scans = zeros(8*n_runs,1);
+    for run = 1 : n_runs
+        bad_scans(1+(8*(run-1)):8*run) = [1 2 3 251 252 253 254 255] + n_volumes*(run-1);
+    end
+    
+    % remove these scans
+    R(bad_scans,:) = [];
+    
+    % define number of volumes remaining in a run
+    n_volumes_adj = n_volumes - 8;
+    
+    % add regressors that model the per-block linear change
+    R(1+(n_volumes_adj*0):n_volumes_adj*1,7) = linspace(0,1,n_volumes_adj);
+    R(1+(n_volumes_adj*2):n_volumes_adj*3,8) = linspace(0,1,n_volumes_adj);
+    R(1+(n_volumes_adj*4):n_volumes_adj*5,9) = linspace(0,1,n_volumes_adj);
+    R(1+(n_volumes_adj*6):n_volumes_adj*7,10) = linspace(0,1,n_volumes_adj);
+    R(1+(n_volumes_adj*1):n_volumes_adj*2,11) = linspace(0,1,n_volumes_adj);
+    R(1+(n_volumes_adj*3):n_volumes_adj*4,12) = linspace(0,1,n_volumes_adj);
+    R(1+(n_volumes_adj*5):n_volumes_adj*6,13) = linspace(0,1,n_volumes_adj);
+    R(1+(n_volumes_adj*7):n_volumes_adj*8,14) = linspace(0,1,n_volumes_adj);
+    
+    % add regressors that model the per-block constant
+    R(1+(n_volumes_adj*0):n_volumes_adj*1,15) = ones(1,n_volumes_adj);
+    R(1+(n_volumes_adj*2):n_volumes_adj*3,16) = ones(1,n_volumes_adj);
+    R(1+(n_volumes_adj*4):n_volumes_adj*5,17) = ones(1,n_volumes_adj);
+    R(1+(n_volumes_adj*6):n_volumes_adj*7,18) = ones(1,n_volumes_adj);
+    R(1+(n_volumes_adj*1):n_volumes_adj*2,19) = ones(1,n_volumes_adj);
+    R(1+(n_volumes_adj*3):n_volumes_adj*4,20) = ones(1,n_volumes_adj);
+    R(1+(n_volumes_adj*5):n_volumes_adj*6,21) = ones(1,n_volumes_adj);
+    R(1+(n_volumes_adj*7):n_volumes_adj*8,21) = ones(1,n_volumes_adj); 
+    
+    % save nuisance regressors
+    save([dir_root,'bids_data/derivatives/',subj_handle,'/rsa-ers/R.mat'],'R')            
+    clear R n_volumes_adj run
+    
+    % get all scans for GLM
+    all_scans = get_functional_files([dir_root,'bids_data/derivatives/',subj_handle,'/'],'ua');
+    all_scans = all_scans{1};
+    
+    % remove bad scans
+    all_scans(bad_scans) = [];
+    
+    % define parameters for GLM
+    matlabbatch{1}.spm.stats.fmri_spec.volt             = 1;
+    matlabbatch{1}.spm.stats.fmri_spec.global           = 'None';
+    matlabbatch{1}.spm.stats.fmri_spec.mthresh          = 0.8;
+    matlabbatch{1}.spm.stats.fmri_spec.mask             = {''};
+    matlabbatch{1}.spm.stats.fmri_spec.cvi              = 'AR(1)';
+    matlabbatch{1}.spm.stats.fmri_spec.dir              = {[dir_root,'bids_data/derivatives/',subj_handle,'/rsa-ers']};
+    matlabbatch{1}.spm.stats.fmri_spec.fact             = struct('name', {}, 'levels', {});
+    matlabbatch{1}.spm.stats.fmri_spec.bases.hrf.derivs = [0 0];
+    matlabbatch{1}.spm.stats.fmri_spec.sess.multi       = {''};
+    matlabbatch{1}.spm.stats.fmri_spec.sess.regress     = struct('name', {}, 'val', {});
+    matlabbatch{1}.spm.stats.fmri_spec.sess.hpf         = 128;
+    matlabbatch{1}.spm.stats.fmri_spec.sess.scans       = all_scans;
+    matlabbatch{1}.spm.stats.fmri_spec.sess.multi_reg   = {[dir_root,'bids_data/derivatives/',subj_handle,'/rsa-ers/R.mat']};   
+    matlabbatch{1}.spm.stats.fmri_spec.timing.units     = 'secs';
+    matlabbatch{1}.spm.stats.fmri_spec.timing.RT        = 2;
+    matlabbatch{1}.spm.stats.fmri_spec.timing.fmri_t    = 32;
+    matlabbatch{1}.spm.stats.fmri_spec.timing.fmri_t0   = 16;  
+                   
+    % cycle through and define each condition
+    for trl = 1 : size(events_onset,2)
+        matlabbatch{1}.spm.stats.fmri_spec.sess.cond(trl).name        = ['trl',sprintf('%03.0f',trl)];
+        matlabbatch{1}.spm.stats.fmri_spec.sess.cond(trl).onset       = events_onset(:,trl);
+        matlabbatch{1}.spm.stats.fmri_spec.sess.cond(trl).duration    = 3;
+        matlabbatch{1}.spm.stats.fmri_spec.sess.cond(trl).tmod        = 0;
+        matlabbatch{1}.spm.stats.fmri_spec.sess.cond(trl).orth        = 1;
+        matlabbatch{1}.spm.stats.fmri_spec.sess.cond(trl).pmod        = struct('name',{},'param',{},'poly',{});
+    end
+    
+    % add button press
+    matlabbatch{1}.spm.stats.fmri_spec.sess.cond(end+1).name      = 'button_press';
+    matlabbatch{1}.spm.stats.fmri_spec.sess.cond(end).onset       = button_onset;
+    matlabbatch{1}.spm.stats.fmri_spec.sess.cond(end).duration    = 0.5;
+    matlabbatch{1}.spm.stats.fmri_spec.sess.cond(end).tmod        = 0;
+    matlabbatch{1}.spm.stats.fmri_spec.sess.cond(end).orth        = 1;
+    matlabbatch{1}.spm.stats.fmri_spec.sess.cond(end).pmod        = struct('name',{},'param',{},'poly',{});
+    
+    % estimate model
+    matlabbatch{2}.spm.stats.fmri_est.write_residuals                   = 0;
+    matlabbatch{2}.spm.stats.fmri_est.method.Classical                  = 1;
+    matlabbatch{2}.spm.stats.fmri_est.spmmat                            = {[dir_root,'bids_data/derivatives/',subj_handle,'/rsa-ers/SPM.mat']};
+
+    % run batch
+    spm_jobman('run',matlabbatch)
+    clear matlabbatch all_scans bad_scans subj_handle button_onset events_onset trl    
+end
+
 %% Prepare GLM and Data for Searchlight Analysis
 % cycle through each subject
 for subj = 1 : n_subj
@@ -49,10 +223,10 @@ for subj = 1 : n_subj
     dir_subj = [dir_root,'bids_data/derivatives/',subj_handle,'/'];
     
     % load pattern data
-    load([dir_subj,'/rsa/',subj_handle,'_task-rf_rsa-maskedDemeanedVolume.mat'])
+    load([dir_subj,'/rsa-ers/',subj_handle,'_task-rf_rsa-maskedDemeanedVolume.mat'])
     
     % load SPM.mat
-    load([dir_subj,'/rsa/SPM.mat'])
+    load([dir_subj,'/rsa-ers/SPM.mat'])
     
     % create table to record stimulus detail
     stim_details  = array2table(zeros(n_trials*2,2),'VariableNames', {'encoding','modality'});
@@ -167,8 +341,16 @@ for subj = 1 : n_subj
     X.a(:,X.a_badCol) = [];
     X.b(:,X.b_badCol) = [];
     
+    %
+    %
+    %
+    % BUG!!!! CHECK BLOCK CONSTANT!
+    %
+    %
+    %
+    
     % save data
-    save([dir_subj,'/rsa/',subj_handle,'_task-rf_rsa-FormattedVolume.mat'],'X','Y')
+    save([dir_subj,'/rsa-ers/',subj_handle,'_task-rf_rsa-FormattedVolume.mat'],'X','Y')
     
     clear X Y i j fn patterns subj_handle dir_subj
     
@@ -199,8 +381,8 @@ for subj = 1 : n_subj
     subj_handle = sprintf('sub-%02.0f',subj);
     
     % load data
-    load([dir_root,'bids_data/derivatives/',subj_handle,'/rsa/',subj_handle,'_task-rf_rsa-FormattedVolume.mat'])
-    load([dir_root,'bids_data/derivatives/',subj_handle,'/rsa/',subj_handle,'_task-rf_rsa-mask.mat'])
+    load([dir_root,'bids_data/derivatives/',subj_handle,'/rsa-ers/',subj_handle,'_task-rf_rsa-FormattedVolume.mat'])
+    load([dir_root,'bids_data/derivatives/',subj_handle,'/rsa-ers/',subj_handle,'_task-rf_rsa-mask.mat'])
     
     % predefine model rdm
     model_rdm{1}        	= nan(8,8);
@@ -283,7 +465,7 @@ for subj = 1 : n_subj
     RDM_ldt = rsa.stat.fisherDiscrTRDM_searchlight(X.a,Y.a,X.b,Y.b,1:8,sl_vox,model_rdm,false);
 
     % save raw output
-    save([dir_root,'bids_data/derivatives/',subj_handle,'/rsa/',subj_handle,'_task-rf_rsa-rawRDM.mat'],'RDM_ldt')
+    save([dir_root,'bids_data/derivatives/',subj_handle,'/rsa-ers/',subj_handle,'_task-rf_rsa-rawRDM.mat'],'RDM_ldt')
     
     % clean up
     clear X Y sl_vox
@@ -292,11 +474,11 @@ for subj = 1 : n_subj
     rdmBrain(M(goodSL)) = mean(cat(2,RDM_ldt.ats,RDM_ldt.bts),2);
 
     % load template nifti
-    filename = [dir_root,'bids_data/derivatives/',subj_handle,'/rsa/mask.nii'];        
+    filename = [dir_root,'bids_data/derivatives/',subj_handle,'/rsa-ers/mask.nii'];        
     V = load_untouch_nii(filename);
 
     % change filename, datatype, and image
-    V.fileprefix = [dir_root,'bids_data/derivatives/',subj_handle,'/rsa/',subj_handle,'_task-rf_rsa-searchlight'];
+    V.fileprefix = [dir_root,'bids_data/derivatives/',subj_handle,'/rsa-ers/',subj_handle,'_task-rf_rsa-searchlight'];
     V.hdr.dime.datatype = 64;
     V.img = rdmBrain;
 
@@ -329,14 +511,14 @@ for subj = 1 : n_subj
     matlabbatch{1}.spm.spatial.normalise.write.woptions.vox     = [3 3 4];
     matlabbatch{1}.spm.spatial.normalise.write.woptions.interp  = 4;
     matlabbatch{1}.spm.spatial.normalise.write.subj.def         = {[dir_root,'bids_data/derivatives/',subj_handle,'/anat/y_',subj_handle,'_T1w.nii']};
-    matlabbatch{1}.spm.spatial.normalise.write.subj.resample    = {[dir_root,'bids_data/derivatives/',subj_handle,'/rsa/',subj_handle,'_task-rf_rsa-searchlight.nii,1']};
+    matlabbatch{1}.spm.spatial.normalise.write.subj.resample    = {[dir_root,'bids_data/derivatives/',subj_handle,'/rsa-ers/',subj_handle,'_task-rf_rsa-searchlight.nii,1']};
 
     % smooth
     matlabbatch{2}.spm.spatial.smooth.fwhm                      = [8 8 8];
     matlabbatch{2}.spm.spatial.smooth.dtype                     = 0;
     matlabbatch{2}.spm.spatial.smooth.im                        = 1;
     matlabbatch{2}.spm.spatial.smooth.prefix                    = 's';
-    matlabbatch{2}.spm.spatial.smooth.data                      = {[dir_root,'bids_data/derivatives/',subj_handle,'/rsa/w',subj_handle,'_task-rf_rsa-searchlight.nii,1']};
+    matlabbatch{2}.spm.spatial.smooth.data                      = {[dir_root,'bids_data/derivatives/',subj_handle,'/rsa-ers/w',subj_handle,'_task-rf_rsa-searchlight.nii,1']};
     
     % run batch
     spm_jobman('run',matlabbatch)
@@ -355,11 +537,11 @@ for subj = 1 : n_subj
     subj_handle = sprintf('sub-%02.0f',subj);
     
     % get searchlight images
-    rMapFiles{subj,1}  = [dir_root,'bids_data/derivatives/',subj_handle,'/rsa/sw',subj_handle,'_task-rf_rsa-searchlight.nii,1'];
+    rMapFiles{subj,1}  = [dir_root,'bids_data/derivatives/',subj_handle,'/rsa-ers/sw',subj_handle,'_task-rf_rsa-searchlight.nii,1'];
 end
 
 % create second-level glms
-matlabbatch{1}.spm.stats.factorial_design.dir                       = {[dir_root,'bids_data/derivatives/group/rsa/visual-ers/']};
+matlabbatch{1}.spm.stats.factorial_design.dir                       = {[dir_root,'bids_data/derivatives/group/rsa-ers']};
 matlabbatch{1}.spm.stats.factorial_design.des.t1.scans              = rMapFiles(:,1);
 matlabbatch{1}.spm.stats.factorial_design.cov                       = struct('c', {}, 'cname', {}, 'iCFI', {}, 'iCC', {});
 matlabbatch{1}.spm.stats.factorial_design.multi_cov                 = struct('files', {}, 'iCFI', {}, 'iCC', {});
@@ -373,7 +555,7 @@ spm_jobman('run',matlabbatch)
 clear matlabbatch subjHandle subj
 
 % estimate model
-matlabbatch{1}.spm.stats.fmri_est.spmmat            = {[dir_root,'bids_data/derivatives/group/rsa/visual-ers/SPM.mat']};
+matlabbatch{1}.spm.stats.fmri_est.spmmat            = {[dir_root,'bids_data/derivatives/group/rsa-ers/SPM.mat']};
 matlabbatch{1}.spm.stats.fmri_est.write_residuals   = 0;
 matlabbatch{1}.spm.stats.fmri_est.method.Classical  = 1;
 
@@ -381,7 +563,7 @@ spm_jobman('run',matlabbatch)
 clear matlabbatch
 
 % define contrasts
-matlabbatch{1}.spm.stats.con.spmmat(1)                  = {[dir_root,'bids_data/derivatives/group/rsa/visual-ers/SPM.mat']};   
+matlabbatch{1}.spm.stats.con.spmmat(1)                  = {[dir_root,'bids_data/derivatives/group/rsa-ers/SPM.mat']};   
 matlabbatch{1}.spm.stats.con.delete                     = 0;    
 matlabbatch{1}.spm.stats.con.consess{1}.tcon.name       = 'within>between';
 matlabbatch{1}.spm.stats.con.consess{1}.tcon.convec     = 1;
@@ -392,13 +574,13 @@ clear matlabbatch
 
 %% Extract Metrics for Visualisation
 % combine visual cluster and save
-combine_spm_cluster([dir_root,'bids_data/derivatives/group/rsa/visual-ers/'])
+combine_spm_cluster([dir_root,'bids_data/derivatives/group/rsa-ers/'])
 
 % load SPM details
-load([dir_root,'bids_data/derivatives/group/rsa/visual-ers/SPM.mat'])
+load([dir_root,'bids_data/derivatives/group/rsa-ers/SPM.mat'])
 
 % extract subject values for each cluster
-[betas,d] = extract_sample_points([dir_root,'bids_data/derivatives/group/rsa/visual-ers/'],SPM);
+[betas,d] = extract_sample_points([dir_root,'bids_data/derivatives/group/rsa-ers/'],SPM);
 
 % save betas as table
 tbl = array2table(betas','VariableNames',{'Occipital','Central'});
