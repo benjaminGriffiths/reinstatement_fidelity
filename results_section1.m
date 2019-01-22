@@ -36,7 +36,7 @@ TR          = 2;
 EEG_sample  = 5000;
 scan_fov    = [64 64 32];                                   % scan field of view
 scan_vox    = [3 3 4];                                      % scan voxel size
-scan_search = 8;                                           % searchlight radius
+scan_search = 12;                                           % searchlight radius
 scan_func   = {'_3_1','_4_1','_5_1','_6_1',...
                '_8_1','_9_1','_10_1','_11_1'};              % functional scan suffix
 
@@ -101,6 +101,9 @@ for subj = 1 : n_subj
             
             % add key values
             events_onset(count(1,idx),idx) = tbl.onset(e);
+            
+            % mark forgotten items
+            if tbl.recalled(e)~=1; events_onset(count(1,idx),idx) = NaN; end
             
             % get button press onset (if pressed)
             if ~isnan(tbl.rt(e)); button_onset(end+1,1) = tbl.onset(e) + tbl.rt(e); end %#ok<SAGROW>
@@ -612,13 +615,14 @@ for subj = 1 : n_subj
     % smooth
     matlabbatch{2}.spm.spatial.smooth.fwhm                      = [8 8 8];
     matlabbatch{2}.spm.spatial.smooth.dtype                     = 0;
-    matlabbatch{2}.spm.spatial.smooth.im                        = 0;
+    matlabbatch{2}.spm.spatial.smooth.im                        = 1;
     matlabbatch{2}.spm.spatial.smooth.prefix                    = 's';
     matlabbatch{2}.spm.spatial.smooth.data                      = {[dir_root,'bids_data/derivatives/',subj_handle,'/rsa/w',subj_handle,'_task-rf_rsa-searchlight.nii,1']};
     
     % run batch
     spm_jobman('run',matlabbatch)
     clear matlabbatch
+    
 end
 
 %% Run Second-Level Statistics
