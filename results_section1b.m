@@ -47,6 +47,7 @@ for subj = 1 : n_subj
     % define key subject strings
     subj_handle = sprintf('sub-%02.0f',subj);
     dir_subj = [dir_root,'bids_data/',subj_handle,'/'];
+    mkdir([dir_root,'bids_data/derivatives/',subj_handle,'/rsa-ers/'])
     
     % delete old SPM file if it exists
     if exist([dir_root,'bids_data/derivatives/',subj_handle,'/rsa/SPM.mat'],'file'); delete([dir_root,'bids_data/derivatives/',subj_handle,'/rsa-ers/SPM.mat']); end
@@ -101,9 +102,6 @@ for subj = 1 : n_subj
             
             % add key values
             events_onset(count(1,idx),idx) = tbl.onset(e);
-            
-            % mark forgotten items
-            if tbl.recalled(e)~=1; events_onset(count(1,idx),idx) = NaN; end
             
             % get button press onset (if pressed)
             if ~isnan(tbl.rt(e)); button_onset(end+1,1) = tbl.onset(e) + tbl.rt(e); end %#ok<SAGROW>
