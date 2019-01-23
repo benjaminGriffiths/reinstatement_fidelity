@@ -96,7 +96,7 @@ cfg.parameter   = 'pow';
 % save data
 save([dir_bids,'derivatives/group/eeg/group_task-all_eeg-stat.mat'],'stat','tbl');
 
-%% Plot Data
+%% Create Surface Plots
 % load template MRI
 load([dir_tool,'fieldtrip-20170319/template/sourcemodel/standard_sourcemodel3d10mm.mat']);
 
