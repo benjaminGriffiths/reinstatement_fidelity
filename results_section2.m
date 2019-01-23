@@ -96,6 +96,72 @@ cfg.parameter   = 'pow';
 % save data
 save([dir_bids,'derivatives/group/eeg/group_task-all_eeg-stat.mat'],'stat','tbl');
 
+%% Extract Raw Power of Cluster 
+% prepare table for stat values
+tbl = array2table(zeros(n_subj,2),'VariableNames',plot_names);
+
+% cycle through conditions
+for i = 1 : numel(stat)
+     
+    % get indices of clusters
+    clus_idx = stat{i}.negclusterslabelmat==1;
+
+    % create table
+    tbl.(plot_names{i})(:,1) = nanmean(grand_freq{i}.pow(:,clus_idx),2);
+end
+
+% write table
+writetable(tbl,[dir_bids,'derivatives/group/eeg/group_task-rf_eeg-cluster.csv'],'Delimiter',',')
+
+%% Get Time/Frequency Series of Statistical Cluster
+% predefine cell for group data
+group_freq = cell(n_subj,2);
+
+% cycle through each subject
+for subj = 1 : n_subj
+    
+    % define subject data directory
+    dir_subj = [dir_bids,'sourcedata/',sprintf('sub-%02.0f',subj),'/eeg/'];
+    
+    % load in raw data
+    load([dir_subj,sprintf('sub-%02.0f',subj),'_task-rf_eeg-source.mat'])  
+        
+    % define custom TF resolution
+    res.toi = -1:0.05:3;
+    res.foi = 3:40;
+    
+    % restrict data to cluster
+    cfg         = [];
+    cfg.channel = source.label(stat{1}.negclusterslabelmat(stat{1}.inside)==1);
+    sourcetmp   = ft_selectdata(cfg,source);
+
+    % get time-frequency representaiton of data for specified conditions
+    group_freq{subj,1} = get_basediff_timefrequency(sourcetmp,'encoding','visual',res);
+    
+    % restrict data to cluster
+    cfg         = [];
+    cfg.channel = source.label(stat{2}.negclusterslabelmat(stat{2}.inside)==1);
+    sourcetmp   = ft_selectdata(cfg,source);
+    
+    % get time-frequency representaiton of data for specified conditions
+    group_freq{subj,2} = get_memdiff_timefrequency(sourcetmp,'retrieval','visual',res);
+end
+    
+% predefine cells to house concatenated group data
+grand_freq = cell(size(group_freq,2),1);
+
+% cycle through conditions
+for i = 1 : size(group_freq,2)
+    
+    % get grand average of subjects
+    cfg                 = [];
+    cfg.keepindividual  = 'yes';
+    grand_freq{i,1}     = ft_freqgrandaverage(cfg,group_freq{:,i});
+end
+
+% extract encoding frequency spectrum
+
+
 %% Create Surface Plots
 % load template MRI
 load([dir_tool,'fieldtrip-20170319/template/sourcemodel/standard_sourcemodel3d10mm.mat']);
@@ -144,20 +210,3 @@ for i = 1 : numel(stat)
     reslice_nii([dir_bids,'derivatives/group/eeg/group_task-rf_eeg-',plot_names{i},'map.nii'],[dir_bids,'derivatives/group/eeg/group_task-rf_eeg-',plot_names{i},'map.nii'],[1 1 1]);    
 end
 
-%% Extract Raw Power of Cluster 
-% prepare table for stat values
-tbl = array2table(zeros(n_subj,2),'VariableNames',plot_names);
-
-% cycle through conditions
-for i = 1 : numel(stat)
-     
-    % get indices of clusters
-    clus_idx = stat{i}.negclusterslabelmat==1;
-
-    % create table
-    tbl.(plot_names{i})(:,1) = nanmean(grand_freq{i}.pow(:,clus_idx),2);
-
-end
-
-% write table
-writetable(tbl,[dir_bids,'derivatives/group/eeg/group_task-rf_eeg-cluster.csv'],'Delimiter',',')

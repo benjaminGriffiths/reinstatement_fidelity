@@ -1,4 +1,4 @@
-function [freq,ntrls] = get_basediff_timefrequency(data,operation,modality)
+function [freq,ntrls] = get_basediff_timefrequency(data,operation,modality,resolution)
 
 % define time frequency analysis parameters based on data probability
 if numel(data.label) > 200
@@ -9,6 +9,12 @@ else
     fprintf('Less than 200 channels detected, assuming data is channel level...\n')
     toi = -1:0.05:3;
     foi = 3:0.5:40;
+end
+
+% define custom resolution if specified
+if nargin == 4
+    toi = resolution.toi;
+    foi = resolution.foi;
 end
 
 % predefine conditional arrays to include all trials
