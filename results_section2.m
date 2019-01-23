@@ -159,8 +159,15 @@ for i = 1 : size(group_freq,2)
     grand_freq{i,1}     = ft_freqgrandaverage(cfg,group_freq{:,i});
 end
 
-% extract encoding frequency spectrum
+% extract encoding/retrieval time/frequency series
+enc_freq = squeeze(mean(grand_freq{1}.powspctrm,2));
+ret_freq = squeeze(mean(mean(grand_freq{2}.powspctrm(:,:,:,grand_freq{2}.time>=0.5 & grand_freq{2}.time<=1.5),4),2));
+ret_time = squeeze(nanmean(nanmean(grand_freq{2}.powspctrm(:,:,grand_freq{2}.freq>=8 & grand_freq{2}.freq<=30,:),3),2));
 
+% save details
+csvwrite([dir_bids,'derivatives/group/eeg/group_task-rf_eeg-encfreqspc.csv'],enc_freq)
+csvwrite([dir_bids,'derivatives/group/eeg/group_task-rf_eeg-retfreqspc.csv'],ret_freq)
+csvwrite([dir_bids,'derivatives/group/eeg/group_task-rf_eeg-rettimespc.csv'],ret_time)
 
 %% Create Surface Plots
 % load template MRI
