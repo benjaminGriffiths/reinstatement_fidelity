@@ -10,7 +10,7 @@ if ispc;    dir_bids = 'Y:/projects/reinstatement_fidelity/bids_data/';
             dir_repos = 'E:/bjg335/projects/reinstatement_fidelity/'; % repository directory
 else;       dir_bids = '/media/bjg335/rds-share-2018-hanslmas-memory/projects/reinstatement_fidelity/bids_data/';
             dir_tool = '/media/bjg335/rds-share-2018-hanslmas-memory/projects/general/';
-            dir_repos = '/media/bjg335/rds-share-2018-hanslmas-memory/projects/reinstatement_fidelity/scripts/'; % repository directory
+            dir_repos = '/media/bjg335/rds-share-2018-hanslmas-memory/projects/git_clone/reinstatement_fidelity/'; % repository directory
 end
 
 % add subfunctions
