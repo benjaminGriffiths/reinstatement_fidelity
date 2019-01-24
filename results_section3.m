@@ -11,8 +11,10 @@ spm_jobman('initcfg');
 if ispc;    dir_root = 'Y:/projects/reinstatement_fidelity/';
             dir_tool = 'Y:/projects/general/';
             dir_repos = 'E:/bjg335/projects/reinstatement_fidelity/'; % repository directory
+            copylocal = true;
 else;       dir_root = '/media/bjg335/rds-share-2018-hanslmas-memory/projects/reinstatement_fidelity/';
             dir_tool = '/media/bjg335/rds-share-2018-hanslmas-memory/projects/general/';
+            copylocal = false;
 end
 
 % add subfunctions
@@ -38,7 +40,188 @@ scan_func   = {'_3_1','_4_1','_5_1','_6_1',...
 
 % add subfunctions
 addpath([dir_repos,'subfunctions'])
-               
+
+%% Create GLM Model
+% cycle through each subject
+for subj = 1 : n_subj
+    
+    % define key subject strings
+    subj_handle = sprintf('sub-%02.0f',subj);
+    dir_subj = [dir_root,'bids_data/derivatives/',subj_handle,'/'];
+    mkdir([dir_subj,'rsa-correlation/'])
+    
+    % delete old SPM file if it exists
+    if exist([dir_subj,'rsa-correlation/SPM.mat'],'file'); delete([dir_subj,'rsa-correlation/SPM.mat']); end
+    
+    % create cell to hold events data
+    events_onset  = zeros(n_trials/2,1);
+    count = 1;
+    
+    % create array to hold button press onsets
+    button_onset = [];
+    
+    % define 'length of scan'
+    LoS = 0;
+        
+    % cycle through each run
+    for run = 1 : n_runs
+
+        % load event table
+        tbl = readtable([dir_root,'bids_data/',subj_handle,'/func/',subj_handle,'_task-rf_run-',num2str(run),'_events.tsv'],'FileType','text','Delimiter','\t');
+        
+        % remove first three volumes and last five volumes
+        tbl = tbl(4:end-5,:);
+        
+        % adjust time accordingly
+        tbl.onset = tbl.onset - 30000;
+        
+        % add length of prior scans to this event table
+        tbl.onset = tbl.onset + LoS;
+        
+        % extract 'length of scan' and add on additional scan for next iteration
+        LoS = max(tbl.onset) + (TR*EEG_sample)-1;
+        
+        % cut table to stimulus onset
+        tbl = tbl(ismember(tbl.trial_type,'Stimulus Onset'),:);
+        
+        % cycle through every event
+        for e = 1 : size(tbl,1)
+            
+            % check if encoding adn visual
+            if strcmpi(tbl.modality{e},'visual')
+
+                % add key values
+                events_onset(count,1) = tbl.onset(e);
+                count = count + 1;
+            end
+
+            % get button press onset (if pressed)
+            if ~isnan(tbl.rt(e)); button_onset(end+1,1) = tbl.onset(e) + tbl.rt(e); end %#ok<SAGROW>            
+        end
+    end
+    
+    % tidy up
+    clear count e tbl LoS run
+       
+    % convert event onsets and button presses from EEG samples to seconds
+    events_onset = events_onset ./ EEG_sample;
+    button_onset = button_onset ./ EEG_sample;    
+    
+    % load movement parameters
+    R = load([dir_subj,'/func/rp_a',subj_handle,'_task-rf_run-1_bold.txt']);
+    
+    % find first three volumes and last five volumes of each run
+    bad_scans = zeros(8*n_runs,1);
+    for run = 1 : n_runs
+        bad_scans(1+(8*(run-1)):8*run) = [1 2 3 251 252 253 254 255] + n_volumes*(run-1);
+    end
+    
+    % remove these scans
+    R(bad_scans,:) = [];
+    
+    % define number of volumes remaining in a run
+    n_volumes_adj = n_volumes - 8;
+    
+    % add regressors that model the per-block linear change
+    R(1+(n_volumes_adj*0):n_volumes_adj*1,7) = linspace(0,1,n_volumes_adj);
+    R(1+(n_volumes_adj*2):n_volumes_adj*3,8) = linspace(0,1,n_volumes_adj);
+    R(1+(n_volumes_adj*4):n_volumes_adj*5,9) = linspace(0,1,n_volumes_adj);
+    R(1+(n_volumes_adj*6):n_volumes_adj*7,10) = linspace(0,1,n_volumes_adj);
+    R(1+(n_volumes_adj*1):n_volumes_adj*2,11) = linspace(0,1,n_volumes_adj);
+    R(1+(n_volumes_adj*3):n_volumes_adj*4,12) = linspace(0,1,n_volumes_adj);
+    R(1+(n_volumes_adj*5):n_volumes_adj*6,13) = linspace(0,1,n_volumes_adj);
+    R(1+(n_volumes_adj*7):n_volumes_adj*8,14) = linspace(0,1,n_volumes_adj);
+    
+    % add regressors that model the per-block constant
+    R(1+(n_volumes_adj*0):n_volumes_adj*1,15) = ones(1,n_volumes_adj);
+    R(1+(n_volumes_adj*2):n_volumes_adj*3,16) = ones(1,n_volumes_adj);
+    R(1+(n_volumes_adj*4):n_volumes_adj*5,17) = ones(1,n_volumes_adj);
+    R(1+(n_volumes_adj*6):n_volumes_adj*7,18) = ones(1,n_volumes_adj);
+    R(1+(n_volumes_adj*1):n_volumes_adj*2,19) = ones(1,n_volumes_adj);
+    R(1+(n_volumes_adj*3):n_volumes_adj*4,20) = ones(1,n_volumes_adj);
+    R(1+(n_volumes_adj*5):n_volumes_adj*6,21) = ones(1,n_volumes_adj);
+    R(1+(n_volumes_adj*7):n_volumes_adj*8,21) = ones(1,n_volumes_adj); 
+    
+    % save nuisance regressors
+    if copylocal; mkdir('C:/tmp_mri/spm/'); save('C:/tmp_mri/spm/R.mat','R')   
+    else; save([dir_subj,'/rsa-correlation/R.mat'],'R')   
+    end
+              
+    clear R n_volumes_adj run
+    
+    % get all scans for GLM
+    all_scans = get_functional_files(dir_subj,'ua',copylocal);
+    all_scans = all_scans{1};
+    
+    % remove bad scans
+    all_scans(bad_scans) = [];
+    
+    % define parameters for GLM
+    matlabbatch{1}.spm.stats.fmri_spec.volt             = 1;
+    matlabbatch{1}.spm.stats.fmri_spec.global           = 'None';
+    matlabbatch{1}.spm.stats.fmri_spec.mthresh          = 0.8;
+    matlabbatch{1}.spm.stats.fmri_spec.mask             = {''};
+    matlabbatch{1}.spm.stats.fmri_spec.cvi              = 'AR(1)';
+    matlabbatch{1}.spm.stats.fmri_spec.fact             = struct('name', {}, 'levels', {});
+    matlabbatch{1}.spm.stats.fmri_spec.bases.hrf.derivs = [0 0];
+    matlabbatch{1}.spm.stats.fmri_spec.sess.multi       = {''};
+    matlabbatch{1}.spm.stats.fmri_spec.sess.regress     = struct('name', {}, 'val', {});
+    matlabbatch{1}.spm.stats.fmri_spec.sess.hpf         = 128;
+    matlabbatch{1}.spm.stats.fmri_spec.sess.scans       = all_scans;  
+    matlabbatch{1}.spm.stats.fmri_spec.timing.units     = 'secs';
+    matlabbatch{1}.spm.stats.fmri_spec.timing.RT        = 2;
+    matlabbatch{1}.spm.stats.fmri_spec.timing.fmri_t    = 32;
+    matlabbatch{1}.spm.stats.fmri_spec.timing.fmri_t0   = 16;  
+    
+    % define directories
+    if copylocal
+        matlabbatch{1}.spm.stats.fmri_spec.dir              = {'C:/tmp_mri/spm'};
+        matlabbatch{1}.spm.stats.fmri_spec.sess.multi_reg   = {'C:/tmp_mri/spm/R.mat'};         
+    else
+        matlabbatch{1}.spm.stats.fmri_spec.dir              = {[dir_subj,'/rsa-correlation']};
+        matlabbatch{1}.spm.stats.fmri_spec.sess.multi_reg   = {[dir_subj,'/rsa-correlation/R.mat']}; 
+    end
+                   
+    % cycle through and define each condition
+    for trl = 1 : size(events_onset,1)
+        matlabbatch{1}.spm.stats.fmri_spec.sess.cond(trl).name        = ['trl',sprintf('%03.0f',trl)];
+        matlabbatch{1}.spm.stats.fmri_spec.sess.cond(trl).onset       = events_onset(trl,1);
+        matlabbatch{1}.spm.stats.fmri_spec.sess.cond(trl).duration    = 3;
+        matlabbatch{1}.spm.stats.fmri_spec.sess.cond(trl).tmod        = 0;
+        matlabbatch{1}.spm.stats.fmri_spec.sess.cond(trl).orth        = 1;
+        matlabbatch{1}.spm.stats.fmri_spec.sess.cond(trl).pmod        = struct('name',{},'param',{},'poly',{});
+    end
+    
+    % add button press
+    matlabbatch{1}.spm.stats.fmri_spec.sess.cond(end+1).name      = 'button_press';
+    matlabbatch{1}.spm.stats.fmri_spec.sess.cond(end).onset       = button_onset;
+    matlabbatch{1}.spm.stats.fmri_spec.sess.cond(end).duration    = 0.5;
+    matlabbatch{1}.spm.stats.fmri_spec.sess.cond(end).tmod        = 0;
+    matlabbatch{1}.spm.stats.fmri_spec.sess.cond(end).orth        = 1;
+    matlabbatch{1}.spm.stats.fmri_spec.sess.cond(end).pmod        = struct('name',{},'param',{},'poly',{});
+        
+    % estimate model
+    matlabbatch{2}.spm.stats.fmri_est.write_residuals                   = 0;
+    matlabbatch{2}.spm.stats.fmri_est.method.Classical                  = 1;
+
+    % define directories
+    if copylocal; matlabbatch{2}.spm.stats.fmri_est.spmmat = {'C:/tmp_mri/spm/SPM.mat'};
+    else; matlabbatch{2}.spm.stats.fmri_est.spmmat = {[dir_subj,'/rsa-correlation/SPM.mat']};
+    end
+    
+    % run batch
+    spm_jobman('run',matlabbatch)
+    clear matlabbatch all_scans bad_scans subj_handle button_onset events_onset trl    
+    
+    % copy and delete local files if they exist
+    if copylocal
+        copyfile('C:/tmp_mri/spm/R.mat',[dir_subj,'/rsa-correlation/R.mat'])
+        copyfile('C:/tmp_mri/spm/SPM.mat',[dir_subj,'/rsa-correlation/SPM.mat'])
+        copyfile('C:/tmp_mri/spm/mask.nii',[dir_subj,'/rsa-correlation/mask.nii'])
+        rmdir('C:/tmp_mri/','s'); 
+    end
+end
+
 %% Prepare Masks
 % cycle through each subject
 for subj = 1 : n_subj

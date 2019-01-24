@@ -446,14 +446,6 @@ for subj = 1 : n_subj
     X.a(:,X.a_badCol) = [];
     X.b(:,X.b_badCol) = [];
     
-    %
-    %
-    %
-    % BUG!!!! CHECK BLOCK CONSTANT!
-    %
-    %
-    %
-    
     % save data
     save([dir_subj,'/rsa-ers/',subj_handle,'_task-rf_rsa-FormattedVolume.mat'],'X','Y')
     

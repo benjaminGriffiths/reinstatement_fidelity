@@ -223,7 +223,7 @@ for subj = 1 : n_subj
     maskImg = zeros(1, prod(scan_fov));
     
     % load mask and add to matrix    
-    nii = load_untouch_nii([dir_root,'bids_data/derivatives/',subj_handle,'/rsa/mask.nii']);
+    nii = load_untouch_nii([dir_root,'bids_data/derivatives/',subj_handle,'/rsa-percept/mask.nii']);
     maskImg(1,:) = reshape(nii.img,1,[]);
 
     % predefine matrix for functional data
@@ -264,8 +264,7 @@ for subj = 1 : n_subj
     
     % save
     fprintf('\nSaving full volume...\n')
-    mkdir([dir_root,'bids_data/derivatives/',subj_handle,'/rsa/'])
-    save([dir_root,'bids_data/derivatives/',subj_handle,'/rsa/',subj_handle,'_task-rf_rsa-fullVolume.mat'],'scanVec')
+    save([dir_root,'bids_data/derivatives/',subj_handle,'/rsa-percept/',subj_handle,'_task-rf_rsa-fullVolume.mat'],'scanVec')
     
     % apply mask to scans
     fprintf('Masking data...\n')
@@ -284,8 +283,8 @@ for subj = 1 : n_subj
     
     % save
     fprintf('Saving masked volumes...\n')
-    save([dir_root,'bids_data/derivatives/',subj_handle,'/rsa/',subj_handle,'_task-rf_rsa-maskedVolume.mat'],'patterns')
-    save([dir_root,'bids_data/derivatives/',subj_handle,'/rsa/',subj_handle,'_task-rf_rsa-mask.mat'],'mask_idx')
+    save([dir_root,'bids_data/derivatives/',subj_handle,'/rsa-percept/',subj_handle,'_task-rf_rsa-maskedVolume.mat'],'patterns')
+    save([dir_root,'bids_data/derivatives/',subj_handle,'/rsa-percept/',subj_handle,'_task-rf_rsa-mask.mat'],'mask_idx')
     
     % clear excess variables
     clear scanVec nii deadIdx patterns mask_idx subjHandle maskImg
@@ -300,7 +299,7 @@ for subj = 1 : n_subj
     dir_subj = [dir_root,'bids_data/',subj_handle,'/'];
     
     % load pattern data
-    load([dir_root,'bids_data/derivatives/',subj_handle,'/rsa/',subj_handle,'_task-rf_rsa-maskedVolume.mat'])
+    load([dir_root,'bids_data/derivatives/',subj_handle,'/rsa-percept/',subj_handle,'_task-rf_rsa-maskedVolume.mat'])
     
     % get mean pattern across all trials and replicate matrix
     meanPattern = repmat(mean(patterns,1),[size(patterns,1), 1]);
@@ -309,7 +308,7 @@ for subj = 1 : n_subj
     patterns = patterns - meanPattern;
     
     % save patterns
-    save([dir_root,'bids_data/derivatives/',subj_handle,'/rsa/',subj_handle,'_task-rf_rsa-maskedDemeanedVolume.mat'],'patterns')
+    save([dir_root,'bids_data/derivatives/',subj_handle,'/rsa-percept/',subj_handle,'_task-rf_rsa-maskedDemeanedVolume.mat'],'patterns')
     
     % clean up
     clear subjHandle meanPattern patterns
@@ -324,10 +323,10 @@ for subj = 1 : n_subj
     dir_subj = [dir_root,'bids_data/derivatives/',subj_handle,'/'];
     
     % load pattern data
-    load([dir_subj,'/rsa/',subj_handle,'_task-rf_rsa-maskedDemeanedVolume.mat'])
+    load([dir_subj,'/rsa-percept/',subj_handle,'_task-rf_rsa-maskedDemeanedVolume.mat'])
     
     % load SPM.mat
-    load([dir_subj,'/rsa/SPM.mat'])
+    load([dir_subj,'/rsa-percept/SPM.mat'])
     
     % create table to record stimulus detail
     scan_details  = array2table(zeros(n_volumes*8,2),'VariableNames', {'encoding','modality'});
@@ -452,7 +451,7 @@ for subj = 1 : n_subj
     X.b(:,X.b_badCol) = [];
     
     % save data
-    save([dir_subj,'/rsa/',subj_handle,'_task-percept_rsa-FormattedVolume.mat'],'X','Y')    
+    save([dir_subj,'/rsa-percept/',subj_handle,'_task-percept_rsa-FormattedVolume.mat'],'X','Y')    
     clear X Y i j fn patterns subj_handle dir_subj
     
     fprintf('Subject %02.0f of %02.0f prepared...\n',subj,n_subj)
@@ -482,8 +481,8 @@ for subj = 1 : n_subj
     subj_handle = sprintf('sub-%02.0f',subj);
     
     % load data
-    load([dir_root,'bids_data/derivatives/',subj_handle,'/rsa/',subj_handle,'_task-percept_rsa-FormattedVolume.mat'])
-    load([dir_root,'bids_data/derivatives/',subj_handle,'/rsa/',subj_handle,'_task-rf_rsa-mask.mat'])
+    load([dir_root,'bids_data/derivatives/',subj_handle,'/rsa-percept/',subj_handle,'_task-percept_rsa-FormattedVolume.mat'])
+    load([dir_root,'bids_data/derivatives/',subj_handle,'/rsa-percept/',subj_handle,'_task-rf_rsa-mask.mat'])
     
     % predefine model rdm
     model_rdm{1} = zeros(48,48)+1;
@@ -576,7 +575,7 @@ for subj = 1 : n_subj
     V = load_untouch_nii(filename);
 
     % change filename, datatype, and image
-    V.fileprefix = [dir_root,'bids_data/derivatives/',subj_handle,'/rsa/',subj_handle,'_task-percept_rsa-searchlightVisual'];
+    V.fileprefix = [dir_root,'bids_data/derivatives/',subj_handle,'/rsa-percept/',subj_handle,'_task-percept_rsa-searchlightVisual'];
     V.hdr.dime.datatype = 64;
     V.img = rdmBrain;
 
@@ -612,14 +611,14 @@ for subj = 1 : n_subj
     matlabbatch{1}.spm.spatial.normalise.write.woptions.vox     = [3 3 4];
     matlabbatch{1}.spm.spatial.normalise.write.woptions.interp  = 4;
     matlabbatch{1}.spm.spatial.normalise.write.subj.def         = {[dir_root,'bids_data/derivatives/',subj_handle,'/anat/y_',subj_handle,'_T1w.nii']};
-    matlabbatch{1}.spm.spatial.normalise.write.subj.resample    = {[dir_root,'bids_data/derivatives/',subj_handle,'/rsa/',subj_handle,'_task-percept_rsa-searchlightVisual.nii,1']};
+    matlabbatch{1}.spm.spatial.normalise.write.subj.resample    = {[dir_root,'bids_data/derivatives/',subj_handle,'/rsa-percept/',subj_handle,'_task-percept_rsa-searchlightVisual.nii,1']};
 
     % smooth
     matlabbatch{2}.spm.spatial.smooth.fwhm                      = [8 8 8];
     matlabbatch{2}.spm.spatial.smooth.dtype                     = 0;
     matlabbatch{2}.spm.spatial.smooth.im                        = 0;
     matlabbatch{2}.spm.spatial.smooth.prefix                    = 's';
-    matlabbatch{2}.spm.spatial.smooth.data                      = {[dir_root,'bids_data/derivatives/',subj_handle,'/rsa/',subj_handle,'_task-percept_rsa-searchlightVisual.nii,1']};
+    matlabbatch{2}.spm.spatial.smooth.data                      = {[dir_root,'bids_data/derivatives/',subj_handle,'/rsa-percept/',subj_handle,'_task-percept_rsa-searchlightVisual.nii,1']};
     
     % run batch
     spm_jobman('run',matlabbatch)
@@ -641,7 +640,7 @@ for subj = 1 : n_subj
 end
 
 % create second-level glms
-matlabbatch{1}.spm.stats.factorial_design.dir                       = {[dir_root,'bids_data/derivatives/group/rsa/visual-percept/']};
+matlabbatch{1}.spm.stats.factorial_design.dir                       = {[dir_root,'bids_data/derivatives/group/rsa-percept/']};
 matlabbatch{1}.spm.stats.factorial_design.des.t1.scans              = rMapFiles(:,1);
 matlabbatch{1}.spm.stats.factorial_design.cov                       = struct('c', {}, 'cname', {}, 'iCFI', {}, 'iCC', {});
 matlabbatch{1}.spm.stats.factorial_design.multi_cov                 = struct('files', {}, 'iCFI', {}, 'iCC', {});
@@ -655,7 +654,7 @@ spm_jobman('run',matlabbatch)
 clear matlabbatch subjHandle subj
 
 % estimate model
-matlabbatch{1}.spm.stats.fmri_est.spmmat            = {[dir_root,'bids_data/derivatives/group/rsa/visual-percept/SPM.mat']};
+matlabbatch{1}.spm.stats.fmri_est.spmmat            = {[dir_root,'bids_data/derivatives/group/rsa-percept/SPM.mat']};
 matlabbatch{1}.spm.stats.fmri_est.write_residuals   = 0;
 matlabbatch{1}.spm.stats.fmri_est.method.Classical  = 1;
 
@@ -663,7 +662,7 @@ spm_jobman('run',matlabbatch)
 clear matlabbatch
 
 % define contrasts
-matlabbatch{1}.spm.stats.con.spmmat(1)                  = {[dir_root,'bids_data/derivatives/group/rsa/visual-percept/SPM.mat']};   
+matlabbatch{1}.spm.stats.con.spmmat(1)                  = {[dir_root,'bids_data/derivatives/group/rsa-percept/SPM.mat']};   
 matlabbatch{1}.spm.stats.con.delete                     = 0;    
 matlabbatch{1}.spm.stats.con.consess{1}.tcon.name       = 'within>between';
 matlabbatch{1}.spm.stats.con.consess{1}.tcon.convec     = 1;
@@ -674,13 +673,13 @@ clear matlabbatch
 
 %% Extract Metrics for Visualisation
 % combine visual cluster and save
-combine_spm_cluster([dir_root,'bids_data/derivatives/group/rsa/visual-percept/'])
+combine_spm_cluster([dir_root,'bids_data/derivatives/group/rsa-percept/'])
 
 % load SPM details
-load([dir_root,'bids_data/derivatives/group/rsa/visual-percept/SPM.mat'])
+load([dir_root,'bids_data/derivatives/group/rsa-percept/SPM.mat'])
 
 % extract subject values for each cluster
-[betas,d] = extract_sample_points([dir_root,'bids_data/derivatives/group/rsa/visual-percept/'],SPM);
+[betas,d] = extract_sample_points([dir_root,'bids_data/derivatives/group/rsa-percept/'],SPM);
 
 % save betas as table
 tbl = array2table(betas','VariableNames',{'Occipital','Central','Frontal'});
