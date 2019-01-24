@@ -439,11 +439,6 @@ for subj = 1 : n_subj
     Y.a(X.a_badRow,:) = [];
     Y.b(X.b_badRow,:) = [];
 
-    % convert stimulus string into value
-    for j = 1 : size(stim,1)
-        stim{j,4} = find(ismember(conditions,stim{j,2})); %#ok<SAGROW>
-    end
-
     % extract stimulus values and split into A and B
     sv = stim_details.stimulus(stim_details.modality==1);
     Y.sa = sv(1:numel(sv)/2);
@@ -460,17 +455,10 @@ for subj = 1 : n_subj
     % save subject RDM    
     save([dir_subj,'/rsa-correlation/',subj_handle,'_task-rf_rsa-rdm.mat'],'RDM')
 
-    % get mean T
-    sRDMs(subj,i,:,:) = mean(cat(3,RDM.ldtB_avg,RDM.ldtA_avg),3); %#ok<SAGROW>
-        
     clear Xa Xb Xa_avg Xb_avg Ya Yb
     
     fprintf('Subject %02.0f of %02.0f complete...\n',subj,n_subj)
 end
-
-% save average rdms
-save([dir_root,'data/combined/rsa/stats/avg_rdms.mat'],'sRDMs')
-if ispc; save([dir_repos,'data/searchlight_rdm.mat'],'sRDMs'); end
 
 %% Extract Vector of Similarity Indices for Each Trial
 % predefine vector for RSA data

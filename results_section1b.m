@@ -13,6 +13,7 @@ if ispc
     dir_bids = [dir_root,'bids_data/'];
     dir_tool = 'Y:/projects/general/';
     dir_repos = 'E:/bjg335/projects/reinstatement_fidelity/'; % repository directory
+    copylocal = true;
     
     % add subfunctions
     addpath([dir_repos,'subfunctions'])
@@ -22,6 +23,7 @@ else
     dir_bids = [dir_root,'bids_data/'];
     dir_tool = '/media/bjg335/rds-share-2018-hanslmas-memory/projects/general/';            
     dir_repos = '/media/bjg335/rds-share-2018-hanslmas-memory/projects/reinstatement_fidelity/scripts/'; % repository directory
+    copylocal = false;
 end
 
 % add RSA toolbox to path
@@ -46,8 +48,9 @@ for subj = 1 : n_subj
     
     % define key subject strings
     subj_handle = sprintf('sub-%02.0f',subj);
-    dir_subj = [dir_root,'bids_data/',subj_handle,'/'];
+    dir_subj = [dir_root,'bids_data/derivatives/',subj_handle,'/'];
     mkdir([dir_root,'bids_data/derivatives/',subj_handle,'/rsa-ers/'])
+    mkdir([dir_subj,'rsa-ers/'])
     
     % delete old SPM file if it exists
     if exist([dir_root,'bids_data/derivatives/',subj_handle,'/rsa-ers/SPM.mat'],'file'); delete([dir_root,'bids_data/derivatives/',subj_handle,'/rsa-ers/SPM.mat']); end
@@ -155,13 +158,14 @@ for subj = 1 : n_subj
     R(1+(n_volumes_adj*7):n_volumes_adj*8,21) = ones(1,n_volumes_adj); 
     
     % save nuisance regressors
-    save([dir_root,'bids_data/derivatives/',subj_handle,'/rsa-ers/R.mat'],'R')            
-    clear R n_volumes_adj run
+    if copylocal; mkdir('C:/tmp_mri/spm/'); save('C:/tmp_mri/spm/R.mat','R')   
+    else; save([dir_subj,'/rsa-ers/R.mat'],'R')   
+    end
     
     % get all scans for GLM
-    all_scans = get_functional_files([dir_root,'bids_data/derivatives/',subj_handle,'/'],'ua');
+    all_scans = get_functional_files([dir_root,'bids_data/derivatives/',subj_handle,'/'],'ua',copylocal);
     all_scans = all_scans{1};
-    
+       
     % remove bad scans
     all_scans(bad_scans) = [];
     
@@ -171,19 +175,26 @@ for subj = 1 : n_subj
     matlabbatch{1}.spm.stats.fmri_spec.mthresh          = 0.8;
     matlabbatch{1}.spm.stats.fmri_spec.mask             = {''};
     matlabbatch{1}.spm.stats.fmri_spec.cvi              = 'AR(1)';
-    matlabbatch{1}.spm.stats.fmri_spec.dir              = {[dir_root,'bids_data/derivatives/',subj_handle,'/rsa-ers']};
     matlabbatch{1}.spm.stats.fmri_spec.fact             = struct('name', {}, 'levels', {});
     matlabbatch{1}.spm.stats.fmri_spec.bases.hrf.derivs = [0 0];
     matlabbatch{1}.spm.stats.fmri_spec.sess.multi       = {''};
     matlabbatch{1}.spm.stats.fmri_spec.sess.regress     = struct('name', {}, 'val', {});
     matlabbatch{1}.spm.stats.fmri_spec.sess.hpf         = 128;
     matlabbatch{1}.spm.stats.fmri_spec.sess.scans       = all_scans;
-    matlabbatch{1}.spm.stats.fmri_spec.sess.multi_reg   = {[dir_root,'bids_data/derivatives/',subj_handle,'/rsa-ers/R.mat']};   
     matlabbatch{1}.spm.stats.fmri_spec.timing.units     = 'secs';
     matlabbatch{1}.spm.stats.fmri_spec.timing.RT        = 2;
     matlabbatch{1}.spm.stats.fmri_spec.timing.fmri_t    = 32;
     matlabbatch{1}.spm.stats.fmri_spec.timing.fmri_t0   = 16;  
-                   
+      
+    % define directories
+    if copylocal
+        matlabbatch{1}.spm.stats.fmri_spec.dir              = {'C:/tmp_mri/spm'};
+        matlabbatch{1}.spm.stats.fmri_spec.sess.multi_reg   = {'C:/tmp_mri/spm/R.mat'};         
+    else
+        matlabbatch{1}.spm.stats.fmri_spec.dir              = {[dir_subj,'/rsa-ers']};
+        matlabbatch{1}.spm.stats.fmri_spec.sess.multi_reg   = {[dir_subj,'/rsa-ers/R.mat']}; 
+    end
+    
     % cycle through and define each condition
     for trl = 1 : size(events_onset,2)
         matlabbatch{1}.spm.stats.fmri_spec.sess.cond(trl).name        = ['trl',sprintf('%03.0f',trl)];
@@ -205,11 +216,23 @@ for subj = 1 : n_subj
     % estimate model
     matlabbatch{2}.spm.stats.fmri_est.write_residuals                   = 0;
     matlabbatch{2}.spm.stats.fmri_est.method.Classical                  = 1;
-    matlabbatch{2}.spm.stats.fmri_est.spmmat                            = {[dir_root,'bids_data/derivatives/',subj_handle,'/rsa-ers/SPM.mat']};
-
+    
+    % define directories
+    if copylocal; matlabbatch{2}.spm.stats.fmri_est.spmmat = {'C:/tmp_mri/spm/SPM.mat'};
+    else; matlabbatch{2}.spm.stats.fmri_est.spmmat = {[dir_subj,'/rsa-ers/SPM.mat']};
+    end
+    
     % run batch
     spm_jobman('run',matlabbatch)
     clear matlabbatch all_scans bad_scans subj_handle button_onset events_onset trl    
+        
+    % copy and delete local files if they exist
+    if copylocal
+        copyfile('C:/tmp_mri/spm/R.mat',[dir_subj,'/rsa-ers/R.mat'])
+        copyfile('C:/tmp_mri/spm/SPM.mat',[dir_subj,'/rsa-ers/SPM.mat'])
+        copyfile('C:/tmp_mri/spm/mask.nii',[dir_subj,'/rsa-ers/mask.nii'])
+        rmdir('C:/tmp_mri/','s'); 
+    end
 end
 
 %% Read Data
