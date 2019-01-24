@@ -9,10 +9,12 @@ spm_jobman('initcfg');
 
 % define root directory
 if ispc;    dir_root = 'Y:/projects/reinstatement_fidelity/';
+            dir_bids = 'Y:/projects/reinstatement_fidelity/bids_data/';
             dir_tool = 'Y:/projects/general/';
             dir_repos = 'E:/bjg335/projects/reinstatement_fidelity/'; % repository directory
             copylocal = true;
 else;       dir_root = '/media/bjg335/rds-share-2018-hanslmas-memory/projects/reinstatement_fidelity/';
+            dir_bids = '/media/bjg335/rds-share-2018-hanslmas-memory/projects/reinstatement_fidelity/bids_data/';
             dir_tool = '/media/bjg335/rds-share-2018-hanslmas-memory/projects/general/';
             copylocal = false;
 end
@@ -462,8 +464,7 @@ end
 
 %% Extract Vector of Similarity Indices for Each Trial
 % predefine vector for RSA data
-rsa_vec.perception = zeros(n_subj,n_trials);
-rsa_vec.retrieval  = zeros(n_subj,n_trials);
+rsa_vec  = zeros(n_subj,n_trials/2);
 
 % cycle through each subject
 for subj = 1 : n_subj
@@ -476,22 +477,11 @@ for subj = 1 : n_subj
     load([dir_subj,'/rsa-correlation/',subj_handle,'_task-rf_rsa-rdm.mat'])
     
     % cycle through every trial in RDM
-    for trl = 1 : size(RDM.ldtA,1)
+    for trl = 49 : size(RDM.ldtA,1)
         
-        % if is encoding trial
-        if trl <= size(RDM.ldtA,1)/2
-            
-            % calculate similarity index
-            rsa_vec.perception(subj,trl)    = calculate_similarity_index(trl,RDM.ldtA,RDM.sa);
-            rsa_vec.perception(subj,trl+48) = calculate_similarity_index(trl,RDM.ldtB,RDM.sb);
-            
-        % if is retrieval trial
-        else 
-            
-            % calculate simliarity index
-            rsa_vec.retrieval(subj,trl-48)  = calculate_similarity_index(trl,RDM.ldtA,RDM.sa);
-            rsa_vec.retrieval(subj,trl)     = calculate_similarity_index(trl,RDM.ldtB,RDM.sb);
-        end
+        % calculate simliarity index
+        rsa_vec(subj,trl-48)  = calculate_similarity_index(trl,RDM.ldtA,RDM.sa);
+        rsa_vec(subj,trl)     = calculate_similarity_index(trl,RDM.ldtB,RDM.sb);
     end
     
     % clear details
@@ -499,239 +489,78 @@ for subj = 1 : n_subj
 end
 
 % save RSA vector
-save([dir_root,'bids_data/derivatives/group/rsa-correlation/group_task-correlation_fmri-si'],'rsa_vec')
+save([dir_root,'bids_data/derivatives/group/rsa-correlation/group_task-retrieval_fmri-si'],'rsa_vec')
 
-%% Create AAL Source Grids
-% load template grid
-load([dir_tool,'fieldtrip-20170319/template/sourcemodel/standard_sourcemodel3d4mm.mat']); 
-template_grid = sourcemodel; clear sourcemodel % rename grid
+%% Prepare ROI
+% load sourcemodel
+load([dir_tool,'fieldtrip-20170319/template/sourcemodel/standard_sourcemodel3d10mm.mat']);
 
 % load AAL atlas
-mri = ft_read_mri([dir_tool,'fieldtrip-20170319/template/atlas/aal/ROI_MNI_V4.nii']);
+mri = ft_read_mri([dir_bids,'sourcedata/masks/aal.nii']);
  
-% change MRI to binary 'in-atlas' vs. 'out-atlas'
-mri.anatomy = double(mri.anatomy > 0); 
+% interpolate clusters with grid
+cfg             = [];
+cfg.parameter	= 'anatomy';
+roi             = ft_sourceinterpolate(cfg,mri,sourcemodel);
 
-% interpolate mri with grid
+% define additional roi parameters
+roi.inside      = ~isnan(roi.anatomy) & roi.anatomy > 0;
+roi.anatomy     = double(~isnan(roi.anatomy) & roi.anatomy > 0);
+roi.pos         = sourcemodel.pos;
+
+%% Get Timelocked Representation of Each Condition
+% predefine cell for group data
+group_freq = cell(n_subj,1);
+
+% load in similarity index
+load([dir_root,'bids_data/derivatives/group/rsa-correlation/group_task-retrieval_fmri-si'])
+
+% cycle through each subject
+for subj = 1 : n_subj
+    
+    % define subject data directory
+    dir_subj = [dir_bids,'sourcedata/',sprintf('sub-%02.0f',subj),'/eeg/'];
+    
+    % load in raw data
+    load([dir_subj,sprintf('sub-%02.0f',subj),'_task-rf_eeg-source.mat'])  
+    
+    % get time-frequency representaiton of data for specified conditions
+    group_freq{subj,1} = get_rsa_timefrequency_correlation(source,'retrieval','visual',rsa_vec(subj,:));
+end
+   
+% get grand average of subjects
 cfg                 = [];
-cfg.parameter       = 'anatomy';
-cfg.interpmethod    = 'nearest';
-roi                 = ft_sourceinterpolate(cfg,mri,template_grid);
+cfg.keepindividual  = 'yes';
+grand_freq          = ft_freqgrandaverage(cfg,group_freq{:,i});
 
-% clean up
-clear mri template_grid cfg
+% collapse over time/frequency
+grand_freq.pow = mean(mean(grand_freq{i,1}.powspctrm,4),3);
 
-%% Get Time-Frequency Data
-% cycle through each subject
-for subj = 1 : n_subj
+% add in source model details
+grand_freq.powdimord   = 'rpt_pos';
+grand_freq.dim         = roi.dim;
+grand_freq.inside      = roi.inside(:);
+grand_freq.pos         = roi.pos;
+grand_freq.cfg         = [];
+
+% add in "outside" virtual electrods
+tmp_pow = zeros(size(grand_freq.pow,1),size(grand_freq.inside,1));
+tmp_pow(:,grand_freq.inside) = grand_freq.pow;
+grand_freq.pow = tmp_pow;
+
+% remove freq details
+grand_freq = rmfield(grand_freq,{'powspctrm','label','freq','time','dimord'});
     
-    % load
-    load([dir_root,'data/eeg/source/subj',sprintf('%02.0f',subj),'_source.mat'])
-    
-    % get splits
-    [audio_bool,hit_bool] = get_splits_eeg(source);
-  
-    % get time-frequency representation of data
-    cfg             = [];
-    cfg.trials      = audio_bool==0;
-    cfg.keeptrials  = 'yes';
-    cfg.method      = 'wavelet';
-    cfg.width       = 6;
-    cfg.output      = 'pow';
-    cfg.toi         = 0.5:0.25:1.5;
-    cfg.foi         = 8:2:24; % 50hz sampling
-    cfg.pad         = 'nextpow2';
-    freq            = ft_freqanalysis(cfg, source); clear source
-
-    % convert powspctrm to single
-    freq.powspctrm = single(freq.powspctrm);
-    
-    % z-transform
-    avg_pow = repmat(nanmean(nanmean(freq.powspctrm,4),1),[size(freq.powspctrm,1) 1 1 size(freq.powspctrm,4)]);
-    std_pow = repmat(nanstd(nanmean(freq.powspctrm,4),[],1),[size(freq.powspctrm,1) 1 1 size(freq.powspctrm,4)]);
-    freq.powspctrm = (freq.powspctrm - avg_pow) ./ std_pow; clear avg_pow std_pow
-    
-    % avg over time and frequency
-    cfg             = [];
-    cfg.avgovertime = 'yes';
-    cfg.avgoverfreq = 'yes';
-    freq            = ft_selectdata(cfg,freq);
-    
-    % save
-    save([dir_root,'data/combined/rsa/data/subj',sprintf('%02.0f',subj),'/freq_source.mat'],'freq','-v7.3')
-    clear cfg freq    
-end
-
-%% Correlate RSA with Source Data
-% load RSA data
-load([dir_root,'data/fmri/rsa/data/similarity_vector.mat']);
-
-% predefine matrices for chance data
-obs_r       = nan(n_subj,2,23156);
-chance_r    = nan(n_subj,2,23156);
-n_elements  = nan(n_subj,2);
-
-% cycle through each subject
-for subj = 1 : n_subj
-    
-    % define subject name
-    subjHandle = sprintf('subj%02.0f',subj);
-      
-    % load source data
-    load([dir_root,'data/combined/rsa/data/',subjHandle,'/freq_source.mat'])
-
-    % get trl num for eeg data
-    trl_num = zeros(size(freq.trialinfo));
-    for j = 1 : numel(freq.trialinfo); trl_num(j) = freq.trialinfo{j}.trlNo_encoding; end
-    [~,sorted_idx] = sort(trl_num);
-        
-    % sort powspctrm to match encoding order
-    freq.powspctrm = freq.powspctrm(sorted_idx,:);
-    freq.trialinfo = freq.trialinfo(sorted_idx,1);
-     
-    % get splits (in sorted order)
-    [~,hit_bool] = get_splits_eeg(freq);
-
-    for i = 1:2
-        
-        % extract visual trials from RSA matrix
-        Y = rsa_vec(subj,ismember(1:192,trl_num))';
-
-        % restrict EEG and RSA data to hits
-        X = freq.powspctrm(hit_bool==i-1,:);
-        Y = Y(hit_bool==i-1,:);
-
-        % replicate matrix of Y to aid correlation
-        Y = repmat(Y,[1,size(X,2)]);
-
-        % correlate
-        numer = sum((X-mean(X,1)).*(Y-mean(Y,1)));
-        denom = sqrt(sum((X-mean(X,1)).^2)).*sqrt(sum((Y-mean(Y,1)).^2));
-        obs_r(subj,i,:) = numer ./ denom;
-
-        % get random correlation
-        for k = 1 : 1000
-
-            % reorder X
-            Xk = X(randperm(size(X,1)),:);
-
-            % correlate
-            numer = sum((Xk-mean(Xk,1)).*(Y-mean(Y,1)));
-            denom = sqrt(sum((Xk-mean(Xk,1)).^2)).*sqrt(sum((Y-mean(Y,1)).^2));
-            tmp(k,:)   = numer ./ denom;
-        end
-
-        % get averaged permutated R
-        chance_r(subj,i,:) = mean(tmp);   
-        
-        % record number of elements in correlation
-        n_elements(subj,i) = size(X,1);
-    end
-    
-    % clean up
-    clear numer denom tmp Xk X Y k hit_bool freq sorted_idx trl_num j subjHandle
-end
-
-% save
-save([dir_root,'data/combined/rsa/data/group_corr.mat'],'obs_r','chance_r','n_elements')
+% save data
+save([dir_bids,'derivatives/group/rsa-correlation/group_task-retrieval_comb-freq.mat'],'grand_freq'); 
 
 %% Run Statistics
-% load correlation data
-load([dir_root,'data/combined/rsa/data/group_corr.mat'])
+% predefine cell for statistics
+cfg.tail        = -1;
+cfg.parameter   = 'pow';
+[stat,tbl]      = run_oneSampleT(cfg, grand_freq);
 
-% load in source template
-load([dir_root,'data/eeg/source/grand_freq.mat'])
-
-% load in EEG cluster
-load([dir_root,'data/eeg/source/stat.mat'])
-
-% create frequency structure for analysis
-data_hits                               = grand_hits.video;
-data_misses                             = grand_hits.video;
-data_hits.pow(:,data_hits.inside)       = obs_r(:,2,:);
-data_misses.pow(:,data_misses.inside)   = obs_r(:,1,:);
-data_misses.pow(:,data_misses.inside)   = obs_r(:,1,:);
-
-% create null hypothesis
-null_hits                               = data_hits;
-null_misses                             = data_misses;
-null_hits.pow(:,null_hits.inside)       = chance_r(:,2,:);
-null_misses.pow(:,null_misses.inside)   = chance_r(:,1,:);
-
-% set inside to cluster
-data_hits.inside    = stat.video.negclusterslabelmat == 1;
-data_misses.inside  = stat.video.negclusterslabelmat == 1;
-null_hits.inside    = stat.video.negclusterslabelmat == 1;
-null_misses.inside  = stat.video.negclusterslabelmat == 1;
-clear stat grand_hits grand_misses
-
-% run statisitics
-cfg                   = [];
-cfg.dim               = data_hits.dim;  % specify dimensions of your source grid
-cfg.design            = [1:size(data_hits.pow,1), 1:size(data_hits.pow,1); ones(1,size(data_hits.pow,1)), ones(1,size(data_hits.pow,1))+1];
-cfg.uvar              = 1;
-cfg.ivar              = 2;
-cfg.method            = 'montecarlo';
-cfg.parameter         = 'pow';
-cfg.statistic         = 'ft_statfun_depsamplesT';
-cfg.correctm          = 'cluster';
-cfg.clusteralpha      = 0.05;
-cfg.numrandomization  = 2000;
-cfg.alpha             = 0.05;
-cfg.tail              = -1;
-cfg.clustertail       = -1;
-stat.hits             = ft_sourcestatistics(cfg, data_hits, null_hits);
-stat.misses           = ft_sourcestatistics(cfg, data_misses, null_misses);
-
-% save stats
-save([dir_root,'data/combined/rsa/stats/eeg_rsa_corr.mat'],'stat')
-
-%% Extract Raw Power of Cluster 
-% get indices of clusters
-clus_idx = stat.hits.negclusterslabelmat==1;
-
-% get mean magnitude of cluster
-hits     = nanmean(data_hits.pow(:,clus_idx),2);
-misses   = nanmean(data_misses.pow(:,clus_idx),2);
-
-% create table
-tbl = table(hits,misses);
-
-% write table
-writetable(tbl,[dir_repos,'data/RSA-EEG_correlation.csv'],'Delimiter',',')
-
-%% Create Surface File
-% find indices of largest cluster
-clus_idx = stat.hits.negclusterslabelmat==1;
-
-% create source data structure
-source                  = [];
-source.inside           = stat.hits.inside;
-source.dim              = stat.hits.dim;
-source.pos              = stat.hits.pos*10;
-source.unit             = 'mm';
-source.pow              = stat.hits.stat;
-source.pow              = nan(size(stat.hits.pos,1),1);     
-source.pow(clus_idx)	= stat.hits.stat(clus_idx); 
-
-% reshape data to 3D
-source.pow              = reshape(source.pow,source.dim);
-source.inside           = reshape(source.inside,source.dim);
-
-% add transformation matrix
-source.transform        = [1,0,0,-91;
-                           0,1,0,-127;
-                           0,0,1,-73;
-                           0,0,0,1];
-
-% export
-cfg = [];
-cfg.parameter     = 'pow';               % specify the functional parameter to write to the .nii file
-cfg.filename      = 'E:\brain.nii';  % enter the desired file name
-cfg.filetype      = 'nifti';
-cfg.coordsys      = 'spm';
-cfg.vmpversion    = 2;
-cfg.datatype      = 'float';
-ft_volumewrite(cfg,source);      % be sure to use your interpolated source data
+% save data
+save([dir_bids,'derivatives/group/eeg/group_task-all_eeg-stat.mat'],'stat','tbl');
 
 
