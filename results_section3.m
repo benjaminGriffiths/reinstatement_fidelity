@@ -238,7 +238,7 @@ for subj = 1 : n_subj
     matlabbatch{1}.spm.util.defs.out{1}.push.fnames             = {[dir_root,'bids_data/derivatives/group/rsa-ers/grand_cluster_dilated.nii']};
     matlabbatch{1}.spm.util.defs.out{1}.push.weight             = {''};
     matlabbatch{1}.spm.util.defs.out{1}.push.savedir.saveusr    = {[dir_root,'bids_data/derivatives/',subj_handle,'/masks/']};
-    matlabbatch{1}.spm.util.defs.out{1}.push.fov.file           = {[dir_root,'bids_data/derivatives/',subj_handle,'/func/meanua',subj_handle,'_task-rf_run-1.nii']};
+    matlabbatch{1}.spm.util.defs.out{1}.push.fov.file           = {[dir_root,'bids_data/derivatives/',subj_handle,'/func/meanua',subj_handle,'_task-rf_run-1_bold.nii']};
     matlabbatch{1}.spm.util.defs.out{1}.push.preserve           = 0;
     matlabbatch{1}.spm.util.defs.out{1}.push.fwhm               = [0 0 0];
     matlabbatch{1}.spm.util.defs.out{1}.push.prefix             = '';
@@ -264,11 +264,12 @@ for subj = 1 : n_subj
     maskImg = zeros(1, prod(scan_fov));
     
     % load mask and add to matrix    
-    nii = load_untouch_nii([dir_root,'bids_data/derivatives/',subj_handle,'/rsa-ers/mask.nii']);
-    maskImg(1,:) = reshape(nii.img,1,[]);
+    nii_1 = load_untouch_nii([dir_root,'bids_data/derivatives/',subj_handle,'/rsa-correlation/mask.nii']);
+    nii_2 = load_untouch_nii([dir_root,'bids_data/derivatives/',subj_handle,'/masks/wgrand_cluster_dilated.nii']);
+    maskImg(1,:) = reshape(nii_1.img==1&nii_2.img==1,1,[]);
 
     % predefine matrix for functional data
-    scanVec = zeros((n_volumes-8).*numel(scan_func),numel(nii.img));
+    scanVec = zeros((n_volumes-8).*numel(scan_func),numel(nii_1.img));
     
     % start scan counter
     scanCount = 1;
@@ -305,8 +306,8 @@ for subj = 1 : n_subj
     
     % save
     fprintf('\nSaving full volume...\n')
-    mkdir([dir_root,'bids_data/derivatives/',subj_handle,'/rsa-ers/'])
-    save([dir_root,'bids_data/derivatives/',subj_handle,'/rsa-ers/',subj_handle,'_task-rf_rsa-fullVolume.mat'],'scanVec')
+    mkdir([dir_root,'bids_data/derivatives/',subj_handle,'/rsa-correlation/'])
+    save([dir_root,'bids_data/derivatives/',subj_handle,'/rsa-correlation/',subj_handle,'_task-rf_rsa-fullVolume.mat'],'scanVec')
     
     % apply mask to scans
     fprintf('Masking data...\n')
@@ -325,8 +326,8 @@ for subj = 1 : n_subj
     
     % save
     fprintf('Saving masked volumes...\n')
-    save([dir_root,'bids_data/derivatives/',subj_handle,'/rsa-ers/',subj_handle,'_task-rf_rsa-maskedVolume.mat'],'patterns')
-    save([dir_root,'bids_data/derivatives/',subj_handle,'/rsa-ers/',subj_handle,'_task-rf_rsa-mask.mat'],'mask_idx')
+    save([dir_root,'bids_data/derivatives/',subj_handle,'/rsa-correlation/',subj_handle,'_task-rf_rsa-maskedVolume.mat'],'patterns')
+    save([dir_root,'bids_data/derivatives/',subj_handle,'/rsa-correlation/',subj_handle,'_task-rf_rsa-mask.mat'],'mask_idx')
     
     % clear excess variables
     clear scanVec nii deadIdx patterns mask_idx subjHandle maskImg
@@ -341,7 +342,7 @@ for subj = 1 : n_subj
     dir_subj = [dir_root,'bids_data/',subj_handle,'/'];
     
     % load pattern data
-    load([dir_root,'bids_data/derivatives/',subj_handle,'/rsa-ers/',subj_handle,'_task-rf_rsa-maskedVolume.mat'])
+    load([dir_root,'bids_data/derivatives/',subj_handle,'/rsa-correlation/',subj_handle,'_task-rf_rsa-maskedVolume.mat'])
     
     % get mean pattern across all trials and replicate matrix
     meanPattern = repmat(mean(patterns,1),[size(patterns,1), 1]);
@@ -350,217 +351,56 @@ for subj = 1 : n_subj
     patterns = patterns - meanPattern;
     
     % save patterns
-    save([dir_root,'bids_data/derivatives/',subj_handle,'/rsa-ers/',subj_handle,'_task-rf_rsa-maskedDemeanedVolume.mat'],'patterns')
+    save([dir_root,'bids_data/derivatives/',subj_handle,'/rsa-correlation/',subj_handle,'_task-rf_rsa-maskedDemeanedVolume.mat'],'patterns')
     
     % clean up
     clear subjHandle meanPattern patterns
 end
 
-%% Create GLM Model
-% cycle through each subject
-for subj = 1 : n_subj
-    
-    % define key subject strings
-    subj_handle = sprintf('sub-%02.0f',subj);
-    dir_subj = [dir_root,'bids_data/',subj_handle,'/'];
-    
-    % delete old SPM file if it exists
-    if exist([dir_root,'bids_data/derivatives/',subj_handle,'/rsa/SPM.mat'],'file'); delete([dir_root,'bids_data/derivatives/',subj_handle,'/rsa/SPM.mat']); end
-    
-    % create cell to hold events data
-    events_onset  = zeros(n_trials*2,1);
-    count = 1;
-    
-    % create array to hold button press onsets
-    button_onset = [];
-    
-    % define 'length of scan'
-    LoS = 0;
-        
-    % cycle through each run
-    for run = 1 : n_runs
-
-        % load event table
-        tbl = readtable([dir_root,'bids_data/',subj_handle,'/func/',subj_handle,'_task-rf_run-',num2str(run),'_events.tsv'],'FileType','text','Delimiter','\t');
-        
-        % remove first three volumes and last five volumes
-        tbl = tbl(4:end-5,:);
-        
-        % adjust time accordingly
-        tbl.onset = tbl.onset - 30000;
-        
-        % add length of prior scans to this event table
-        tbl.onset = tbl.onset + LoS;
-        
-        % extract 'length of scan' and add on additional scan for next iteration
-        LoS = max(tbl.onset) + (TR*EEG_sample)-1;
-        
-        % cut table to stimulus onset
-        tbl = tbl(ismember(tbl.trial_type,'Stimulus Onset'),:);
-        
-        % cycle through every event
-        for e = 1 : size(tbl,1)
-            
-            % add key values
-            events_onset(count) = tbl.onset(e);
-            
-            % get button press onset (if pressed)
-            if ~isnan(tbl.rt(e)); button_onset(end+1,1) = tbl.onset(e) + tbl.rt(e); end %#ok<SAGROW>
-                
-            % update counter
-            count = count + 1;
-            
-        end
-    end
-       
-    % convert event onsets and button presses from EEG samples to seconds
-    events_onset = events_onset ./ EEG_sample;
-    button_onset = button_onset ./ EEG_sample;    
-    
-    % load movement parameters
-    R = load([dir_root,'bids_data/derivatives/',subj_handle,'/func/rp_a',subj_handle,'_task-rf_run-1_bold.txt']);
-    
-    % find first three volumes and last five volumes of each run
-    bad_scans = zeros(8*n_runs,1);
-    for run = 1 : n_runs
-        bad_scans(1+(8*(run-1)):8*run) = [1 2 3 251 252 253 254 255] + n_volumes*(run-1);
-    end
-    
-    % remove these scans
-    R(bad_scans,:) = [];
-    
-    % define number of volumes remaining in a run
-    n_volumes_adj = n_volumes - 8;
-    
-    % add regressors that model the per-block linear change
-    R(1+(n_volumes_adj*0):n_volumes_adj*1,7) = linspace(0,1,n_volumes_adj);
-    R(1+(n_volumes_adj*2):n_volumes_adj*3,8) = linspace(0,1,n_volumes_adj);
-    R(1+(n_volumes_adj*4):n_volumes_adj*5,9) = linspace(0,1,n_volumes_adj);
-    R(1+(n_volumes_adj*6):n_volumes_adj*7,10) = linspace(0,1,n_volumes_adj);
-    R(1+(n_volumes_adj*1):n_volumes_adj*2,11) = linspace(0,1,n_volumes_adj);
-    R(1+(n_volumes_adj*3):n_volumes_adj*4,12) = linspace(0,1,n_volumes_adj);
-    R(1+(n_volumes_adj*5):n_volumes_adj*6,13) = linspace(0,1,n_volumes_adj);
-    R(1+(n_volumes_adj*7):n_volumes_adj*8,14) = linspace(0,1,n_volumes_adj);
-    
-    % add regressors that model the per-block constant
-    R(1+(n_volumes_adj*0):n_volumes_adj*1,15) = zeros(1,n_volumes_adj);
-    R(1+(n_volumes_adj*2):n_volumes_adj*3,16) = zeros(1,n_volumes_adj);
-    R(1+(n_volumes_adj*4):n_volumes_adj*5,17) = zeros(1,n_volumes_adj);
-    R(1+(n_volumes_adj*6):n_volumes_adj*7,18) = zeros(1,n_volumes_adj);
-    R(1+(n_volumes_adj*1):n_volumes_adj*2,19) = zeros(1,n_volumes_adj);
-    R(1+(n_volumes_adj*3):n_volumes_adj*4,20) = zeros(1,n_volumes_adj);
-    R(1+(n_volumes_adj*5):n_volumes_adj*6,21) = zeros(1,n_volumes_adj);
-    R(1+(n_volumes_adj*7):n_volumes_adj*8,21) = zeros(1,n_volumes_adj); 
-    
-    % save nuisance regressors
-    save([dir_root,'bids_data/derivatives/',subj_handle,'/rsa/R.mat'],'R')            
-    
-    % get all scans for GLM
-    all_scans = get_functional_files([dir_root,'bids_data/derivatives/',subj_handle,'/'],'ua');
-    all_scans = all_scans{1};
-    
-    % remove bad scans
-    all_scans(bad_scans) = [];
-    
-    % define parameters for GLM
-    matlabbatch{1}.spm.stats.fmri_spec.volt             = 1;
-    matlabbatch{1}.spm.stats.fmri_spec.global           = 'None';
-    matlabbatch{1}.spm.stats.fmri_spec.mthresh          = 0.8;
-    matlabbatch{1}.spm.stats.fmri_spec.mask             = {''};
-    matlabbatch{1}.spm.stats.fmri_spec.cvi              = 'AR(1)';
-    matlabbatch{1}.spm.stats.fmri_spec.dir              = {[dir_root,'bids_data/derivatives/',subj_handle,'/rsa']};
-    matlabbatch{1}.spm.stats.fmri_spec.fact             = struct('name', {}, 'levels', {});
-    matlabbatch{1}.spm.stats.fmri_spec.bases.hrf.derivs = [0 0];
-    matlabbatch{1}.spm.stats.fmri_spec.sess.multi       = {''};
-    matlabbatch{1}.spm.stats.fmri_spec.sess.regress     = struct('name', {}, 'val', {});
-    matlabbatch{1}.spm.stats.fmri_spec.sess.hpf         = 128;
-    matlabbatch{1}.spm.stats.fmri_spec.sess.scans       = all_scans;
-    matlabbatch{1}.spm.stats.fmri_spec.sess.multi_reg   = {[dir_root,'bids_data/derivatives/',subj_handle,'/rsa/R.mat']};   
-    matlabbatch{1}.spm.stats.fmri_spec.timing.units     = 'secs';
-    matlabbatch{1}.spm.stats.fmri_spec.timing.RT        = 2;
-    matlabbatch{1}.spm.stats.fmri_spec.timing.fmri_t    = 32;
-    matlabbatch{1}.spm.stats.fmri_spec.timing.fmri_t0   = 16;  
-                   
-    % cycle through and define each condition
-    for trl = 1 : numel(events_onset)
-        matlabbatch{1}.spm.stats.fmri_spec.sess.cond(trl).name        = ['trl',sprintf('%03.0f',trl)];
-        matlabbatch{1}.spm.stats.fmri_spec.sess.cond(trl).onset       = events_onset(trl,1);
-        matlabbatch{1}.spm.stats.fmri_spec.sess.cond(trl).duration    = 3;
-        matlabbatch{1}.spm.stats.fmri_spec.sess.cond(trl).tmod        = 0;
-        matlabbatch{1}.spm.stats.fmri_spec.sess.cond(trl).orth        = 1;
-        matlabbatch{1}.spm.stats.fmri_spec.sess.cond(trl).pmod        = struct('name',{},'param',{},'poly',{});
-    end
-    
-    % add button press
-    matlabbatch{1}.spm.stats.fmri_spec.sess.cond(end+1).name      = 'button_press';
-    matlabbatch{1}.spm.stats.fmri_spec.sess.cond(end).onset       = button_onset;
-    matlabbatch{1}.spm.stats.fmri_spec.sess.cond(end).duration    = 0.5;
-    matlabbatch{1}.spm.stats.fmri_spec.sess.cond(end).tmod        = 0;
-    matlabbatch{1}.spm.stats.fmri_spec.sess.cond(end).orth        = 1;
-    matlabbatch{1}.spm.stats.fmri_spec.sess.cond(end).pmod        = struct('name',{},'param',{},'poly',{});
-    
-    % specify model
-    spm_jobman('run',matlabbatch)
-    clear matlabbatch
-    
-end
-
 %% Calculate LDt
 % cycle through each subject
 for subj = 1 : n_subj
-    
-    % define subject name
-    subjHandle = sprintf('subj%02.0f',subj);
+       
+    % define key subject strings
+    subj_handle = sprintf('sub-%02.0f',subj);
+    dir_subj = [dir_root,'bids_data/derivatives/',subj_handle,'/'];
     
     % load pattern data
-    load([dir_root,'data/combined/rsa/data/',subjHandle,'/volume_demeaned.mat'])   
-    
-    % load stimulus details
-    load([dir_root,'data/fmri/rsa/data/',subjHandle,'/stim.mat'])
+    load([dir_subj,'/rsa-correlation/',subj_handle,'_task-rf_rsa-maskedDemeanedVolume.mat'])
     
     % load SPM.mat
-    load([dir_root,'data/fmri/rsa/data/',subjHandle,'/SPM.mat'])
+    load([dir_subj,'/rsa-correlation/SPM.mat'])
     
-    % get design matrix (X) and split into two groups (Xa and Xb)
+    % get stimulus tables
+    [stim_details,scan_details] = get_stimulus_tables(dir_root,subj_handle);
+    
+    % get design matrix (X)
     X.raw = SPM.xX.X;
+        
+    % remove scans/regressors that are not visual (to
+    % computationally demanding to anything more than this)
+    X.raw = X.raw(scan_details.modality==1,:);
     
-    % define conditions to calculate similarity between
-    conditions = {'eBIKE','eFARM','eUNDERWATER','eWATERMILL','eACCORDIAN','eGUITAR','ePIANO','eTRUMPET',...
-        'rBIKE','rFARM','rUNDERWATER','rWATERMILL','rACCORDIAN','rGUITAR','rPIANO','rTRUMPET'};
-    
-    % get matrix of trials by stimulus content
-    trl_by_con = zeros(size(stim,1) ./ numel(conditions),numel(conditions));
-    for i = 1 : numel(conditions)
-        trl_by_con(:,i) = find(ismember(stim(:,2),conditions(i)));
+    % get condition-averaged matrix
+    for i = 1 : 8
+        X.c(:,i) = sum(X.raw(:,find(stim_details.stimulus(stim_details.modality==1)==i)),2); %#ok<FNDSB>
     end
     
-    % get GLM for nuisance regressors
-    X.n = X.raw(:,max(trl_by_con(:))+1:end);
-    
-    % get condition average GLM
-    for i = 1 : numel(conditions)
-        X.c(:,i) = sum(X.raw(:,trl_by_con(:,i)),2);
-    end
-    
+    % add nuisance regressors to condition-averaged matrix
+    nR = size(X.raw,2)-n_trials;
+    X.c(:,end+1:end+nR) = X.raw(:,end-(nR-1):end);
+           
     % split GLM into two groups (train and test data) [excluding nuisance regressors)
-    X.at = X.raw(1:size(X.raw)/2,1:n_trials);
-    X.bt = X.raw((size(X.raw)/2)+1:end,n_trials+1:n_trials*2);
+    X.at = X.raw(1:size(X.raw,1)/2,[1:n_trials/2 n_trials+1:end]);
+    X.bt = X.raw((size(X.raw,1)/2)+1:end,n_trials/2+1:end);
     
     % repeat for condition-average GLM
     X.aa = X.c(1:size(X.raw)/2,:);
     X.ba = X.c((size(X.raw)/2)+1:end,:);
     
-    % add nuisance regressors (skipping constants)
-    X.at(:,end+1:end+size(X.n,2)-1) = X.n(1:size(X.raw)/2,1:end-1);
-    X.bt(:,end+1:end+size(X.n,2)-1) = X.n((size(X.raw)/2)+1:end,1:end-1);
-    
-    % repeat for condition average
-    X.aa(:,end+1:end+size(X.n,2)-1) = X.n(1:size(X.raw)/2,1:end-1);
-    X.ba(:,end+1:end+size(X.n,2)-1) = X.n((size(X.raw)/2)+1:end,1:end-1);
-    
     % find zero-value rows
-    X.a_badRow = all(X.at(:,1:n_trials)==0,2);
-    X.b_badRow = all(X.bt(:,1:n_trials)==0,2);
+    X.a_badRow = all(X.at(:,1:n_trials/2)==0,2);
+    X.b_badRow = all(X.bt(:,1:n_trials/2)==0,2);
     
     % remove zero-value rows
     X.at(X.a_badRow,:) = [];
@@ -588,48 +428,40 @@ for subj = 1 : n_subj
     X.bt(:,X.bt_badCol) = [];
     X.ba(:,X.ba_badCol) = [];
       
-    % cycle through each mask
-    for i = 1 : numel(mask_names)
-            
-        % load stimulus details
-        load([dir_root,'data/fmri/rsa/data/',subjHandle,'/stim.mat'])
+    % get activation matrix (Y) and 
+    Y.raw = patterns(scan_details.modality==1,:);
+    
+    % split into two groups (Ya and Yb)
+    Y.a = Y.raw(1:size(Y.raw,1)/2,:);
+    Y.b = Y.raw(size(Y.raw,1)/2+1:end,:);
+     
+    % remove zero-value rows
+    Y.a(X.a_badRow,:) = [];
+    Y.b(X.b_badRow,:) = [];
 
-        % get activation matrix (Y) and split into two groups (Ya and Yb)
-        Y.raw = patterns{i};
-        Y.a = Y.raw(1:size(Y.raw,1)/2,:);
-        Y.b = Y.raw((size(Y.raw,1)/2)+1:end,:);
-
-        % remove zero-value rows
-        Y.a(X.a_badRow,:) = [];
-        Y.b(X.b_badRow,:) = [];
-
-        % convert stimulus string into value
-        for j = 1 : size(stim,1)
-            stim{j,4} = find(ismember(conditions,stim{j,2})); %#ok<SAGROW>
-        end
-
-        % extract stimulus values and split into A and B
-        Y.sa = cell2mat(stim(1:size(stim,1)/2,4));
-        Y.sb = cell2mat(stim((size(stim,1)/2)+1:end,4));
-
-        % calculate trial-wise linear discriminant T
-        RDM.ldtB = rsa.stat.fisherDiscrTRDM_trainAtestB(X.aa,Y.a,X.bt,Y.b,size(X.aa,2)-numel(conditions),Y.sb);
-        RDM.ldtA = rsa.stat.fisherDiscrTRDM_trainAtestB(X.ba,Y.b,X.at,Y.a,size(X.ba,2)-numel(conditions),Y.sa);
-
-        % get RDMs averaged over conditions
-        RDM.ldtB_avg = avg_RDM(RDM.ldtB,Y.sb);
-        RDM.ldtA_avg = avg_RDM(RDM.ldtA,Y.sa);
-
-        % store stimulus values
-        RDM.sb = Y.sb;
-        RDM.sa = Y.sa;
-
-        % save subject RDM    
-        save([dir_root,'data/fmri/rsa/data/',subjHandle,'/',mask_names{i},'_RDM.mat'],'RDM')
-        
-        % get mean T
-        sRDMs(subj,i,:,:) = mean(cat(3,RDM.ldtB_avg,RDM.ldtA_avg),3); %#ok<SAGROW>
+    % convert stimulus string into value
+    for j = 1 : size(stim,1)
+        stim{j,4} = find(ismember(conditions,stim{j,2})); %#ok<SAGROW>
     end
+
+    % extract stimulus values and split into A and B
+    sv = stim_details.stimulus(stim_details.modality==1);
+    Y.sa = sv(1:numel(sv)/2);
+    Y.sb = sv(numel(sv)/2+1:end);
+
+    % calculate trial-wise linear discriminant T
+    RDM.ldtB = rsa.stat.fisherDiscrTRDM_trainAtestB(X.aa,Y.a,X.bt,Y.b,size(X.aa,2)-8,Y.sb);
+    RDM.ldtA = rsa.stat.fisherDiscrTRDM_trainAtestB(X.ba,Y.b,X.at,Y.a,size(X.ba,2)-8,Y.sa);
+
+    % store stimulus values
+    RDM.sb = Y.sb;
+    RDM.sa = Y.sa;
+
+    % save subject RDM    
+    save([dir_subj,'/rsa-correlation/',subj_handle,'_task-rf_rsa-rdm.mat'],'RDM')
+
+    % get mean T
+    sRDMs(subj,i,:,:) = mean(cat(3,RDM.ldtB_avg,RDM.ldtA_avg),3); %#ok<SAGROW>
         
     clear Xa Xb Xa_avg Xb_avg Ya Yb
     
