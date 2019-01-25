@@ -3,8 +3,8 @@ function [freq] = get_rsa_timefrequency_correlation(data,operation,modality,si)
 % define time frequency analysis parameters based on data probability
 if numel(data.label) > 200
     fprintf('More than 200 channels detected, assuming data is in source space...\n')
-    toi = 0.5:0.1:1.5;
-    foi = 8:2:30;
+    toi = 0.5:0.05:1.5;
+    foi = 8:1:30;
 else
     fprintf('Less than 200 channels detected, assuming data is channel level...\n')
     toi = -1:0.05:3;
@@ -94,7 +94,7 @@ for chan = 1 : size(freq.powspctrm,2)
     % correlate time-frequency data with similarity index
     numer = sum((X-mean(X,1)).*(Y-mean(Y,1)));
     denom = sqrt(sum((X-mean(X,1)).^2) .* sum((Y-mean(Y,1)).^2));
-    r(chan,:,:) = squeeze(numer ./ denom);
+    r(chan,:,:) = atanh(squeeze(numer ./ denom));
 end
 
 % add correlation into freq structure
@@ -108,9 +108,3 @@ cfg = [];
 cfg.avgovertime = 'yes';
 cfg.avgoverfreq = 'yes';
 freq = ft_selectdata(cfg,freq);
-
-
-
-
-
-

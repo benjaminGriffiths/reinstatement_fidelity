@@ -16,4 +16,6 @@ match_idx(match_idx==trl) = []; % <- remove identical trial
 mismatch_idx = find(stim(stim<=4)~=sv);
 
 % calculate similarity index
-si = -(mean(rdm(trl,match_idx)) - mean(rdm(trl,mismatch_idx))); %#ok<FNDSB>
+X = [rdm(trl,match_idx) rdm(trl,mismatch_idx)];
+Y = [zeros(1,numel(match_idx))-1 zeros(1,numel(mismatch_idx))];
+si = atanh(corr(X',Y'));
