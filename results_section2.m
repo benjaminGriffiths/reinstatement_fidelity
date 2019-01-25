@@ -97,6 +97,9 @@ cfg.parameter   = 'pow';
 save([dir_bids,'derivatives/group/eeg/group_task-all_eeg-stat.mat'],'stat','tbl');
 
 %% Extract Raw Power of Cluster 
+% define cluster names
+plot_names = {'encoding','retrieval'};
+
 % prepare table for stat values
 tbl = array2table(zeros(n_subj,2),'VariableNames',plot_names);
 
