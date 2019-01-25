@@ -24,7 +24,7 @@ n_subj = 21;
 load([dir_tool,'fieldtrip-20170319/template/sourcemodel/standard_sourcemodel3d10mm.mat']);
 
 % load AAL atlas
-mri = ft_read_mri([dir_bids,'sourcedata/masks/aal.nii']);
+mri = ft_read_mri([dir_bids,'sourcedata/masks/whole_brain.nii']);
  
 % interpolate clusters with grid
 cfg             = [];
