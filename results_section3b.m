@@ -228,9 +228,6 @@ for subj = 1 : n_subj
 end
 
 %% Prepare Masks
-% dilate section 1 mask to fit searchlight size
-dilate_mask([dir_root,'bids_data/derivatives/group/rsa-ers/grand_cluster.nii'],scan_search,scan_vox)
-
 % cycle through each subject
 for subj = 1 : n_subj
      
@@ -252,6 +249,9 @@ for subj = 1 : n_subj
     spm_jobman('run',matlabbatch)
     clear matlabbatch
     
+    % change mask name
+    movefile([dir_root,'bids_data/derivatives/',subj_handle,'/masks/wgrand_cluster.nii'],...
+             [dir_root,'bids_data/derivatives/',subj_handle,'/masks/rsa-ers.nii'])
 end
 
 %% Read Data
@@ -270,7 +270,7 @@ for subj = 1 : n_subj
     
     % load mask and add to matrix    
     nii_1 = load_untouch_nii([dir_root,'bids_data/derivatives/',subj_handle,'/rsa-correlation/mask.nii']);
-    nii_2 = load_untouch_nii([dir_root,'bids_data/derivatives/',subj_handle,'/masks/wgrand_cluster.nii']);
+    nii_2 = load_untouch_nii([dir_root,'bids_data/derivatives/',subj_handle,'/masks/rsa-ers.nii']);
     maskImg(1,:) = reshape(nii_1.img==1&nii_2.img==1,1,[]);
 
     % predefine matrix for functional data

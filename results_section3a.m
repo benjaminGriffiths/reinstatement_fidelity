@@ -228,9 +228,6 @@ for subj = 1 : n_subj
 end
 
 %% Prepare Masks
-% dilate section 1 mask to fit searchlight size
-dilate_mask([dir_root,'bids_data/derivatives/group/rsa-percept/grand_cluster.nii'],scan_search,scan_vox)
-
 % cycle through each subject
 for subj = 1 : n_subj
      
@@ -240,7 +237,7 @@ for subj = 1 : n_subj
     % prepare deformation batch
     matlabbatch{1}.spm.util.defs.comp{1}.inv.comp{1}.def        = {[dir_root,'bids_data/derivatives/',subj_handle,'/anat/iy_',subj_handle,'_T1w.nii']};
     matlabbatch{1}.spm.util.defs.comp{1}.inv.space              = {[dir_root,'bids_data/',subj_handle,'/anat/',subj_handle,'_T1w.nii']};
-    matlabbatch{1}.spm.util.defs.out{1}.push.fnames             = {[dir_root,'bids_data/derivatives/group/rsa-percept/grand_cluster_dilated.nii']};
+    matlabbatch{1}.spm.util.defs.out{1}.push.fnames             = {[dir_root,'bids_data/derivatives/group/rsa-percept/grand_cluster.nii']};
     matlabbatch{1}.spm.util.defs.out{1}.push.weight             = {''};
     matlabbatch{1}.spm.util.defs.out{1}.push.savedir.saveusr    = {[dir_root,'bids_data/derivatives/',subj_handle,'/masks/']};
     matlabbatch{1}.spm.util.defs.out{1}.push.fov.file           = {[dir_root,'bids_data/derivatives/',subj_handle,'/func/meanua',subj_handle,'_task-rf_run-1_bold.nii']};
@@ -251,6 +248,10 @@ for subj = 1 : n_subj
     % run
     spm_jobman('run',matlabbatch)
     clear matlabbatch
+    
+    % change mask name
+    movefile([dir_root,'bids_data/derivatives/',subj_handle,'/masks/wgrand_cluster.nii'],...
+             [dir_root,'bids_data/derivatives/',subj_handle,'/masks/rsa-percept.nii'])
     
 end
 
@@ -270,7 +271,7 @@ for subj = 1 : n_subj
     
     % load mask and add to matrix    
     nii_1 = load_untouch_nii([dir_root,'bids_data/derivatives/',subj_handle,'/rsa-correlation/mask.nii']);
-    nii_2 = load_untouch_nii([dir_root,'bids_data/derivatives/',subj_handle,'/masks/wgrand_cluster_dilated.nii']);
+    nii_2 = load_untouch_nii([dir_root,'bids_data/derivatives/',subj_handle,'/masks/rsa-percept.nii']);
     maskImg(1,:) = reshape(nii_1.img==1&nii_2.img==1,1,[]);
 
     % predefine matrix for functional data
