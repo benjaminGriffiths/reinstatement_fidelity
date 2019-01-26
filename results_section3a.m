@@ -22,6 +22,9 @@ end
 % add subfunctions
 addpath([dir_root,'scripts/subfunctions'])
 
+% add developer rsa toolbox
+addpath([dir_tool,'rsatoolbox-develop'])
+
 % load layout
 load([dir_root,'data/layout.mat'])
 

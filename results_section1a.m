@@ -618,7 +618,7 @@ for subj = 1 : n_subj
     matlabbatch{2}.spm.spatial.smooth.dtype                     = 0;
     matlabbatch{2}.spm.spatial.smooth.im                        = 0;
     matlabbatch{2}.spm.spatial.smooth.prefix                    = 's';
-    matlabbatch{2}.spm.spatial.smooth.data                      = {[dir_root,'bids_data/derivatives/',subj_handle,'/rsa-percept/',subj_handle,'_task-percept_rsa-searchlightVisual.nii,1']};
+    matlabbatch{2}.spm.spatial.smooth.data                      = {[dir_root,'bids_data/derivatives/',subj_handle,'/rsa-percept/w',subj_handle,'_task-percept_rsa-searchlightVisual.nii,1']};
     
     % run batch
     spm_jobman('run',matlabbatch)
@@ -638,6 +638,9 @@ for subj = 1 : n_subj
     % get searchlight images
     rMapFiles{subj,1}  = [dir_root,'bids_data/derivatives/',subj_handle,'/rsa-percept/sw',subj_handle,'_task-percept_rsa-searchlightVisual.nii,1'];
 end
+
+% delete spm if it exists
+if exist([dir_root,'bids_data/derivatives/group/rsa-percept/SPM.mat'],'file'); delete([dir_root,'bids_data/derivatives/group/rsa-percept/SPM.mat']); end
 
 % create second-level glms
 matlabbatch{1}.spm.stats.factorial_design.dir                       = {[dir_root,'bids_data/derivatives/group/rsa-percept/']};
