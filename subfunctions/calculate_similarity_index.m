@@ -17,5 +17,5 @@ mismatch_idx = find(stim(stim<=4)~=sv);
 
 % calculate similarity index
 X = [rdm(trl,match_idx) rdm(trl,mismatch_idx)];
-Y = [zeros(1,numel(match_idx))-1 zeros(1,numel(mismatch_idx))];
+Y = [zeros(1,numel(match_idx)) ones(1,numel(mismatch_idx))];
 si = atanh(corr(X',Y'));

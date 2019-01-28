@@ -559,12 +559,14 @@ load([dir_bids,'derivatives/group/eeg/group_task-all_eeg-stat.mat']);
 
 % switch inside to EEG cluster
 grand_freq.inside = stat{2}.negclusterslabelmat == 1;
+clear stat
 
 % save data
 save([dir_bids,'derivatives/group/rsa-correlation/group_task-retrieval_comb-freq.mat'],'grand_freq'); 
 
 %% Run Statistics
 % predefine cell for statistics
+cfg             = [];
 cfg.tail        = -1;
 cfg.parameter   = 'pow';
 [stat,tbl]      = run_oneSampleT(cfg, grand_freq);

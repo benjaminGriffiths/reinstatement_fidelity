@@ -449,6 +449,14 @@ for subj = 1 : n_subj
     sv = stim_details.stimulus(stim_details.modality==1);
     Y.sa = sv(1:numel(sv)/2);
     Y.sb = sv(numel(sv)/2+1:end);
+    
+    % reorder stimuli
+    [Y.sa,Y.sai] = sort(Y.sa);
+    [Y.sb,Y.sbi] = sort(Y.sb);
+    X.at(:,1:96) = X.at(:,Y.sai);
+    X.bt(:,1:96) = X.bt(:,Y.sbi);
+    
+    % tidy up    
     clear sv i j nR stim_details scan_details SPM patterns
 
     % calculate trial-wise linear discriminant T
@@ -500,7 +508,7 @@ save([dir_root,'bids_data/derivatives/group/rsa-correlation/group_task-percept_f
 load([dir_tool,'fieldtrip-20170319/template/sourcemodel/standard_sourcemodel3d10mm.mat']);
 
 % load AAL atlas
-mri = ft_read_mri([dir_bids,'sourcedata/masks/aal.nii']);
+mri = ft_read_mri([dir_bids,'sourcedata/masks/whole_brain.nii']);
  
 % interpolate clusters with grid
 cfg             = [];
@@ -559,7 +567,7 @@ grand_freq = rmfield(grand_freq,{'powspctrm','label','freq','time','dimord'});
 load([dir_bids,'derivatives/group/eeg/group_task-all_eeg-stat.mat']);
 
 % switch inside to EEG cluster
-grand_freq.inside = stat{2}.negclusterslabelmat == 1;
+grand_freq.inside = stat{1}.negclusterslabelmat == 1;
 
 % save data
 save([dir_bids,'derivatives/group/rsa-correlation/group_task-percept_comb-freq.mat'],'grand_freq'); 

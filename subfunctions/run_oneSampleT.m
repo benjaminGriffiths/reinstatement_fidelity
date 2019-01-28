@@ -55,7 +55,7 @@ for condition = 1 : n_data
     if issource
         
         % run statistics
-        cfg.dim         = data{condition}.dim;  % specify dimensions of your source grid
+        config.dim         = data{condition}.dim;  % specify dimensions of your source grid
         stat{condition} = ft_sourcestatistics(config, data{condition}, null_freq);
     
     else

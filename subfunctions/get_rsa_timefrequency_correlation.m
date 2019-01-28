@@ -3,8 +3,8 @@ function [freq] = get_rsa_timefrequency_correlation(data,operation,modality,si)
 % define time frequency analysis parameters based on data probability
 if numel(data.label) > 200
     fprintf('More than 200 channels detected, assuming data is in source space...\n')
-    toi = 0.5:0.05:1.5;
-    foi = 8:1:30;
+    toi = -1:0.05:3;
+    foi = 3:0.5:40;
 else
     fprintf('Less than 200 channels detected, assuming data is channel level...\n')
     toi = -1:0.05:3;
@@ -63,14 +63,17 @@ end
 trl_no(trl_no>48&trl_no<=96)    = trl_no(trl_no>48&trl_no<=96) - 48;
 trl_no(trl_no>96&trl_no<=144)   = trl_no(trl_no>96&trl_no<=144) - 48;
 trl_no(trl_no>144)              = trl_no(trl_no>144) - 96;
-trl_no(mem_performance~=1)      = [];
+
+% if retrieval, kick out forgotten trials
+if strcmpi(operation,'retrieval')
+    trl_no(mem_performance~=1)      = [];
+end
 
 % get similarity index for these trials
 si = si(trl_no);
 
-% get time-frequency
+% define time-frequency parameters
 cfg                 = [];
-cfg.trials          = find(mem_performance==1);
 cfg.keeptrials      = 'yes';
 cfg.method          = 'wavelet';
 cfg.width           = 6;
@@ -78,8 +81,42 @@ cfg.output          = 'pow';
 cfg.toi             = toi;
 cfg.foi             = foi;
 cfg.pad             = 'nextpow2';
+
+% if retrieval, kick out forgotten trials
+if strcmpi(operation,'retrieval')    
+    cfg.trials = find(mem_performance==1);
+end
+
+% get time frequency
 freq                = ft_freqanalysis(cfg, data);
 clear data
+
+% get time-averaged mean and standard deviation of power for each channel and frequency
+raw_pow = mean(freq.powspctrm,4);
+avg_pow = mean(raw_pow,1);
+std_pow = std(raw_pow,[],1);
+
+% replicate matrices to match freq.powspctrm
+avg_pow = repmat(avg_pow,[size(freq.powspctrm,1) 1 1 size(freq.powspctrm,4)]);
+std_pow = repmat(std_pow,[size(freq.powspctrm,1) 1 1 size(freq.powspctrm,4)]);
+
+% z-transform power
+freq.powspctrm = (freq.powspctrm - avg_pow) ./ std_pow;
+clear raw_pow avg_pow std_pow
+
+% if encoding, get event-related change
+if strcmpi(operation,'encoding')    
+    
+    % get pre- and post- power
+    prepow  = mean(freq.powspctrm(:,:,:,freq.time<=0),4);
+    postpow = mean(freq.powspctrm(:,:,:,freq.time>=0.5&freq.time<=1.5),4);
+    
+    % add difference to freq
+    freq.powspctrm = postpow - prepow;
+    
+    % update time
+    freq.time = 1;
+end
 
 % predefine matrix to hold correlation data
 r = nan(size(freq.powspctrm,2),size(freq.powspctrm,3),size(freq.powspctrm,4));
@@ -102,9 +139,3 @@ freq            = rmfield(freq,{'cumtapcnt','trialinfo'});
 freq.powspctrm  = r;
 freq.dimord     = 'chan_freq_time';
 freq.cfg        = [];
-
-% get source variant - where data collasped across time-frequency
-cfg = [];
-cfg.avgovertime = 'yes';
-cfg.avgoverfreq = 'yes';
-freq = ft_selectdata(cfg,freq);
