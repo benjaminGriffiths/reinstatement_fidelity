@@ -4,7 +4,7 @@ function [freq] = get_rsa_timefrequency_correlation(data,operation,modality,si)
 if numel(data.label) > 200
     fprintf('More than 200 channels detected, assuming data is in source space...\n')
     toi = -1:0.05:3;
-    foi = 3:0.5:40;
+    foi = 8:30;
 else
     fprintf('Less than 200 channels detected, assuming data is channel level...\n')
     toi = -1:0.05:3;
@@ -136,6 +136,8 @@ end
 
 % add correlation into freq structure
 freq            = rmfield(freq,{'cumtapcnt','trialinfo'});
+freq.X          = freq.powspctrm;
+freq.Y          = repmat(si',[1 size(freq.powspctrm,2) size(freq.powspctrm,3) size(freq.powspctrm,4)]);
 freq.powspctrm  = r;
 freq.dimord     = 'chan_freq_time';
 freq.cfg        = [];

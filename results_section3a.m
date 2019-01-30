@@ -450,7 +450,7 @@ for subj = 1 : n_subj
     Y.sa = sv(1:numel(sv)/2);
     Y.sb = sv(numel(sv)/2+1:end);
     
-    % reorder stimuli
+    % reorder from trial order to stimulus order
     [Y.sa,Y.sai] = sort(Y.sa);
     [Y.sb,Y.sbi] = sort(Y.sb);
     X.at(:,1:96) = X.at(:,Y.sai);
@@ -466,6 +466,10 @@ for subj = 1 : n_subj
     % store stimulus values
     RDM.sb = Y.sb;
     RDM.sa = Y.sa;
+    
+    % record original trial numbers
+    [~,RDM.ta] = sort(Y.sai);
+    [~,RDM.tb] = sort(Y.sbi);
 
     % save subject RDM    
     save([dir_subj,'/rsa-correlation/',subj_handle,'_task-percept_rsa-rdm.mat'],'RDM')
@@ -496,6 +500,10 @@ for subj = 1 : n_subj
         rsa_vec(subj,trl+48)    = calculate_similarity_index(trl,RDM.ldtB,RDM.sb);
     end
     
+    % reorder trial order from stimulus order to trial order
+    rsa_vec(subj,1:48)     = rsa_vec(subj,RDM.ta(1:48));
+    rsa_vec(subj,49:96)    = rsa_vec(subj,RDM.tb(1:48)+48);
+    
     % clear details
     clear subj_handle dir_subj RDM trl
 end
@@ -520,6 +528,9 @@ roi.inside      = ~isnan(roi.anatomy) & roi.anatomy > 0;
 roi.anatomy     = double(~isnan(roi.anatomy) & roi.anatomy > 0);
 roi.pos         = sourcemodel.pos;
 
+% load EEG stat
+load([dir_bids,'derivatives/group/eeg/group_task-all_eeg-stat.mat']);
+
 %% Get Timelocked Representation of Each Condition
 % predefine cell for group data
 group_freq   = cell(n_subj,1);
@@ -536,8 +547,16 @@ for subj = 1 : n_subj
     % load in raw data
     load([dir_subj,sprintf('sub-%02.0f',subj),'_task-rf_eeg-source.mat'])  
     
+    % restrict analysis to labels in roi
+    cfg             = [];
+    cfg.channel     = source.label(stat{1}.negclusterslabelmat(roi.inside==1) == 1);
+    source          = ft_selectdata(cfg,source);
+    
     % get time-frequency representaiton of data for specified conditions
     group_freq{subj,1} = get_rsa_timefrequency_correlation(source,'encoding','visual',rsa_vec(subj,:));
+    
+    % update command line
+    fprintf('\n\nSubject %02.0f of %02.0f complete...\n\n',subj,n_subj)
 end
    
 % get grand average of subjects
@@ -547,11 +566,13 @@ grand_freq          = ft_freqgrandaverage(cfg,group_freq{:,1});
 
 % collapse over time/frequency
 grand_freq.pow = mean(mean(grand_freq.powspctrm,4),3);
+grand_freq.time = 1;
+grand_freq.freq = 1;
 
 % add in source model details
 grand_freq.powdimord   = 'rpt_pos';
 grand_freq.dim         = roi.dim;
-grand_freq.inside      = roi.inside(:);
+grand_freq.inside      = stat{1}.negclusterslabelmat==1;
 grand_freq.pos         = roi.pos;
 grand_freq.cfg         = [];
 
@@ -562,12 +583,6 @@ grand_freq.pow = tmp_pow;
 
 % remove freq details
 grand_freq = rmfield(grand_freq,{'powspctrm','label','freq','time','dimord'});
-    
-% load EEG stat
-load([dir_bids,'derivatives/group/eeg/group_task-all_eeg-stat.mat']);
-
-% switch inside to EEG cluster
-grand_freq.inside = stat{1}.negclusterslabelmat == 1;
 
 % save data
 save([dir_bids,'derivatives/group/rsa-correlation/group_task-percept_comb-freq.mat'],'grand_freq'); 

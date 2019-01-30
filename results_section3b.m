@@ -450,6 +450,12 @@ for subj = 1 : n_subj
     Y.sb = sv(numel(sv)/2+1:end);
     clear sv i j nR stim_details scan_details SPM patterns
 
+    % reorder from trial order to stimulus order
+    [Y.sa,Y.sai] = sort(Y.sa);
+    [Y.sb,Y.sbi] = sort(Y.sb);
+    X.at(:,1:96) = X.at(:,Y.sai);
+    X.bt(:,1:96) = X.bt(:,Y.sbi);
+    
     % calculate trial-wise linear discriminant T
     RDM.ldtB = rsa.stat.fisherDiscrTRDM_trainAtestB(X.aa,Y.a,X.bt,Y.b,size(X.aa,2)-8,Y.sb);
     RDM.ldtA = rsa.stat.fisherDiscrTRDM_trainAtestB(X.ba,Y.b,X.at,Y.a,size(X.ba,2)-8,Y.sa);
@@ -457,6 +463,10 @@ for subj = 1 : n_subj
     % store stimulus values
     RDM.sb = Y.sb;
     RDM.sa = Y.sa;
+    
+    % record original trial numbers
+    [~,RDM.ta] = sort(Y.sai);
+    [~,RDM.tb] = sort(Y.sbi);
 
     % save subject RDM    
     save([dir_subj,'/rsa-correlation/',subj_handle,'_task-rf_rsa-rdm.mat'],'RDM')
@@ -487,6 +497,10 @@ for subj = 1 : n_subj
         rsa_vec(subj,trl)     = calculate_similarity_index(trl,RDM.ldtB,RDM.sb);
     end
     
+    % reorder trial order from stimulus order to trial order <- BUGGED!!!!
+    rsa_vec(subj,1:48)     = rsa_vec(subj,RDM.ta(1:48));
+    rsa_vec(subj,49:96)    = rsa_vec(subj,RDM.tb(1:48)+48);
+    
     % clear details
     clear subj_handle dir_subj RDM trl
 end
@@ -511,6 +525,9 @@ roi.inside      = ~isnan(roi.anatomy) & roi.anatomy > 0;
 roi.anatomy     = double(~isnan(roi.anatomy) & roi.anatomy > 0);
 roi.pos         = sourcemodel.pos;
 
+% load EEG stat
+load([dir_bids,'derivatives/group/eeg/group_task-all_eeg-stat.mat']);
+
 %% Get Timelocked Representation of Each Condition
 % predefine cell for group data
 group_freq   = cell(n_subj,1);
@@ -527,8 +544,16 @@ for subj = 1 : n_subj
     % load in raw data
     load([dir_subj,sprintf('sub-%02.0f',subj),'_task-rf_eeg-source.mat'])  
     
+    % restrict analysis to labels in roi
+    cfg             = [];
+    cfg.channel     = source.label(stat{2}.negclusterslabelmat(roi.inside==1) == 1);
+    source          = ft_selectdata(cfg,source);
+    
     % get time-frequency representaiton of data for specified conditions
     group_freq{subj,1} = get_rsa_timefrequency_correlation(source,'retrieval','visual',rsa_vec(subj,:));
+    
+    % update command line
+    fprintf('\n\nSubject %02.0f of %02.0f complete...\n\n',subj,n_subj)
 end
    
 % get grand average of subjects
