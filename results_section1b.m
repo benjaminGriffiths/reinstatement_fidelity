@@ -453,7 +453,7 @@ for subj = 1 : n_subj
     
     % remove zero-value rows
     X.a(X.a_badRow,:) = [];
-    X.b(X.a_badRow,:) = [];
+    X.b(X.b_badRow,:) = [];
     
     % remove zero-value rows
     Y.a(X.a_badRow,:) = [];
