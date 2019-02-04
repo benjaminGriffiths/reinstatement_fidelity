@@ -1,28 +1,50 @@
 %% EEG: Source Analysis
 % prepare workspace
+% initialisation
 clearvars
-close all
 clc
 
 % define root directory
-if ispc;    dir_bids = 'Y:/projects/reinstatement_fidelity/bids_data/';
-            dir_tool = 'Y:/projects/general/';
-            dir_repos = 'E:/bjg335/projects/reinstatement_fidelity/'; % repository directory
-else        dir_bids = '/media/bjg335/rds-share-2018-hanslmas-memory/projects/reinstatement_fidelity/bids_data/';
-            dir_tool = '/media/bjg335/rds-share-2018-hanslmas-memory/projects/general/';
-            dir_repos = '/media/bjg335/rds-share-2018-hanslmas-memory/projects/reinstatement_fidelity/scripts/';
+if ispc        
+    dir_root = 'Y:/projects/reinstatement_fidelity/';
+    dir_bids = [dir_root,'bids_data/'];
+    dir_tool = 'Y:/projects/general/';
+    dir_repos = 'E:/bjg335/projects/reinstatement_fidelity/'; % repository directory
+    
+    % add subfunctions
+    addpath([dir_repos,'subfunctions'])
+    
+else       
+    dir_root = '/media/bjg335/rds-share-2018-hanslmas-memory/projects/reinstatement_fidelity/';
+    dir_bids = [dir_root,'bids_data/'];
+    dir_tool = '/media/bjg335/rds-share-2018-hanslmas-memory/projects/general/';            
+    dir_repos = '/media/bjg335/rds-share-2018-hanslmas-memory/projects/git_clone/reinstatement_fidelity/'; % repository directory
+    
+    % add subfunctions
+    addpath([dir_repos,'subfunctions'])
 end
-
-% add subfunctions
-addpath([dir_repos,'subfunctions'])
 
 % define number of subjects
 n_subj = 21;
 
-%% Get TF of Source Data
-% load stat
-load([dir_bids,'derivatives/group/eeg/group_task-rf_eeg-stat.mat'])
+%% Prepare ROI
+% load sourcemodel
+load([dir_tool,'fieldtrip-20170319/template/sourcemodel/standard_sourcemodel3d10mm.mat']);
 
+% load AAL atlas
+mri = ft_read_mri([dir_bids,'sourcedata/masks/whole_brain.nii']);
+ 
+% interpolate clusters with grid
+cfg             = [];
+cfg.parameter	= 'anatomy';
+roi             = ft_sourceinterpolate(cfg,mri,sourcemodel);
+
+% define additional roi parameters
+roi.inside      = ~isnan(roi.anatomy) & roi.anatomy > 0;
+roi.anatomy     = double(~isnan(roi.anatomy) & roi.anatomy > 0);
+roi.pos         = sourcemodel.pos;
+
+%% Get TF of Source Data
 % cycle through each subject
 for subj = 1 : n_subj
     
@@ -34,15 +56,14 @@ for subj = 1 : n_subj
     load([dir_bids,'sourcedata/',subj_handle,'/eeg/',subj_handle,'_task-rf_eeg-source.mat'])
         
     % cycle through each trial
-    isVisRet = [];
-    for trl = 1 : numel(source.trial);
+    isVisRet = nan(size(source.trial));
+    for trl = 1 : numel(source.trial)
         isVisRet(trl) = strcmpi(source.trialinfo{trl}.operation,'retrieval')&strcmpi(source.trialinfo{trl}.modality,'visual');
     end
        
     % restrict source to channels in cluster
     cfg             = [];
     cfg.trials      = find(isVisRet);
-    %cfg.channel     = source.label(stat.video.negclusterslabelmat(stat.video.inside==1)==1);
     source          = ft_selectdata(cfg,source);
     
     % get time-frequency representation of data
@@ -71,7 +92,7 @@ for subj = 1 : n_subj
     freq            = ft_selectdata(cfg,freq);
      
     % extract confidence values
-    confi = [];
+    confi = nan(size(freq.trialinfo));
     for trl = 1 : numel(freq.trialinfo)
         confi(trl,1) = freq.trialinfo{trl}.confidence;
     end
@@ -104,15 +125,8 @@ for subj = 1 : n_subj
 end
 
 %% Get Group Averages
-% load stat
-load([dir_bids,'derivatives/group/eeg/group_task-rf_eeg-stat.mat'])
-
 % predefine group data matrix
 group_freq = cell(n_subj,1);
-
-% load template grid
-load([dir_tool,'fieldtrip-20170319/template/sourcemodel/standard_sourcemodel3d10mm.mat']); 
-template_grid = sourcemodel; clear sourcemodel
 
 % cycle through each subject
 for subj = 1 : n_subj
@@ -127,9 +141,9 @@ for subj = 1 : n_subj
     group_freq{subj,1} = freq;
     
     % add source fields
-    group_freq{subj,1}.pos          = template_grid.pos;
-    group_freq{subj,1}.dim          = template_grid.dim;
-    group_freq{subj,1}.inside       = template_grid.inside;
+    group_freq{subj,1}.pos          = roi.pos;
+    group_freq{subj,1}.dim          = roi.dim;
+    group_freq{subj,1}.inside       = roi.inside(:);
     group_freq{subj,1}.powdimord	= 'pos';
     group_freq{subj,1}.pow          = group_freq{subj,1}.powspctrm;
     group_freq{subj,1}              = rmfield(group_freq{subj,1},{'dimord','powspctrm','time','freq'});
@@ -150,47 +164,15 @@ grand_freq          = ft_sourcegrandaverage(cfg, group_freq{:,1});
 
 % save
 mkdir([dir_bids,'derivatives/group/eeg/'])
-save([dir_bids,'derivatives/group/eeg/group_task-rf_eeg-confidence.mat'],'grand_freq')
-keep dir_root dir_bids dir_tool
+save([dir_bids,'derivatives/group/eeg/group_task-confidence_eeg-confidence.mat'],'grand_freq')
 
-%% Run Statistical Analysis across Whole Brain
-% load data
-load([dir_bids,'derivatives/group/eeg/group_task-rf_eeg-confidence.mat'])
+%% Run Statistics
+% predefine cell for statistics
+cfg.tail        = -1;
+cfg.parameter   = 'pow';
+[stat,tbl]      = run_oneSampleT(cfg, grand_freq);
 
-% create null hypothesis
-grand_null = grand_freq;
-grand_null.pow = zeros(size(grand_freq.pow));
-
-% run statisitics
-cfg                   = [];
-cfg.dim               = grand_freq.dim;  % specify dimensions of your source grid
-cfg.design            = [1:size(grand_freq.pow,1), 1:size(grand_freq.pow,1); ones(1,size(grand_freq.pow,1)), ones(1,size(grand_freq.pow,1))+1];
-cfg.uvar              = 1;
-cfg.ivar              = 2;
-cfg.method            = 'montecarlo';
-cfg.parameter         = 'pow';
-cfg.statistic         = 'ft_statfun_depsamplesT';
-cfg.correctm          = 'cluster';
-cfg.clusteralpha      = 0.05;
-cfg.numrandomization  = 2000;
-cfg.alpha             = 0.05;
-cfg.tail              = -1;
-cfg.clustertail       = -1;
-stat                  = ft_sourcestatistics(cfg, grand_freq, grand_null);
-
-% extract key values
-p  = round(stat.negclusters(1).prob,3);
-t  = round(stat.negclusters(1).clusterstat ./ sum(stat.negclusterslabelmat == 1),3);
-ci = round(stat.negclusters(1).cirange,3);
-
-% calculate cohen's dz
-dz = round(t./ sqrt(size(grand_freq.pow,1)),3);
-stat.cohens_dz = dz;
-
-% create results table
-results_table = table(p,ci,t,dz) %#ok<NOPTS>
-
-% save
-save([dir_bids,'derivatives/group/eeg/group_task-rf_eeg-confistat.mat'],'stat','results_table')
+% save data
+save([dir_bids,'derivatives/group/eeg/group_task-confidence_eeg-stat.mat'],'stat','tbl');
 
 
