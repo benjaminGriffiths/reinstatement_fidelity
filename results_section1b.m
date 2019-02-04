@@ -109,6 +109,11 @@ for subj = 1 : n_subj
             % add key values
             events_onset(count(1,idx),idx) = tbl.onset(e);
             
+            % sort memory
+            if tbl.recalled(e) ~= 1
+                events_onset(count(1,idx),idx) = NaN;
+            end
+            
             % get button press onset (if pressed)
             if ~isnan(tbl.rt(e)); button_onset(end+1,1) = tbl.onset(e) + tbl.rt(e); end %#ok<SAGROW>
                 
@@ -201,7 +206,7 @@ for subj = 1 : n_subj
     % cycle through and define each condition
     for trl = 1 : size(events_onset,2)
         matlabbatch{1}.spm.stats.fmri_spec.sess.cond(trl).name        = ['trl',sprintf('%03.0f',trl)];
-        matlabbatch{1}.spm.stats.fmri_spec.sess.cond(trl).onset       = events_onset(:,trl);
+        matlabbatch{1}.spm.stats.fmri_spec.sess.cond(trl).onset       = events_onset(~isnan(events_onset(:,trl)),trl);
         matlabbatch{1}.spm.stats.fmri_spec.sess.cond(trl).duration    = 3;
         matlabbatch{1}.spm.stats.fmri_spec.sess.cond(trl).tmod        = 0;
         matlabbatch{1}.spm.stats.fmri_spec.sess.cond(trl).orth        = 1;
@@ -511,7 +516,7 @@ for subj = 1 : n_subj
     model_rdm{1}        	= nan(8,8);
 
     % set items that belong to the different category to 1
-    model_rdm{1}(5:8,1:4)	= 1;
+    model_rdm{1}(5:8,1:4)	= 1; 
 
     % set items that belong to a same category to -1
     model_rdm{1}(5,1)       = -1;

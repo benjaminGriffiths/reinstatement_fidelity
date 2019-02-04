@@ -31,15 +31,18 @@ for subj = 1 : n_subj
     dir_subj = [dir_bids,'sourcedata/',subj_handle,'/eeg/'];
     
     % load
-    load([dir_bids,'sourcedata/',subj_handle,'/eeg/',subj_handle,'_task-rf_eeg.mat'])
+    load([dir_bids,'sourcedata/',subj_handle,'/eeg/',subj_handle,'_task-rf_eeg-source.mat'])
         
-    % find audio/video hit/miss trials
-    [audio_bool,hit_bool]   = get_splits_eeg(source);
-        
+    % cycle through each trial
+    isVisRet = [];
+    for trl = 1 : numel(source.trial);
+        isVisRet(trl) = strcmpi(source.trialinfo{trl}.operation,'retrieval')&strcmpi(source.trialinfo{trl}.modality,'visual');
+    end
+       
     % restrict source to channels in cluster
     cfg             = [];
-    cfg.trials      = find(audio_bool == 0 & hit_bool == 1);
-    cfg.channel     = source.label(stat.video.negclusterslabelmat(stat.video.inside==1)==1);
+    cfg.trials      = find(isVisRet);
+    %cfg.channel     = source.label(stat.video.negclusterslabelmat(stat.video.inside==1)==1);
     source          = ft_selectdata(cfg,source);
     
     % get time-frequency representation of data
@@ -48,7 +51,7 @@ for subj = 1 : n_subj
     cfg.method      = 'wavelet';
     cfg.width       = 6;
     cfg.output      = 'pow';
-    cfg.toi         = 0.5:0.25:1.5;
+    cfg.toi         = 0.5:0.1:1.5;
     cfg.foi         = 8:2:30; % 100hz sampling
     cfg.pad         = 'nextpow2';
     freq            = ft_freqanalysis(cfg, source); clear source
@@ -68,8 +71,9 @@ for subj = 1 : n_subj
     freq            = ft_selectdata(cfg,freq);
      
     % extract confidence values
+    confi = [];
     for trl = 1 : numel(freq.trialinfo)
-        confi(trl,1) = freq.trialinfo{trl}.confidenceScore;
+        confi(trl,1) = freq.trialinfo{trl}.confidence;
     end
         
     % cycle through each channel and correlate
@@ -93,7 +97,7 @@ for subj = 1 : n_subj
     
     % save    
     mkdir([dir_bids,'derivatives/',subj_handle,'/eeg/'])
-    save([dir_bids,'derivatives/',subj_handle,'/eeg/',subj_handle,'_task-rf_eeg-confidence.mat'],'freq','brainGeo')    
+    save([dir_bids,'derivatives/',subj_handle,'/eeg/',subj_handle,'_task-rf_eeg-confidence.mat'],'freq')    
     
     % clean workspace
     clear subj_handle freq cfg i X Y r confi trl
@@ -107,7 +111,7 @@ load([dir_bids,'derivatives/group/eeg/group_task-rf_eeg-stat.mat'])
 group_freq = cell(n_subj,1);
 
 % load template grid
-load([dir_tool,'fieldtrip-20170319/template/sourcemodel/standard_sourcemodel3d4mm.mat']); 
+load([dir_tool,'fieldtrip-20170319/template/sourcemodel/standard_sourcemodel3d10mm.mat']); 
 template_grid = sourcemodel; clear sourcemodel
 
 % cycle through each subject
@@ -124,8 +128,8 @@ for subj = 1 : n_subj
     
     % add source fields
     group_freq{subj,1}.pos          = template_grid.pos;
-    group_freq{subj,1}.dim          = brainGeo.dim;
-    group_freq{subj,1}.inside       = stat.video.negclusterslabelmat==1;
+    group_freq{subj,1}.dim          = template_grid.dim;
+    group_freq{subj,1}.inside       = template_grid.inside;
     group_freq{subj,1}.powdimord	= 'pos';
     group_freq{subj,1}.pow          = group_freq{subj,1}.powspctrm;
     group_freq{subj,1}              = rmfield(group_freq{subj,1},{'dimord','powspctrm','time','freq'});
