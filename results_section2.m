@@ -85,7 +85,8 @@ for i = 1 : size(group_freq,2)
 end
     
 % save data
-save([dir_bids,'derivatives/group/eeg/group_task-rf_eeg-source.mat'],'grand_freq');
+mkdir([dir_bids,'derivatives/group/eeg/'])
+save([dir_bids,'derivatives/group/eeg/group_task-all_eeg-source.mat'],'grand_freq');
 
 %% Run Statistics
 % predefine cell for statistics
@@ -114,63 +115,8 @@ for i = 1 : numel(stat)
 end
 
 % write table
-writetable(tbl,[dir_bids,'derivatives/group/eeg/group_task-rf_eeg-cluster.csv'],'Delimiter',',')
-
-%% Get Time/Frequency Series of Statistical Cluster
-% predefine cell for group data
-group_freq = cell(n_subj,2);
-
-% cycle through each subject
-for subj = 1 : n_subj
-    
-    % define subject data directory
-    dir_subj = [dir_bids,'sourcedata/',sprintf('sub-%02.0f',subj),'/eeg/'];
-    
-    % load in raw data
-    load([dir_subj,sprintf('sub-%02.0f',subj),'_task-rf_eeg-source.mat'])  
-        
-    % define custom TF resolution
-    res.toi = -1:0.05:3;
-    res.foi = 3:40;
-    
-    % restrict data to cluster
-    cfg         = [];
-    cfg.channel = source.label(stat{1}.negclusterslabelmat(stat{1}.inside)==1);
-    sourcetmp   = ft_selectdata(cfg,source);
-
-    % get time-frequency representaiton of data for specified conditions
-    group_freq{subj,1} = get_basediff_timefrequency(sourcetmp,'encoding','visual',res);
-    
-    % restrict data to cluster
-    cfg         = [];
-    cfg.channel = source.label(stat{2}.negclusterslabelmat(stat{2}.inside)==1);
-    sourcetmp   = ft_selectdata(cfg,source);
-    
-    % get time-frequency representaiton of data for specified conditions
-    group_freq{subj,2} = get_memdiff_timefrequency(sourcetmp,'retrieval','visual',res);
-end
-    
-% predefine cells to house concatenated group data
-grand_freq = cell(size(group_freq,2),1);
-
-% cycle through conditions
-for i = 1 : size(group_freq,2)
-    
-    % get grand average of subjects
-    cfg                 = [];
-    cfg.keepindividual  = 'yes';
-    grand_freq{i,1}     = ft_freqgrandaverage(cfg,group_freq{:,i});
-end
-
-% extract encoding/retrieval time/frequency series
-enc_freq = squeeze(mean(grand_freq{1}.powspctrm,2));
-ret_freq = squeeze(mean(mean(grand_freq{2}.powspctrm(:,:,:,grand_freq{2}.time>=0.5 & grand_freq{2}.time<=1.5),4),2));
-ret_time = squeeze(nanmean(nanmean(grand_freq{2}.powspctrm(:,:,grand_freq{2}.freq>=8 & grand_freq{2}.freq<=30,:),3),2));
-
-% save details
-csvwrite([dir_bids,'derivatives/group/eeg/group_task-rf_eeg-encfreqspc.csv'],enc_freq)
-csvwrite([dir_bids,'derivatives/group/eeg/group_task-rf_eeg-retfreqspc.csv'],ret_freq)
-csvwrite([dir_bids,'derivatives/group/eeg/group_task-rf_eeg-rettimespc.csv'],ret_time)
+writetable(tbl,[dir_bids,'derivatives/group/eeg/group_task-all_eeg-cluster.csv'],'Delimiter',',')
+copyfile([dir_bids,'derivatives/group/eeg/group_task-all_eeg-cluster.csv'],[dir_repos,'data/fig2_data/group_task-rf_eeg-cluster.csv'])
 
 %% Create Surface Plots
 % load template MRI
@@ -209,7 +155,7 @@ for i = 1 : numel(stat)
     % export
     cfg = [];
     cfg.parameter     = 'pow';               % specify the functional parameter to write to the .nii file
-    cfg.filename      = [dir_bids,'derivatives/group/eeg/group_task-rf_eeg-',plot_names{i},'map.nii'];  % enter the desired file name
+    cfg.filename      = [dir_bids,'derivatives/group/eeg/group_task-',plot_names{i},'_eeg-map.nii'];  % enter the desired file name
     cfg.filetype      = 'nifti';
     cfg.coordsys      = 'spm';
     cfg.vmpversion    = 2;
@@ -217,6 +163,112 @@ for i = 1 : numel(stat)
     ft_volumewrite(cfg,source);      % be sure to use your interpolated source data
     
     % reslice to 1mm isometric to match template MRI
-    reslice_nii([dir_bids,'derivatives/group/eeg/group_task-rf_eeg-',plot_names{i},'map.nii'],[dir_bids,'derivatives/group/eeg/group_task-rf_eeg-',plot_names{i},'map.nii'],[1 1 1]);    
+    reslice_nii([dir_bids,'derivatives/group/eeg/group_task-',plot_names{i},'_eeg-map.nii'],[dir_bids,'derivatives/group/eeg/group_task-',plot_names{i},'_eeg-map.nii'],[1 1 1]);
+    copyfile([dir_bids,'derivatives/group/eeg/group_task-',plot_names{i},'_eeg-map.nii'],[dir_repos,'data/fig2_data/group_task-',plot_names{i},'_eeg-map.nii'])    
 end
 
+%% Collect TF of Cluster
+% cycle through each subject
+for subj = 1 : n_subj 
+    
+    % define subject data directory
+    dir_subj = [dir_bids,'sourcedata/',sprintf('sub-%02.0f',subj),'/eeg/'];
+    
+    % load in raw data
+    load([dir_subj,sprintf('sub-%02.0f',subj),'_task-rf_eeg-source.mat'])  
+    data = source; clear source
+    
+    % predefine arrays for memory performance
+    mem_performance = zeros(numel(data.trial),1);
+    operation_to_include = zeros(numel(data.trial),1);
+    modality_to_include = zeros(numel(data.trial),1);
+    
+    % cycle through each trial
+    for trl = 1 : numel(data.trial)
+
+        % mark trials that do match specified operation
+        operation_to_include(trl) = strcmpi(data.trialinfo{trl}.operation,'encoding');
+        
+        % mark trials that do match specified operation
+        modality_to_include(trl) = strcmpi(data.trialinfo{trl}.modality,'visual');
+
+        % get memory
+        mem_performance(trl) = data.trialinfo{trl}.recalled;
+        
+    end
+
+    % get time-frequency
+    cfg                 = [];
+    cfg.keeptrials      = 'yes';
+    cfg.method          = 'wavelet';
+    cfg.width           = 6;
+    cfg.output          = 'pow';
+    cfg.toi             = -1:0.05:2;
+    cfg.foi             = 3:0.5:40;
+    cfg.pad             = 'nextpow2';
+    
+    % get encoding data
+    cfg.channel         = data.label(stat{1}.negclusterslabelmat(stat{1}.inside)==1);
+    cfg.trials          = find(operation_to_include == 1 & modality_to_include == 1);
+    freq                = ft_freqanalysis(cfg, data);
+    
+    % get time-averaged mean and standard deviation of power for each channel and frequency
+    raw_pow = mean(freq.powspctrm,4);
+    avg_pow = mean(raw_pow,1);
+    std_pow = std(raw_pow,[],1);
+
+    % replicate matrices to match freq.powspctrm
+    avg_pow = repmat(avg_pow,[size(freq.powspctrm,1) 1 1 size(freq.powspctrm,4)]);
+    std_pow = repmat(std_pow,[size(freq.powspctrm,1) 1 1 size(freq.powspctrm,4)]);
+    
+    % z-transform power
+    freq.powspctrm = (freq.powspctrm - avg_pow) ./ std_pow;
+    clear raw_pow avg_pow std_pow
+
+    % smooth
+    config = [];
+    config.fwhm_t=0.2;
+    config.fwhm_f=2;
+    freq = smooth_TF_GA(config,freq);
+
+    % get pre-post difference
+    percept_diff(subj,:) = squeeze(mean(mean(mean(freq.powspctrm(:,:,:,freq.time>=0.5 & freq.time<=1.5),4) - mean(freq.powspctrm(:,:,:,freq.time<=0),4),2),1));    
+    
+    % get retrieval data
+    cfg.channel         = data.label(stat{2}.negclusterslabelmat(stat{1}.inside)==1);
+    cfg.trials          = find(operation_to_include == 0 & modality_to_include == 1);
+    freq                = ft_freqanalysis(cfg, data);
+    
+    % get time-averaged mean and standard deviation of power for each channel and frequency
+    raw_pow = mean(freq.powspctrm,4);
+    avg_pow = mean(raw_pow,1);
+    std_pow = std(raw_pow,[],1);
+
+    % replicate matrices to match freq.powspctrm
+    avg_pow = repmat(avg_pow,[size(freq.powspctrm,1) 1 1 size(freq.powspctrm,4)]);
+    std_pow = repmat(std_pow,[size(freq.powspctrm,1) 1 1 size(freq.powspctrm,4)]);
+    
+    % z-transform power
+    freq.powspctrm = (freq.powspctrm - avg_pow) ./ std_pow;
+    clear raw_pow avg_pow std_pow
+
+    % smooth
+    cfg = [];
+    cfg.fwhm_t=0.2;
+    cfg.fwhm_f=2;
+    freq = smooth_TF_GA(cfg,freq);
+    
+    % get memory difference
+    vismem = mem_performance(operation_to_include == 0 & modality_to_include == 1);
+    memory_diff(subj,:,:) = squeeze(mean(mean(freq.powspctrm(vismem==1,:,:,:),1) - mean(freq.powspctrm(vismem==0,:,:,:),1),2));
+end
+
+% extract variables of interest
+percept_freq = percept_diff;
+memory_freq  = squeeze(mean(memory_diff(:,:,freq.time>=0.5 & freq.time<=1.5),3));
+memory_time  = squeeze(mean(memory_diff(:,freq.freq>=8 & freq.freq<=30,:),2));
+
+% save as csv
+csvwrite([dir_repos,'data/fig2_data/group_task-percept_eeg-freqseries.csv'],percept_freq)
+csvwrite([dir_repos,'data/fig2_data/group_task-memory_eeg-freqseries.csv'],memory_freq)
+csvwrite([dir_repos,'data/fig2_data/group_task-memory_eeg-timeseries.csv'],memory_time)

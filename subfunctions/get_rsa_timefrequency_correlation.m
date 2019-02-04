@@ -54,6 +54,11 @@ for trl = 1 : numel(data.trial)
 
     % get memory
     mem_performance(trl) = data.trialinfo{trl}.recalled;
+    if mem_performance(trl)==1
+        if data.trialinfo{trl}.confidence ~= 4
+            mem_performance(trl)=NaN;
+        end
+    end
     
     % get trial number
     trl_no(trl) = data.trialinfo{trl}.(['trl_at_',operation]);    
@@ -64,15 +69,7 @@ trl_no(trl_no>48&trl_no<=96)    = trl_no(trl_no>48&trl_no<=96) - 48;
 trl_no(trl_no>96&trl_no<=144)   = trl_no(trl_no>96&trl_no<=144) - 48;
 trl_no(trl_no>144)              = trl_no(trl_no>144) - 96;
 
-% if retrieval, kick out forgotten trials
-if strcmpi(operation,'retrieval')
-    trl_no(mem_performance~=1)      = [];
-end
-
-% get similarity index for these trials
-si = si(trl_no);
-
-% define time-frequency parameters
+% get time-frequency parameters
 cfg                 = [];
 cfg.keeptrials      = 'yes';
 cfg.method          = 'wavelet';
@@ -81,13 +78,6 @@ cfg.output          = 'pow';
 cfg.toi             = toi;
 cfg.foi             = foi;
 cfg.pad             = 'nextpow2';
-
-% if retrieval, kick out forgotten trials
-if strcmpi(operation,'retrieval')    
-    cfg.trials = find(mem_performance==1);
-end
-
-% get time frequency
 freq                = ft_freqanalysis(cfg, data);
 clear data
 
@@ -116,28 +106,42 @@ if strcmpi(operation,'encoding')
     
     % update time
     freq.time = 1;
-end
-
-% predefine matrix to hold correlation data
-r = nan(size(freq.powspctrm,2),size(freq.powspctrm,3),size(freq.powspctrm,4));
-
-% cycle through each channel
-for chan = 1 : size(freq.powspctrm,2)
-
-    % get parameters to correlate
-    X = freq.powspctrm(:,chan,:,:);
-    Y = repmat(si',[1 1 size(freq.powspctrm,3) size(freq.powspctrm,4)]);
     
-    % correlate time-frequency data with similarity index
-    numer = sum((X-mean(X,1)).*(Y-mean(Y,1)));
-    denom = sqrt(sum((X-mean(X,1)).^2) .* sum((Y-mean(Y,1)).^2));
-    r(chan,:,:) = atanh(squeeze(numer ./ denom));
+elseif strcmpi(operation,'retrieval')       
+    
+    % get memory difference
+    mem_diff = mean(mean(freq.powspctrm(mem_performance == 1,:)) - mean(freq.powspctrm(mem_performance == 0,:)),2);
+    
+    % kick out forgotten trials
+    cfg         = [];
+    cfg.trials  = find(mem_performance == 1);
+    cfg.latency = [0.5 1.5];
+    freq        = ft_selectdata(cfg,freq);    
+    trl_no(mem_performance~=1) = [];
 end
+
+% average over time and frequency
+freq.powspctrm = mean(freq.powspctrm(:,:,:),3);
+
+% get similarity index for all trials
+si = si(trl_no);
+
+% get parameters to correlate
+X = freq.powspctrm;
+Y = repmat(si',[1 size(X,2)]);
+
+% correlate time-frequency data with similarity index
+numer   = sum((X-mean(X,1)).*(Y-mean(Y,1)));
+denom   = sqrt(sum((X-mean(X,1)).^2) .* sum((Y-mean(Y,1)).^2));
+r       = atanh(squeeze(numer ./ denom));
 
 % add correlation into freq structure
 freq            = rmfield(freq,{'cumtapcnt','trialinfo'});
-freq.X          = freq.powspctrm;
-freq.Y          = repmat(si',[1 size(freq.powspctrm,2) size(freq.powspctrm,3) size(freq.powspctrm,4)]);
-freq.powspctrm  = r;
+freq.X          = X;
+freq.Y          = mean(Y(:,1));
+freq.n          = sum(mem_performance==1);
+freq.powspctrm  = r';
 freq.dimord     = 'chan_freq_time';
 freq.cfg        = [];
+freq.freq       = 1;
+freq.time       = 1;

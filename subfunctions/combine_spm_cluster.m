@@ -28,6 +28,9 @@ nii_grand.fileprefix    = [cluster_dir,'\grand_cluster'];
 save_nii(nii_grand,[nii_grand.fileprefix,'.nii'])
 fprintf('Mask saved...\n')
 
+% dilate cluster
+dilate_mask([nii_grand.fileprefix,'.nii'],10,[3 3 4])
+
 % load t image
 nii = load_nii([cluster_dir,'\spmT_0001.nii']);
 

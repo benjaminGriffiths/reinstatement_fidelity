@@ -237,7 +237,7 @@ for subj = 1 : n_subj
     % prepare deformation batch
     matlabbatch{1}.spm.util.defs.comp{1}.inv.comp{1}.def        = {[dir_root,'bids_data/derivatives/',subj_handle,'/anat/iy_',subj_handle,'_T1w.nii']};
     matlabbatch{1}.spm.util.defs.comp{1}.inv.space              = {[dir_root,'bids_data/',subj_handle,'/anat/',subj_handle,'_T1w.nii']};
-    matlabbatch{1}.spm.util.defs.out{1}.push.fnames             = {[dir_root,'bids_data/derivatives/group/rsa-ers/grand_cluster.nii']};
+    matlabbatch{1}.spm.util.defs.out{1}.push.fnames             = {[dir_root,'bids_data/derivatives/group/rsa-ers/grand_cluster_diluted.nii']};
     matlabbatch{1}.spm.util.defs.out{1}.push.weight             = {''};
     matlabbatch{1}.spm.util.defs.out{1}.push.savedir.saveusr    = {[dir_root,'bids_data/derivatives/',subj_handle,'/masks/']};
     matlabbatch{1}.spm.util.defs.out{1}.push.fov.file           = {[dir_root,'bids_data/derivatives/',subj_handle,'/func/meanua',subj_handle,'_task-rf_run-1_bold.nii']};
@@ -250,7 +250,7 @@ for subj = 1 : n_subj
     clear matlabbatch
     
     % change mask name
-    movefile([dir_root,'bids_data/derivatives/',subj_handle,'/masks/wgrand_cluster.nii'],...
+    movefile([dir_root,'bids_data/derivatives/',subj_handle,'/masks/wgrand_cluster_diluted.nii'],...
              [dir_root,'bids_data/derivatives/',subj_handle,'/masks/rsa-ers.nii'])
 end
 
@@ -476,6 +476,9 @@ for subj = 1 : n_subj
 end
 
 %% Extract Vector of Similarity Indices for Each Trial
+% predefine memory performance
+mem_perf = nan(n_subj,96);
+
 % predefine vector for RSA data
 rsa_vec  = zeros(n_subj,n_trials/2);
 
@@ -489,6 +492,9 @@ for subj = 1 : n_subj
     % load RDM
     load([dir_subj,'/rsa-correlation/',subj_handle,'_task-rf_rsa-rdm.mat'])
     
+    % get stimulus details
+    count    = 1;
+    
     % cycle through every trial in RDM
     for trl = 49 : size(RDM.ldtA,1)
         
@@ -497,13 +503,44 @@ for subj = 1 : n_subj
         rsa_vec(subj,trl)     = calculate_similarity_index(trl,RDM.ldtB,RDM.sb);
     end
     
-    % reorder trial order from stimulus order to trial order <- BUGGED!!!!
-    rsa_vec(subj,1:48)     = rsa_vec(subj,RDM.ta(1:48));
-    rsa_vec(subj,49:96)    = rsa_vec(subj,RDM.tb(1:48)+48);
-    
+    % reorder trial order from stimulus order to trial order
+    rsa_vec(subj,1:48)     = rsa_vec(subj,RDM.ta(49:end)-48);
+    rsa_vec(subj,49:96)    = rsa_vec(subj,RDM.tb(49:end));
+        
+    % cycle through each run
+    for run = 1 : n_runs
+
+        % load event table
+        tbl = readtable([dir_root,'bids_data/',subj_handle,'/func/',subj_handle,'_task-rf_run-',num2str(run),'_events.tsv'],'FileType','text','Delimiter','\t');
+        
+        % remove first three volumes and last five volumes
+        tbl = tbl(4:end-5,:);
+        
+        % cut table to stimulus onset
+        tbl = tbl(ismember(tbl.trial_type,'Stimulus Onset'),:);
+        
+        % if visual-retrieval
+        for trl = 1 : size(tbl,1)
+            if strcmpi(tbl.operation{trl},'encoding') && strcmpi(tbl.modality{trl},'visual')
+                mem_perf(subj,count) = tbl.recalled(trl);
+                count = count + 1;
+            end
+        end
+    end
+       
     % clear details
     clear subj_handle dir_subj RDM trl
 end
+
+for i = 1 : 21
+    X(i,1) = mean(rsa_vec(i,mem_perf(i,:)==1));
+    Y(i,1) = mean(rsa_vec(i,mem_perf(i,:)==0));
+end
+    
+figure; hold on
+plot(1,X,'ko')
+plot(2,Y,'ko')
+xlim([0 3])
 
 % save RSA vector
 save([dir_root,'bids_data/derivatives/group/rsa-correlation/group_task-retrieval_fmri-si'],'rsa_vec')
@@ -512,18 +549,23 @@ save([dir_root,'bids_data/derivatives/group/rsa-correlation/group_task-retrieval
 % load sourcemodel
 load([dir_tool,'fieldtrip-20170319/template/sourcemodel/standard_sourcemodel3d10mm.mat']);
 
-% load AAL atlas
+% load whole brain
 mri = ft_read_mri([dir_bids,'sourcedata/masks/whole_brain.nii']);
+
+% load mask
+mask = ft_read_mri([dir_root,'bids_data/derivatives/group/rsa-ers/grand_cluster_dilated.nii']);
  
 % interpolate clusters with grid
 cfg             = [];
 cfg.parameter	= 'anatomy';
 roi             = ft_sourceinterpolate(cfg,mri,sourcemodel);
+mask            = ft_sourceinterpolate(cfg,mask,sourcemodel);
 
 % define additional roi parameters
-roi.inside      = ~isnan(roi.anatomy) & roi.anatomy > 0;
-roi.anatomy     = double(~isnan(roi.anatomy) & roi.anatomy > 0);
+roi.inside      = roi.anatomy > 0;
+mask.inside     = mask.anatomy > 0 & roi.inside == 1;
 roi.pos         = sourcemodel.pos;
+mask.pos        = sourcemodel.pos;
 
 % load EEG stat
 load([dir_bids,'derivatives/group/eeg/group_task-all_eeg-stat.mat']);
@@ -544,18 +586,20 @@ for subj = 1 : n_subj
     % load in raw data
     load([dir_subj,sprintf('sub-%02.0f',subj),'_task-rf_eeg-source.mat'])  
     
-    % restrict analysis to labels in roi
-    cfg             = [];
-    cfg.channel     = source.label(stat{2}.negclusterslabelmat(roi.inside==1) == 1);
-    source          = ft_selectdata(cfg,source);
-    
     % get time-frequency representaiton of data for specified conditions
     group_freq{subj,1} = get_rsa_timefrequency_correlation(source,'retrieval','visual',rsa_vec(subj,:));
     
+    % record number of trials
+    n(subj,1) = size(group_freq{subj,1}.Y,1);
+    
+    % record mean power and similiarity
+    X(subj,1) = mean(group_freq{subj,1}.X(:));
+    Y(subj,1) = mean(group_freq{subj,1}.Y(:));
+    
     % update command line
-    fprintf('\n\nSubject %02.0f of %02.0f complete...\n\n',subj,n_subj)
+    fprintf('\nSubject %02.0f of %02.0f complete...\n\n',subj,n_subj)
 end
-   
+    
 % get grand average of subjects
 cfg                 = [];
 cfg.keepindividual  = 'yes';
@@ -567,7 +611,7 @@ grand_freq.pow = mean(mean(grand_freq.powspctrm,4),3);
 % add in source model details
 grand_freq.powdimord   = 'rpt_pos';
 grand_freq.dim         = roi.dim;
-grand_freq.inside      = roi.inside(:);
+grand_freq.inside      = roi.inside(:);%stat{2}.negclusterslabelmat == 1;
 grand_freq.pos         = roi.pos;
 grand_freq.cfg         = [];
 
@@ -578,13 +622,12 @@ grand_freq.pow = tmp_pow;
 
 % remove freq details
 grand_freq = rmfield(grand_freq,{'powspctrm','label','freq','time','dimord'});
-    
-% load EEG stat
-load([dir_bids,'derivatives/group/eeg/group_task-all_eeg-stat.mat']);
 
-% switch inside to EEG cluster
-grand_freq.inside = stat{2}.negclusterslabelmat == 1;
-clear stat
+% apply mask
+grand_freq.inside = mask.inside;
+
+% scale r by trial count
+grand_freq.pow = grand_freq.pow .* repmat(n./max(n),[1,size(grand_freq.pow,2)]);
 
 % save data
 save([dir_bids,'derivatives/group/rsa-correlation/group_task-retrieval_comb-freq.mat'],'grand_freq'); 

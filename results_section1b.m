@@ -22,8 +22,11 @@ else
     dir_root = '/media/bjg335/rds-share-2018-hanslmas-memory/projects/reinstatement_fidelity/';
     dir_bids = [dir_root,'bids_data/'];
     dir_tool = '/media/bjg335/rds-share-2018-hanslmas-memory/projects/general/';            
-    dir_repos = '/media/bjg335/rds-share-2018-hanslmas-memory/projects/reinstatement_fidelity/scripts/'; % repository directory
+    dir_repos = '/media/bjg335/rds-share-2018-hanslmas-memory/projects/git_clone/reinstatement_fidelity/'; % repository directory
     copylocal = false;
+    
+    % add subfunctions
+    addpath([dir_repos,'subfunctions'])
 end
 
 % add RSA toolbox to path

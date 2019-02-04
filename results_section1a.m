@@ -22,6 +22,9 @@ else
     dir_bids = [dir_root,'bids_data/'];
     dir_tool = '/media/bjg335/rds-share-2018-hanslmas-memory/projects/general/';            
     dir_repos = '/media/bjg335/rds-share-2018-hanslmas-memory/projects/reinstatement_fidelity/scripts/'; % repository directory
+    
+    % add subfunctions
+    addpath([dir_repos,'subfunctions'])
 end
 
 % add RSA toolbox to path
@@ -36,9 +39,7 @@ TR          = 2;
 EEG_sample  = 5000;
 scan_fov    = [64 64 32];                                   % scan field of view
 scan_vox    = [3 3 4];                                      % scan voxel size
-scan_search = 8;                                           % searchlight radius
-scan_func   = {'_3_1','_4_1','_5_1','_6_1',...
-               '_8_1','_9_1','_10_1','_11_1'};              % functional scan suffix
+scan_search = 10;                                           % searchlight radius
 
 %% Create GLM Model
 % cycle through each subject
@@ -227,13 +228,13 @@ for subj = 1 : n_subj
     maskImg(1,:) = reshape(nii.img,1,[]);
 
     % predefine matrix for functional data
-    scanVec = zeros((n_volumes-8).*numel(scan_func),numel(nii.img));
+    scanVec = zeros((n_volumes-8).*n_runs,numel(nii.img));
     
     % start scan counter
     scanCount = 1;
     
     % cycle through each run
-    for i = 1 : numel(scan_func)
+    for i = 1 : n_runs
         
         % define functional filenames
         filename = [dir_root,'bids_data/derivatives/',subj_handle,'/func/',...
@@ -256,7 +257,7 @@ for subj = 1 : n_subj
         end
         
         % update command line
-        fprintf('Run %d of %d read in...\n',i,numel(scan_func))
+        fprintf('Run %d of %d read in...\n',i,n_runs)
     end
     
     % clear up
@@ -390,7 +391,7 @@ for subj = 1 : n_subj
     
     % remove scans/regressors that are not visual (to
     % computationally demanding to anything more than this)
-    X.raw = X.raw(scan_details.modality==1&scan_details.encoding,:);
+    X.raw = X.raw(scan_details.modality==1&scan_details.encoding==1,:);
     
     % split GLM into two groups (train [encoding] and test [retrieval] data)
     X.a = X.raw(1:size(X.raw,1)/2,:);
@@ -409,7 +410,7 @@ for subj = 1 : n_subj
     
     % re-organise regressors
     X.a(:,1:48) = X.a(:,X.sai);
-    X.b(:,1:48) = X.b(:,X.sbi);
+    X.b(:,49:96) = X.b(:,X.sbi+48);
     
     % --- prepare patterns --- %
     % get activation matrix (Y) and 
@@ -421,12 +422,12 @@ for subj = 1 : n_subj
     
     % --- remove singular dimensions --- %
     % find zero-value rows
-    X.a_badRow = all(X.a(:,1:n_trials/4)==0,2);
-    X.b_badRow = all(X.b(:,1:n_trials/4)==0,2);
+    X.a_badRow = all(X.a(:,1:96)==0,2);
+    X.b_badRow = all(X.b(:,1:96)==0,2);
     
     % remove zero-value rows
     X.a(X.a_badRow,:) = [];
-    X.b(X.a_badRow,:) = [];
+    X.b(X.b_badRow,:) = [];
     
     % remove zero-value rows
     Y.a(X.a_badRow,:) = [];
@@ -462,7 +463,7 @@ end
 voxRadInSearchLight = scan_search ./ scan_vox;
 
 % define distance from searchlight centre to perimeter in voxels
-dist2Perimeter = ceil(voxRadInSearchLight);
+dist2Perimeter = floor(voxRadInSearchLight);
 
 % create boolean searchlight sphere
 [x,y,z] = meshgrid(-dist2Perimeter(1):dist2Perimeter(1),-dist2Perimeter(2):dist2Perimeter(2),-dist2Perimeter(3):dist2Perimeter(3));
@@ -639,6 +640,9 @@ for subj = 1 : n_subj
     rMapFiles{subj,1}  = [dir_root,'bids_data/derivatives/',subj_handle,'/rsa-percept/sw',subj_handle,'_task-percept_rsa-searchlightVisual.nii,1'];
 end
 
+% make group directory
+mkdir([dir_root,'bids_data/derivatives/group/rsa-percept/'])
+
 % delete spm if it exists
 if exist([dir_root,'bids_data/derivatives/group/rsa-percept/SPM.mat'],'file'); delete([dir_root,'bids_data/derivatives/group/rsa-percept/SPM.mat']); end
 
@@ -685,9 +689,9 @@ load([dir_root,'bids_data/derivatives/group/rsa-percept/SPM.mat'])
 [betas,d] = extract_sample_points([dir_root,'bids_data/derivatives/group/rsa-percept/'],SPM);
 
 % save betas as table
-tbl = array2table(betas','VariableNames',{'Occipital','Temporal','Central'});
+tbl = array2table(betas','VariableNames',{'Occipital','FrontCent','LeftTemp'});
 writetable(tbl,[dir_repos,'data/percept_betas.csv'],'Delimiter',',')
 
 % save effect size as table
-tbl = array2table(d','VariableNames',{'Occipital','Temporal','Central'});
+tbl = array2table(d','VariableNames',{'Occipital','FrontCent','LeftTemp'});
 writetable(tbl,[dir_repos,'data/percept_cohensD.csv'],'Delimiter',',')

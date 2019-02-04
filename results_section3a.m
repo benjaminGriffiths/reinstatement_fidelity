@@ -233,11 +233,13 @@ for subj = 1 : n_subj
      
     % define subject name
     subj_handle = sprintf('sub-%02.0f',subj);    
+    mkdir([dir_root,'bids_data/derivatives/',subj_handle,'/masks/'])
+    mkdir([dir_root,'bids_data/derivatives/',subj_handle,'/rsa-correlation/'])
     
     % prepare deformation batch
     matlabbatch{1}.spm.util.defs.comp{1}.inv.comp{1}.def        = {[dir_root,'bids_data/derivatives/',subj_handle,'/anat/iy_',subj_handle,'_T1w.nii']};
     matlabbatch{1}.spm.util.defs.comp{1}.inv.space              = {[dir_root,'bids_data/',subj_handle,'/anat/',subj_handle,'_T1w.nii']};
-    matlabbatch{1}.spm.util.defs.out{1}.push.fnames             = {[dir_root,'bids_data/derivatives/group/rsa-percept/grand_cluster.nii']};
+    matlabbatch{1}.spm.util.defs.out{1}.push.fnames             = {[dir_root,'bids_data/derivatives/group/rsa-percept/grand_cluster_dilated.nii']};
     matlabbatch{1}.spm.util.defs.out{1}.push.weight             = {''};
     matlabbatch{1}.spm.util.defs.out{1}.push.savedir.saveusr    = {[dir_root,'bids_data/derivatives/',subj_handle,'/masks/']};
     matlabbatch{1}.spm.util.defs.out{1}.push.fov.file           = {[dir_root,'bids_data/derivatives/',subj_handle,'/func/meanua',subj_handle,'_task-rf_run-1_bold.nii']};
@@ -250,7 +252,7 @@ for subj = 1 : n_subj
     clear matlabbatch
     
     % change mask name
-    movefile([dir_root,'bids_data/derivatives/',subj_handle,'/masks/wgrand_cluster.nii'],...
+    movefile([dir_root,'bids_data/derivatives/',subj_handle,'/masks/wgrand_cluster_dilated.nii'],...
              [dir_root,'bids_data/derivatives/',subj_handle,'/masks/rsa-percept.nii'])
     
 end
@@ -509,7 +511,32 @@ for subj = 1 : n_subj
 end
 
 % save RSA vector
+mkdir([dir_root,'bids_data/derivatives/group/rsa-correlation/'])
 save([dir_root,'bids_data/derivatives/group/rsa-correlation/group_task-percept_fmri-si'],'rsa_vec')
+
+%% Extract Variables for Plotting
+% cycle through each subject
+for subj = 1 : n_subj
+    
+    % define key subject strings
+    subj_handle = sprintf('sub-%02.0f',subj);
+    dir_subj = [dir_root,'bids_data/derivatives/',subj_handle,'/'];
+    
+    % load RDM
+    load([dir_subj,'/rsa-correlation/',subj_handle,'_task-percept_rsa-rdm.mat'])
+    
+    % add to group rdm
+    group_rdm(:,:,subj) = mean(cat(3,RDM.ldtB,RDM.ldtA),3);    
+end
+
+% get averaged rdm
+M = mean(group_rdm(1:48,1:48),3);
+
+% rank transform rdm
+M = (reshape(tiedrank(M(:)*-1),size(M))-1) ./ (numel(M)-1);
+
+% save rdm
+csvwrite([dir_repos,'data/fig1_data/group_task-percept_rsa-rdm.csv'],M)
 
 %% Prepare ROI
 % load sourcemodel
