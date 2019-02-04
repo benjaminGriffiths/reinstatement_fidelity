@@ -21,9 +21,6 @@ TR          = 2;
 EEG_sample  = 5000;
 scan_fov    = [64 64 32];                                   % scan field of view
 scan_vox    = [3 3 4];                                      % scan voxel size
-scan_search = 12;                                           % searchlight radius
-scan_func   = {'_3_1','_4_1','_5_1','_6_1',...
-               '_8_1','_9_1','_10_1','_11_1'};              % functional scan suffix
 
 % add subfunctions
 addpath([dir_repos,'subfunctions'])

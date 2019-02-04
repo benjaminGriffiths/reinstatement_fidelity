@@ -110,7 +110,7 @@ for subj = 1 : n_subj
             events_onset(count(1,idx),idx) = tbl.onset(e);
             
             % sort memory
-            if tbl.recalled(e) ~= 1
+            if tbl.recalled(e) ~= 1 && strcmpi(tbl.operation{e},'retrieval');
                 events_onset(count(1,idx),idx) = NaN;
             end
             
