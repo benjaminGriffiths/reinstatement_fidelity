@@ -39,9 +39,7 @@ TR          = 2;
 EEG_sample  = 5000;
 scan_fov    = [64 64 32];                                   % scan field of view
 scan_vox    = [3 3 4];                                      % scan voxel size
-scan_search = 8;                                           % searchlight radius
-scan_func   = {'_3_1','_4_1','_5_1','_6_1',...
-               '_8_1','_9_1','_10_1','_11_1'};              % functional scan suffix
+scan_search = 10;                                           % searchlight radius
 
 % add subfunctions
 addpath([dir_repos,'subfunctions'])
@@ -237,7 +235,7 @@ for subj = 1 : n_subj
     % prepare deformation batch
     matlabbatch{1}.spm.util.defs.comp{1}.inv.comp{1}.def        = {[dir_root,'bids_data/derivatives/',subj_handle,'/anat/iy_',subj_handle,'_T1w.nii']};
     matlabbatch{1}.spm.util.defs.comp{1}.inv.space              = {[dir_root,'bids_data/',subj_handle,'/anat/',subj_handle,'_T1w.nii']};
-    matlabbatch{1}.spm.util.defs.out{1}.push.fnames             = {[dir_root,'bids_data/derivatives/group/rsa-ers/grand_cluster_diluted.nii']};
+    matlabbatch{1}.spm.util.defs.out{1}.push.fnames             = {[dir_root,'bids_data/derivatives/group/rsa-ers/grand_cluster_dilated.nii']};
     matlabbatch{1}.spm.util.defs.out{1}.push.weight             = {''};
     matlabbatch{1}.spm.util.defs.out{1}.push.savedir.saveusr    = {[dir_root,'bids_data/derivatives/',subj_handle,'/masks/']};
     matlabbatch{1}.spm.util.defs.out{1}.push.fov.file           = {[dir_root,'bids_data/derivatives/',subj_handle,'/func/meanua',subj_handle,'_task-rf_run-1_bold.nii']};
@@ -250,7 +248,7 @@ for subj = 1 : n_subj
     clear matlabbatch
     
     % change mask name
-    movefile([dir_root,'bids_data/derivatives/',subj_handle,'/masks/wgrand_cluster_diluted.nii'],...
+    movefile([dir_root,'bids_data/derivatives/',subj_handle,'/masks/wgrand_cluster_dilated.nii'],...
              [dir_root,'bids_data/derivatives/',subj_handle,'/masks/rsa-ers.nii'])
 end
 
@@ -274,13 +272,13 @@ for subj = 1 : n_subj
     maskImg(1,:) = reshape(nii_1.img==1&nii_2.img==1,1,[]);
 
     % predefine matrix for functional data
-    scanVec = zeros((n_volumes-8).*numel(scan_func),numel(nii_1.img));
+    scanVec = zeros((n_volumes-8).*n_runs,numel(nii_1.img));
     
     % start scan counter
     scanCount = 1;
     
     % cycle through each run
-    for i = 1 : numel(scan_func)
+    for i = 1 : n_runs
         
         % define functional filenames
         filename = [dir_root,'bids_data/derivatives/',subj_handle,'/func/',...
@@ -303,7 +301,7 @@ for subj = 1 : n_subj
         end
         
         % update command line
-        fprintf('Run %d of %d read in...\n',i,numel(scan_func))
+        fprintf('Run %d of %d read in...\n',i,n_runs)
     end
     
     % clear up
@@ -532,9 +530,11 @@ for subj = 1 : n_subj
     clear subj_handle dir_subj RDM trl
 end
 
+Z = [];
 for i = 1 : 21
     X(i,1) = mean(rsa_vec(i,mem_perf(i,:)==1));
     Y(i,1) = mean(rsa_vec(i,mem_perf(i,:)==0));
+    Z(end+1:end+sum(mem_perf(i,:)==1),1) = rsa_vec(i,mem_perf(i,:)==1);
 end
     
 figure; hold on
