@@ -71,7 +71,8 @@ for condition = 1 : n_data
     elseif issingle
     
         % run statistics
-        config.correctm     = 'none'; % remove multiple comparisons
+        config.correctm     = 'no'; % remove multiple comparisons
+        config              = rmfield(config,'clustertail');
         stat{condition}     = ft_freqstatistics(config, data{condition}, null_freq);
         
     else
