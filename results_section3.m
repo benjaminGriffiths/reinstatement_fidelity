@@ -620,28 +620,33 @@ load([dir_bids,'derivatives/group/eeg/group_task-all_eeg-stat.mat'])
 load([dir_root,'bids_data/derivatives/group/rsa-correlation/group_task-all_fmri-si'])
 
 % predefine matrix for correlation values
-r = zeros(n_subj,numel(mask_names),2);
+r = zeros(n_subj,numel(mask_names)+1,2);
 
 % cycle through each subject
 for subj = 1 : n_subj
     
-    % cycle through each mask
-    for mask = 1 : numel(mask_names)
+    % cycle through each mask (plus one for forgotten ers)
+    for mask = 1 : numel(mask_names)+1
     
         % get channels in roi
         coi = stat{mask}.negclusterslabelmat(stat{mask}.inside==1)==1;
         
-        % select only remembered items if second mask
-        if mask == 2        
-            
-            % extract recalled trial numbers from powspctrm
-            idx         = group_freq{subj,mask}.trialinfo(:,2)==1;
-            trl_nums    = group_freq{subj,mask}.trialinfo(idx,1);
-            
-        else            
-            % extract all trial numbers from powspctrm
-            idx         = 1 : size(group_freq{subj,mask}.trialinfo,1);
-            trl_nums    = group_freq{subj,mask}.trialinfo(idx,1);
+        % switch based on mask
+        switch mask
+            case 1
+                % extract all trial numbers from powspctrm
+                idx         = 1 : size(group_freq{subj,mask}.trialinfo,1);
+                trl_nums    = group_freq{subj,mask}.trialinfo(idx,1);
+                
+            case 2
+                % extract recalled trial numbers from powspctrm
+                idx         = group_freq{subj,mask}.trialinfo(:,2)==1;
+                trl_nums    = group_freq{subj,mask}.trialinfo(idx,1);
+
+            case 3
+                % extract forgotten trial numbers from powspctrm
+                idx         = group_freq{subj,mask}.trialinfo(:,2)==0;
+                trl_nums    = group_freq{subj,mask}.trialinfo(idx,1);   
         end
 
         % fix numbers
@@ -668,9 +673,13 @@ grand_freq{1}.label        = {'dummy'};
 grand_freq{1}.dimord       = 'subj_chan_freq_time';
 grand_freq{1}.powspctrm    = r(:,1,1);
 
-% duplicate data structure for ERS data
+% duplicate data structure for ERS recalled data
 grand_freq{2}               = grand_freq{1};
 grand_freq{2}.powspctrm     = r(:,2,1);
+
+% duplicate data structure for ERS forgotten data
+grand_freq{3}               = grand_freq{1};
+grand_freq{3}.powspctrm     = r(:,3,1);
 
 % save data
 save([dir_bids,'derivatives/group/rsa-correlation/group_task-all_comb-freq.mat'],'grand_freq'); 
@@ -698,11 +707,12 @@ save([dir_bids,'derivatives/group/rsa-correlation/group_task-retrieval_comb-part
    
 %% Extract Raw Power of Cluster 
 % prepare table for stat values
-tbl = array2table(zeros(n_subj,3),'VariableNames',{'perception','retrieval','partial'});
+tbl = array2table(zeros(n_subj,4),'VariableNames',{'perception','retrieval','forgotten','partial'});
 
 % create table
 tbl.perception(:,1) = grand_freq{1}.powspctrm;
 tbl.retrieval(:,1)  = grand_freq{2}.powspctrm;
+tbl.forgotten(:,1)  = grand_freq{3}.powspctrm;
 tbl.partial(:,1)    = grand_freq_partial.powspctrm;
 
 % write table
