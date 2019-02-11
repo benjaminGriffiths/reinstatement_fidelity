@@ -619,14 +619,17 @@ load([dir_bids,'derivatives/group/eeg/group_task-all_eeg-stat.mat'])
 % load in similarity index
 load([dir_root,'bids_data/derivatives/group/rsa-correlation/group_task-all_fmri-si'])
 
+% predefine matrix for correlation values
+r = zeros(n_subj,numel(mask_names),2);
+
 % cycle through each subject
 for subj = 1 : n_subj
     
     % cycle through each mask
     for mask = 1 : numel(mask_names)
     
-        % define masked channels
-        coi = mask_roi{mask}.inside(stat{mask}.inside==1);
+        % get channels in roi
+        coi = stat{mask}.negclusterslabelmat(stat{mask}.inside==1)==1;
         
         % select only remembered items if second mask
         if mask == 2        
@@ -649,9 +652,11 @@ for subj = 1 : n_subj
         % extract vectors for remembered items
         X = squeeze(rsa_vec(subj,mask,trl_nums));
         Y = nanmean(nanmean(group_freq{subj,mask}.powspctrm(idx,coi,:),3),2);
-
+        Z = group_freq{subj,mask}.trialinfo(idx,3);
+        
         % correlate
-        r(subj,mask) = atanh(corr(X,Y));
+        r(subj,mask,1) = atanh(corr(X,Y));
+        r(subj,mask,2) = atanh(partialcorr(X,Y,Z));
     end
 end
 
@@ -661,11 +666,11 @@ grand_freq{1}.time         = 1;
 grand_freq{1}.freq         = 1;
 grand_freq{1}.label        = {'dummy'};
 grand_freq{1}.dimord       = 'subj_chan_freq_time';
-grand_freq{1}.powspctrm    = r(:,1);
+grand_freq{1}.powspctrm    = r(:,1,1);
 
 % duplicate data structure for ERS data
 grand_freq{2}               = grand_freq{1};
-grand_freq{2}.powspctrm     = r(:,2);
+grand_freq{2}.powspctrm     = r(:,2,1);
 
 % save data
 save([dir_bids,'derivatives/group/rsa-correlation/group_task-all_comb-freq.mat'],'grand_freq'); 
@@ -679,13 +684,26 @@ cfg.tail        = -1;
 % save data
 save([dir_bids,'derivatives/group/rsa-correlation/group_task-retrieval_comb-stat.mat'],'stat','tbl');
 
+% check partial correlation controlling for memory confidence
+grand_freq_partial = grand_freq{2};
+grand_freq_partial.powspctrm = r(:,2,2);
+
+% predefine cell for statistics
+cfg             = [];
+cfg.tail        = -1;
+[stat,tbl]      = run_oneSampleT(cfg, grand_freq_partial);
+   
+% save data
+save([dir_bids,'derivatives/group/rsa-correlation/group_task-retrieval_comb-partialstat.mat'],'stat','tbl');
+   
 %% Extract Raw Power of Cluster 
 % prepare table for stat values
-tbl = array2table(zeros(n_subj,2),'VariableNames',{'perception','retrieval'});
+tbl = array2table(zeros(n_subj,3),'VariableNames',{'perception','retrieval','partial'});
 
 % create table
 tbl.perception(:,1) = grand_freq{1}.powspctrm;
 tbl.retrieval(:,1)  = grand_freq{2}.powspctrm;
+tbl.partial(:,1)    = grand_freq_partial.powspctrm;
 
 % write table
 writetable(tbl,[dir_bids,'derivatives/group/rsa-correlation/group_task-all_eeg-cluster.csv'],'Delimiter',',')

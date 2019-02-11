@@ -260,13 +260,18 @@ for subj = 1 : n_subj
     
     % get memory difference
     vismem = mem_performance(operation_to_include == 0 & modality_to_include == 1);
-    memory_diff(subj,:,:) = squeeze(mean(mean(freq.powspctrm(vismem==1,:,:,:),1) - mean(freq.powspctrm(vismem==0,:,:,:),1),2));
+    memory_diff(subj,:,:,1) = squeeze(mean(mean(freq.powspctrm(vismem==1,:,:,:),1),2)); 
+    memory_diff(subj,:,:,2) = squeeze(mean(mean(freq.powspctrm(vismem==0,:,:,:),1),2));
 end
 
 % extract variables of interest
 percept_freq = percept_diff;
-memory_freq  = squeeze(mean(memory_diff(:,:,freq.time>=0.5 & freq.time<=1.5),3));
-memory_time  = squeeze(mean(memory_diff(:,freq.freq>=8 & freq.freq<=30,:),2));
+memory_freq  = squeeze(mean(memory_diff(:,:,freq.time>=0.5 & freq.time<=1.5,:),3));
+memory_time  = squeeze(mean(memory_diff(:,freq.freq>=8 & freq.freq<=30,:,:),2));
+
+% reshape memory variables
+memory_freq = reshape(memory_freq,[21 150]);
+memory_time = reshape(memory_time,[21 122]);
 
 % save as csv
 csvwrite([dir_repos,'data/fig2_data/group_task-percept_eeg-freqseries.csv'],percept_freq)

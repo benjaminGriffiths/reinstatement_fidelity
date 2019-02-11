@@ -29,7 +29,6 @@ config.clusteralpha      = 0.05;
 config.numrandomization  = 2000;
 config.alpha             = 0.05;
 config.tail              = cfg.tail;
-config.clustertail       = cfg.tail;
 config.parameter         = cfg.parameter;
 
 % cycle through data structures
@@ -65,6 +64,7 @@ for condition = 1 : n_data
         
         % run statistics
         config.dim      = data{condition}.dim;  % specify dimensions of your source grid
+        config.clustertail       = cfg.tail;
         stat{condition} = ft_sourcestatistics(config, data{condition}, null_freq);
         
     % if data consists of a single comparison
@@ -72,7 +72,6 @@ for condition = 1 : n_data
     
         % run statistics
         config.correctm     = 'no'; % remove multiple comparisons
-        config              = rmfield(config,'clustertail');
         stat{condition}     = ft_freqstatistics(config, data{condition}, null_freq);
         
     else
@@ -86,6 +85,7 @@ for condition = 1 : n_data
         % run statistics
         config.frequency    = cfg.frequency;
         config.latency      = cfg.latency;
+        config.clustertail       = cfg.tail;
         stat{condition}     = ft_freqstatistics(config, data{condition}, null_freq);
     end
         

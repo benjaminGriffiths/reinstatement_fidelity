@@ -92,9 +92,9 @@ if strcmpi(operation,'encoding')
     freq.time = 1;
         
     % resort trialinfo
-    new_info = zeros(numel(freq.trialinfo),2);
+    new_info = zeros(numel(freq.trialinfo),3);
     for i = 1 : numel(freq.trialinfo)
-        new_info(i,:) = [freq.trialinfo{i}.trl_at_encoding mem_performance(i)];
+        new_info(i,:) = [freq.trialinfo{i}.trl_at_encoding mem_performance(i) freq.trialinfo{i}.confidence];
     end
     
 elseif strcmpi(operation,'retrieval')       
@@ -108,9 +108,9 @@ elseif strcmpi(operation,'retrieval')
     freq        = ft_selectdata(cfg,freq);    
     
     % resort trialinfo
-    new_info = zeros(numel(freq.trialinfo),2);
+    new_info = zeros(numel(freq.trialinfo),3);
     for i = 1 : numel(freq.trialinfo)
-        new_info(i,:) = [freq.trialinfo{i}.trl_at_retrieval mem_performance(i)];
+        new_info(i,:) = [freq.trialinfo{i}.trl_at_retrieval mem_performance(i) freq.trialinfo{i}.confidence];
     end
         
     freq.X          = mem_diff;

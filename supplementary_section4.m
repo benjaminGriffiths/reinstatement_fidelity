@@ -1,4 +1,4 @@
-%% EEG: Source Analysis
+%% EEG: Confidence Analysis
 % prepare workspace
 % initialisation
 clearvars

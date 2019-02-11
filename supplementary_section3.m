@@ -38,7 +38,7 @@ for subj = 1 : n_subj
     
     % --- Prepare EEG --- %    
     % load data
-    load([dir_eeg,'/eeg/',subj_handle,'_task-rf_eeg.mat'])
+    load([dir_eeg,'/eeg/',subj_handle,'_task-rf_eeg-source.mat'])
     
     % find audio/video hit/miss trials
     [audio_bool,hit_bool] = get_splits_eeg(source);
