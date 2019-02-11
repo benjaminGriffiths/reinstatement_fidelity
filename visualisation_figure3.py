@@ -93,29 +93,28 @@ data_raincloud = pandas.read_csv(data_fname,
                        delimiter=",")
 
 # restrict to retrieval data
-data_raincloud = data_raincloud.drop(labels = 'perception', axis = 1)
+data_raincloud = data_raincloud.drop(labels = ['perception','partial'], axis = 1)
 
 # ----- Raincloud Plot ----- # 
 # create figure
 f,ax = pyplot.subplots(1,1)
-f.set_figheight(6.2/2.54) # 4inches 
-f.set_figwidth(3.1/2.54) # 12inches
+f.set_figheight(6.3/2.54) # 4inches 
+f.set_figwidth(5.3/2.54) # 12inches
 f.set_dpi(300)
-
 
 # define colour scheme
 colour = sns.color_palette("Greens",n_colors=7)
-colour = [colour[2],colour[3]]
+colour = [colour[2],(0.7,0.7,0.7)]
 
 # define labels
 labels = {'title':'',
           'ylabel':'Power-Similarity Correlation (z)',
-          'xticklabel':[''],
-          'yticks':[-0.25,0,0.25],
-          'yticklabel':['-0.25','0','0.25']}
+          'xticklabel':['Rem.','Forgot.'],
+          'yticks':[-0.4,-0.2,0,0.2,0.4],
+          'yticklabel':['-0.4','-0.2','0','0.2','0.4']}
 
 # plot raincloud
-custom_rainplot(data_raincloud,colour,ax,'calibri',labels,[-0.2,0.2],0.125,[0.013])
+custom_rainplot(data_raincloud,colour,ax,'calibri',labels,[-0.4,0.4],0.125,[0.013,0.4])
    
 # save image
 pyplot.savefig(wdir + "/figures/fig3a.jpg",bbox_inches='tight',transparent=True,dpi='figure')

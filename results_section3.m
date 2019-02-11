@@ -628,25 +628,31 @@ for subj = 1 : n_subj
     % cycle through each mask (plus one for forgotten ers)
     for mask = 1 : numel(mask_names)+1
     
-        % get channels in roi
-        coi = stat{mask}.negclusterslabelmat(stat{mask}.inside==1)==1;
-        
         % switch based on mask
         switch mask
             case 1
+                % get channels in roi
+                coi = stat{mask}.negclusterslabelmat(stat{mask}.inside==1)==1;
+        
                 % extract all trial numbers from powspctrm
                 idx         = 1 : size(group_freq{subj,mask}.trialinfo,1);
                 trl_nums    = group_freq{subj,mask}.trialinfo(idx,1);
                 
             case 2
+                % get channels in roi
+                coi = stat{mask}.negclusterslabelmat(stat{mask}.inside==1)==1;
+                
                 % extract recalled trial numbers from powspctrm
                 idx         = group_freq{subj,mask}.trialinfo(:,2)==1;
                 trl_nums    = group_freq{subj,mask}.trialinfo(idx,1);
 
             case 3
+                % get channels in roi
+                coi = stat{mask-1}.negclusterslabelmat(stat{mask-1}.inside==1)==1;
+                
                 % extract forgotten trial numbers from powspctrm
-                idx         = group_freq{subj,mask}.trialinfo(:,2)==0;
-                trl_nums    = group_freq{subj,mask}.trialinfo(idx,1);   
+                idx         = group_freq{subj,mask-1}.trialinfo(:,2)==0;
+                trl_nums    = group_freq{subj,mask-1}.trialinfo(idx,1);   
         end
 
         % fix numbers
@@ -654,10 +660,20 @@ for subj = 1 : n_subj
         trl_nums(trl_nums>96 & trl_nums<=144)   = trl_nums(trl_nums>96 & trl_nums<=144) - 48;
         trl_nums(trl_nums>144 & trl_nums<=192)  = trl_nums(trl_nums>144 & trl_nums<=192) - 96;
 
-        % extract vectors for remembered items
-        X = squeeze(rsa_vec(subj,mask,trl_nums));
-        Y = nanmean(nanmean(group_freq{subj,mask}.powspctrm(idx,coi,:),3),2);
-        Z = group_freq{subj,mask}.trialinfo(idx,3);
+        % switch based on mask
+        if mask ~= 3
+
+            % extract vectors for items
+            X = squeeze(rsa_vec(subj,mask,trl_nums));
+            Y = nanmean(nanmean(group_freq{subj,mask}.powspctrm(idx,coi,:),3),2);
+            Z = group_freq{subj,mask}.trialinfo(idx,3);
+            
+        else
+            % extract vectors for items
+            X = squeeze(rsa_vec(subj,mask-1,trl_nums));
+            Y = nanmean(nanmean(group_freq{subj,mask-1}.powspctrm(idx,coi,:),3),2);
+            Z = group_freq{subj,mask-1}.trialinfo(idx,3);
+        end
         
         % correlate
         r(subj,mask,1) = atanh(corr(X,Y));
