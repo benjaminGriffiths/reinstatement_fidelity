@@ -303,6 +303,32 @@ for i = 1 : numel(contrast_labels)
     matlabbatch{3}.spm.stats.con.spmmat(1)                              = {[stat_dir,'SPM.mat']};  
 
     spm_jobman('run',matlabbatch)
-    clear matlabbatch
-            
+    clear matlabbatch            
+end
+
+%% Extract Metrics for Visualisation
+% define cluster regions
+clus_name{1} = {'occipital','leftTemporalPole','rightTemporalPole'};
+clus_name{2} = {'rightFusiform','leftFusiform'};
+clus_name{3} = {'occipital','limbic'};
+
+% cycle through each first-level contrast
+for i = 1 : 3
+    
+    % combine visual cluster and save
+    combine_spm_cluster([dir_root,'bids_data/derivatives/group/spm/',contrast_labels{i},'/'])
+
+    % load SPM details
+    load([dir_root,'bids_data/derivatives/group/spm/',contrast_labels{i},'/SPM.mat'])
+
+    % extract subject values for each cluster
+    [betas,d] = extract_sample_points([dir_root,'bids_data/derivatives/group/spm/',contrast_labels{i},'/'],SPM);
+
+    % save betas as table
+    tbl = array2table(betas','VariableNames',clus_name{i});
+    writetable(tbl,[dir_repos,'data/sup1_data/',contrast_labels{i},'_betas.csv'],'Delimiter',',')
+
+    % save effect size as table
+    tbl = array2table(d','VariableNames',clus_name{i});
+    writetable(tbl,[dir_repos,'data/sup1_data/',contrast_labels{i},'_cohensD.csv'],'Delimiter',',')
 end

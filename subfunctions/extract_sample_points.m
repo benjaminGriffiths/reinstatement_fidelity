@@ -14,7 +14,7 @@ for c = 1 : n_files
     [roi(1,:),roi(2,:),roi(3,:)] = ind2sub(size(nii.img),find(nii.img>0));
 
     % get average of cluster
-    betas(c,:) = mean(spm_get_data(SPM.xY.P,roi),2); 
+    betas(c,:) = nanmean(spm_get_data(SPM.xY.P,roi),2); 
 end
 
 % calculate cohens d for each cluster
@@ -22,7 +22,7 @@ for b = 1 :  n_files
     
     % calculate cohen's dz
     X = betas(b,:);
-    numer = mean(X);
-    denom = sqrt(sum((X - mean(X)).^2) ./ (numel(X)-1));
+    numer = nanmean(X);
+    denom = sqrt(sum((X - nanmean(X)).^2) ./ (numel(X)-1));
     d(b,1) = numer ./ denom;
 end
