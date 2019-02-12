@@ -34,13 +34,14 @@ def custom_rainplot(data,colour,axes,fontname,labels,ylim,offset,pvalue):
     axes=sns.boxplot(data = data, palette = colour, width = 0.1, ax = axes, linewidth = 1, fliersize = 1)
     
     # plot significance
+    sig_offset = ylim[1]-(ylim[1]*0.05)
     for i in np.arange(0,np.size(pvalue)):
         if pvalue[i] < 0.001:
-            pyplot.scatter(np.array([-0.05,0,0.05])+i,[0.23,0.23,0.23],s=3,c=[0.8,0.8,0.8],marker='*',edgecolors=None)
+            pyplot.scatter(np.array([-0.05,0,0.05])+i,[sig_offset,sig_offset,sig_offset],s=3,c=[0.8,0.8,0.8],marker='*',edgecolors=None)
         elif pvalue[i] < 0.01:
-            pyplot.scatter(np.array([-0.025,0.025])+i,[0.23,0.23],s=3,c=[0.8,0.8,0.8],marker='*',edgecolors=None)
+            pyplot.scatter(np.array([-0.025,0.025])+i,[sig_offset,sig_offset],s=3,c=[0.8,0.8,0.8],marker='*',edgecolors=None)
         elif pvalue[i] < 0.05:
-            pyplot.scatter(np.array([0])+i,[0.23],s=3,c='black',marker='*',edgecolors=None)
+            pyplot.scatter(np.array([0])+i,[sig_offset],s=3,c='black',marker='*',edgecolors=None)
     
     # add horizontal line
     axes.axhline(y=0, xmin=-1, xmax=3, color=[0,0,0], linewidth = 1)
