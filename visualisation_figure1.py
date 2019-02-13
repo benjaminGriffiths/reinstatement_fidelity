@@ -31,7 +31,7 @@ def custom_rainplot(data,colour,axes,fontname,labels,ylim,offset,pvalue):
                        ax = axes)
     
     # plot mean and confidence intervals
-    axes=sns.boxplot(data = data, palette = colour, width = 0.1, ax = axes, linewidth = 1, fliersize = 1)
+    axes=sns.boxplot(data = data, palette = colour, width = 0.1, ax = axes, linewidth = 1, fliersize = 1, whis = 5)
     
     # plot significance
     sig_offset = ylim[1]-(ylim[1]*0.05)

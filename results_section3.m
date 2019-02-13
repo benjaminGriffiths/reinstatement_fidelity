@@ -399,6 +399,7 @@ for subj = 1 : n_subj
     for mask = 1 : numel(mask_names)
 
         % get design matrix (X)
+        X     = [];
         X.raw = SPM.xX.X;
 
         % remove scans/regressors that are not visual (to
@@ -467,7 +468,7 @@ for subj = 1 : n_subj
         sv = stim_details.stimulus(stim_details.modality==1);
         Y.sa = sv(1:numel(sv)/2);
         Y.sb = sv(numel(sv)/2+1:end);
-        clear sv i j nR
+        clear sv i j
 
         % reorder from trial order to stimulus order
         [Y.sa,Y.sai] = sort(Y.sa);
@@ -475,9 +476,18 @@ for subj = 1 : n_subj
         X.at(:,1:96) = X.at(:,Y.sai);
         X.bt(:,1:96) = X.bt(:,Y.sbi);
 
-        % calculate trial-wise linear discriminant T
-        RDM.ldtB = rsa.stat.fisherDiscrTRDM_trainAtestB(X.aa,Y.a,X.bt,Y.b,size(X.aa,2)-8,Y.sb);
-        RDM.ldtA = rsa.stat.fisherDiscrTRDM_trainAtestB(X.ba,Y.b,X.at,Y.a,size(X.ba,2)-8,Y.sa);
+        % switch approach based on data type
+        if mask == 1
+            % calculate trial-wise linear discriminant T
+            RDM.ldtB = rsa.stat.fisherDiscrTRDM_trainAtestB(X.at,Y.a,X.bt,Y.b,size(X.at,2)-96,1:numel(Y.sa));
+            RDM.ldtA = rsa.stat.fisherDiscrTRDM_trainAtestB(X.bt,Y.b,X.at,Y.a,size(X.at,2)-96,1:numel(Y.sb));
+                        
+        else                    
+            % calculate trial-wise linear discriminant T
+            RDM.ldtB = rsa.stat.fisherDiscrTRDM_trainAtestB(X.aa,Y.a,X.bt,Y.b,size(X.aa,2)-8,Y.sb);
+            RDM.ldtA = rsa.stat.fisherDiscrTRDM_trainAtestB(X.ba,Y.b,X.at,Y.a,size(X.ba,2)-8,Y.sa);
+            
+        end
 
         % store stimulus values
         RDM.sb = Y.sb;
@@ -590,7 +600,7 @@ end
 
 %% Get Timelocked Representation of Each Condition
 % predefine cell for group data
-group_freq   = cell(n_subj,1);
+group_freq   = cell(n_subj,2);
 
 % cycle through each subject
 for subj = 1 : n_subj
@@ -734,3 +744,152 @@ tbl.partial(:,1)    = grand_freq_partial.powspctrm;
 % write table
 writetable(tbl,[dir_bids,'derivatives/group/rsa-correlation/group_task-all_eeg-cluster.csv'],'Delimiter',',')
 copyfile([dir_bids,'derivatives/group/rsa-correlation/group_task-all_eeg-cluster.csv'],[dir_repos,'data/fig3_data/group_task-all_eeg-cluster.csv'])
+
+%% Get Time/Freq Series of Data
+% load EEG stat
+load([dir_bids,'derivatives/group/eeg/group_task-all_eeg-stat.mat'])
+
+% load in similarity index
+load([dir_root,'bids_data/derivatives/group/rsa-correlation/group_task-all_fmri-si'])
+
+% predefine cell for group data
+group_freq   = nan(n_subj,75,81,2);
+
+% cycle through each subject
+for subj = 1 : n_subj
+    
+    % define subject data directory
+    dir_subj = [dir_bids,'sourcedata/',sprintf('sub-%02.0f',subj),'/eeg/'];
+    
+    % load in raw data
+    load([dir_subj,sprintf('sub-%02.0f',subj),'_task-rf_eeg-source.mat'])  
+    
+    % get channels in roi
+    coi = stat{2}.negclusterslabelmat(stat{2}.inside==1)==1;
+
+    % select region of interest
+    cfg = [];
+    cfg.channel = source.label(coi);
+    data = ft_selectdata(cfg,source); clear source
+        
+    % predefine conditional arrays to include all trials
+    operation_to_include = zeros(numel(data.trial),1);
+    modality_to_include  = zeros(numel(data.trial),1);
+
+    % predefine arrays for memory performance
+    mem_performance = zeros(numel(data.trial),1);
+    trl_nums = zeros(numel(data.trial),1);
+
+    % cycle through each trial
+    for trl = 1 : numel(data.trial)
+        
+        % mark trials that do match specified operation
+        operation_to_include(trl) = strcmpi(data.trialinfo{trl}.operation,'retrieval');
+        
+        % mark trials that do match specified operation
+        modality_to_include(trl) = strcmpi(data.trialinfo{trl}.modality,'visual');
+        
+        % get memory
+        mem_performance(trl) = data.trialinfo{trl}.recalled;
+        trl_nums(trl) = data.trialinfo{trl}.trl_at_retrieval;
+    end
+
+    % select data
+    cfg                 = [];
+    cfg.trials          = operation_to_include == 1 & modality_to_include == 1;
+    data                = ft_selectdata(cfg,data);
+
+    % select memory performance details
+    mem_performance = mem_performance(operation_to_include == 1 & modality_to_include == 1);
+    trl_nums = trl_nums(operation_to_include == 1 & modality_to_include == 1);
+
+    % get time-frequency parameters
+    cfg                 = [];
+    cfg.keeptrials      = 'yes';
+    cfg.method          = 'wavelet';
+    cfg.width           = 6;
+    cfg.output          = 'pow';
+    cfg.toi             = -1:0.05:3;
+    cfg.foi             = 3:0.5:40;
+    cfg.pad             = 'nextpow2';
+    freq                = ft_freqanalysis(cfg, data);
+    clear data
+
+    % get time-averaged mean and standard deviation of power for each channel and frequency
+    raw_pow = mean(freq.powspctrm,4);
+    avg_pow = mean(raw_pow,1);
+    std_pow = std(raw_pow,[],1);
+
+    % replicate matrices to match freq.powspctrm
+    avg_pow = repmat(avg_pow,[size(freq.powspctrm,1) 1 1 size(freq.powspctrm,4)]);
+    std_pow = repmat(std_pow,[size(freq.powspctrm,1) 1 1 size(freq.powspctrm,4)]);
+
+    % z-transform power
+    freq.powspctrm = (freq.powspctrm - avg_pow) ./ std_pow;
+    clear raw_pow avg_pow std_pow
+
+    % smooth
+    cfg = [];
+    cfg.fwhm_t=0.2;
+    cfg.fwhm_f=2;
+    freq = smooth_TF_GA(cfg,freq);
+    
+    for i = 1 : 2
+
+        % extract recalled trial numbers from powspctrm
+        idx     = mem_performance==i-1;
+        trli    = trl_nums(idx,1);
+
+        % fix numbers
+        trli(trli>48 & trli<=96)    = trli(trli>48 & trli<=96) - 48;
+        trli(trli>96 & trli<=144)   = trli(trli>96 & trli<=144) - 48;
+        trli(trli>144 & trli<=192)  = trli(trli>144 & trli<=192) - 96;
+
+        % extract vectors for items
+        X = squeeze(rsa_vec(subj,2,trli));
+        
+        % cycle through time nad freq
+        for t = 1 : size(freq.powspctrm,4)
+            for f = 1 : size(freq.powspctrm,3)
+        
+                Y = nanmean(freq.powspctrm(idx,:,f,t),2);
+
+                group_freq(subj,f,t,i) = corr(X,Y);
+            end
+        end
+    end
+
+    % update command line
+    fprintf('\nSubject %02.0f of %02.0f complete...\n\n',subj,n_subj)
+end
+ 
+% define time and frequency vectors
+t = -1:0.05:3;
+f = 3:0.5:40;
+
+% extract time and frequency matrices
+raw_time = squeeze(mean(group_freq(:,f>=8&f<=30,:,:),2));
+raw_freq = squeeze(mean(group_freq(:,:,t>=0.5&t<=1.5,:),3));
+
+% create table for time data
+tbl_time = array2table([raw_time(:),...
+                        repmat((1:n_subj)',[numel(raw_time)/n_subj,1]),...
+                        cat(1,reshape(repmat(t,[numel(raw_time)/numel(t)/2,1]),[],1),reshape(repmat(t,[numel(raw_time)/numel(t)/2,1]),[],1)),...
+                        [ones(numel(raw_time)/2,1);ones(numel(raw_time)/2,1)+1]],...
+                        'VariableNames',{'signal','subject','time','condition'});
+
+% create table for freq data
+tbl_freq = array2table([raw_freq(:),...
+                        repmat((1:n_subj)',[numel(raw_freq)/n_subj,1]),...
+                        cat(1,reshape(repmat(f,[numel(raw_freq)/numel(f)/2,1]),[],1),reshape(repmat(f,[numel(raw_freq)/numel(f)/2,1]),[],1)),...
+                        [ones(numel(raw_freq)/2,1);ones(numel(raw_freq)/2,1)+1]],...
+                        'VariableNames',{'signal','subject','freq','condition'});
+          
+% write table
+writetable(tbl_time,[dir_bids,'derivatives/group/rsa-correlation/group_task-all_eeg-timeseries.csv'],'Delimiter',',')
+writetable(tbl_freq,[dir_bids,'derivatives/group/rsa-correlation/group_task-all_eeg-freqseries.csv'],'Delimiter',',')
+
+% copy to repository
+copyfile([dir_bids,'derivatives/group/rsa-correlation/group_task-all_eeg-timeseries.csv'],[dir_repos,'data/fig3_data/group_task-all_eeg-timeseries.csv'])
+copyfile([dir_bids,'derivatives/group/rsa-correlation/group_task-all_eeg-freqseries.csv'],[dir_repos,'data/fig3_data/group_task-all_eeg-freqseries.csv'])
+

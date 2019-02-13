@@ -89,13 +89,20 @@ for condition = 1 : n_data
         stat{condition}     = ft_freqstatistics(config, data{condition}, null_freq);
     end
         
+    % define clusters of interest
+    if cfg.tail==1
+        tailname = 'posclusters';
+    else
+        tailname = 'negclusters';
+    end
+    
     % if data does not consist of a single value
     if ~issingle
         
         % extract key values
-        tbl.p(condition,1)  = round(stat{condition,1}.negclusters(1).prob,3);
-        tbl.t(condition,1)  = round(stat{condition,1}.negclusters(1).clusterstat ./ sum(stat{condition,1}.negclusterslabelmat(:) == 1),3);
-        tbl.ci(condition,1) = round(stat{condition,1}.negclusters(1).cirange,3);
+        tbl.p(condition,1)  = round(stat{condition,1}.(tailname)(1).prob,3);
+        tbl.t(condition,1)  = round(stat{condition,1}.(tailname)(1).clusterstat ./ sum(stat{condition,1}.([(tailname),'labelmat'])(:) == 1),3);
+        tbl.ci(condition,1) = round(stat{condition,1}.(tailname)(1).cirange,3);
 
         % calculate cohen's dz
         tbl.d(condition,1) = round(tbl.t(condition,1)./ sqrt(n_subj),3);

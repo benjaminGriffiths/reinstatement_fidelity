@@ -303,9 +303,6 @@ for subj = 1 : n_subj
     matlabbatch{1}.spm.stats.fmri_spec.sess.cond(9).orth        = 1;
     matlabbatch{1}.spm.stats.fmri_spec.sess.cond(9).pmod        = struct('name',{},'param',{},'poly',{});
        
-    % --- do parametric for 3 and 4
-    visret_onset = events_table.onset(events_table.isVisual == 1 & events_table.isEncoding == 0 & events_table.isRemembered == 1);
-    
     % specify model
     spm_jobman('run',matlabbatch)
     clear matlabbatch
@@ -318,11 +315,16 @@ for subj = 1 : n_subj
     % contrast betas
     matlabbatch{2}.spm.stats.con.delete                         = 0;
     matlabbatch{2}.spm.stats.con.consess{1}.tcon.name           = 'retrieval_hits';
-    matlabbatch{2}.spm.stats.con.consess{1}.tcon.convec         = [0 0 1 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0];
+    matlabbatch{2}.spm.stats.con.consess{1}.tcon.convec         = -ones(31,1)/30;
+    matlabbatch{2}.spm.stats.con.consess{1}.tcon.convec(3)      = 1;
     matlabbatch{2}.spm.stats.con.consess{1}.tcon.sessrep        = 'none';
     matlabbatch{2}.spm.stats.con.consess{2}.tcon.name           = 'retrieval_misses';
-    matlabbatch{2}.spm.stats.con.consess{2}.tcon.convec         = [0 0 0 1 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0];
+    matlabbatch{2}.spm.stats.con.consess{2}.tcon.convec         = -ones(31,1)/30;
+    matlabbatch{2}.spm.stats.con.consess{2}.tcon.convec(4)      = 1;
     matlabbatch{2}.spm.stats.con.consess{2}.tcon.sessrep        = 'none';
+    matlabbatch{2}.spm.stats.con.consess{3}.tcon.name           = 'retrieval_memory';
+    matlabbatch{2}.spm.stats.con.consess{3}.tcon.convec         = [0 0 1 -1 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0];
+    matlabbatch{2}.spm.stats.con.consess{3}.tcon.sessrep        = 'none';
     matlabbatch{2}.spm.stats.con.spmmat(1)                      = {'C:/tmp_mri/spm/SPM.mat'};    
     
     % run job
@@ -336,7 +338,7 @@ end
 
 %% Run Second-Level Stats
 % define each first-level contrast name
-contrast_labels = {'retrieval_hits' 'retrieval_misses'};
+contrast_labels = {'retrieval_hits' 'retrieval_misses' 'retrieval_memory'};
 
 % cycle through each first-level contrast
 for i = 1 : numel(contrast_labels)

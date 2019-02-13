@@ -1,4 +1,4 @@
-%% Power Analysis
+%% Phase Analysis
 % clear workspace
 clearvars
 close all
@@ -23,21 +23,22 @@ n_subj = 21;
 % load sourcemodel
 load([dir_tool,'fieldtrip-20170319/template/sourcemodel/standard_sourcemodel3d10mm.mat']);
 
-% load whole brain
+% load AAL atlas
 mri = ft_read_mri([dir_bids,'sourcedata/masks/whole_brain.nii']);
-
+ 
 % interpolate clusters with grid
 cfg             = [];
 cfg.parameter	= 'anatomy';
 roi             = ft_sourceinterpolate(cfg,mri,sourcemodel);
 
 % define additional roi parameters
-roi.inside      = roi.anatomy(:) > 0;
+roi.inside      = ~isnan(roi.anatomy) & roi.anatomy > 0;
+roi.anatomy     = double(~isnan(roi.anatomy) & roi.anatomy > 0);
 roi.pos         = sourcemodel.pos;
 
 %% Get Timelocked Representation of Each Condition
 % predefine cell for group data
-group_erp = zeros(n_subj,1817,121);
+group_freq = cell(n_subj,1);
 
 % cycle through each subject
 for subj = 1 : n_subj
@@ -47,75 +48,97 @@ for subj = 1 : n_subj
     
     % load in raw data
     load([dir_subj,sprintf('sub-%02.0f',subj),'_task-rf_eeg-source.mat'])  
-    data = source; clear source
     
-    % predefine conditional arrays to include all trials
-    operation_to_include = zeros(numel(data.trial),1);
-    modality_to_include  = zeros(numel(data.trial),1);
-
-    % cycle through each trial
-    for trl = 1 : numel(data.trial)
-
-        % mark trials that do match specified operation
-        operation_to_include(trl) = strcmpi(data.trialinfo{trl}.operation,'encoding');
-
-        % mark trials that do match specified operation
-        modality_to_include(trl) = strcmpi(data.trialinfo{trl}.modality,'visual');
-    end
-
-    % select data
-    cfg                 = [];
-    cfg.trials          = operation_to_include == 1 & modality_to_include == 1;
-    cfg.latency         = [-0.2 1];
-    data                = ft_selectdata(cfg,data);
-
-    % timelock data
-    cfg                 = [];
-    cfg.keeptrials      = 'yes';
-    tml                 = ft_timelockanalysis(cfg,data);
-    
-    % baseline correct
-    tml.trial = tml.trial - repmat(mean(tml.trial(:,:,tml.time<0),3),[1 1 size(tml.trial,3)]);
-    
-    % get group erp
-    group_erp(subj,:,:) = mean(tml.trial,1);
+    % get time-frequency representaiton of data for specified conditions
+    group_freq{subj,1} = get_phasesim(source,'encoding','visual');
+    %group_freq{subj,2} = get_memdiff_timefrequency(source,'retrieval','visual');
 end
+    
+% predefine cells to house concatenated group data
+grand_freq = cell(size(group_freq,2),1);
 
-%% Define Occipital ROI
-% load AAL
-mri = ft_read_mri([dir_bids,'sourcedata/masks/AAL.nii']);
+% cycle through conditions
+for i = 1 : size(group_freq,2)
+    
+    % get grand average of subjects
+    cfg                 = [];
+    cfg.keepindividual  = 'yes';
+    grand_freq{i,1}     = ft_freqgrandaverage(cfg,group_freq{:,i});
+    
+    % add in source model details
+    grand_freq{i,1}.powdimord   = 'rpt_pos';
+    grand_freq{i,1}.dim         = roi.dim;
+    grand_freq{i,1}.inside      = roi.inside(:);
+    grand_freq{i,1}.pos         = roi.pos;
+    grand_freq{i,1}.cfg         = [];
+    
+    % add in "outside" virtual electrods
+    tmp_pow = zeros(size(grand_freq{i,1}.powspctrm,1),size(grand_freq{i,1}.inside,1));
+    tmp_pow(:,grand_freq{i,1}.inside) = grand_freq{i,1}.powspctrm;
+    grand_freq{i,1}.pow = tmp_pow;
+    
+    % remove freq details
+    grand_freq{i,1} = rmfield(grand_freq{i,1},{'powspctrm','label','freq','time','dimord'});
+end
+    
+% save data
+mkdir([dir_bids,'derivatives/group/eeg/'])
+save([dir_bids,'derivatives/group/eeg/group_task-all_eeg-phasesim.mat'],'grand_freq');
 
-% reshape mri.anatomy
-orig_shape  = size(mri.anatomy);
-mri.anatomy = mri.anatomy(:);
+%% Run Statistics
+% predefine cell for statistics
+cfg.tail        = 1;
+cfg.parameter   = 'pow';
+[stat,tbl]      = run_oneSampleT(cfg, grand_freq);
 
-% change MRI to binary 'in-occipital' vs. 'out-occipital'
-mri.anatomy = mri.anatomy == 5001 | mri.anatomy == 5002 | ... % calcarine L/R 
-    mri.anatomy == 5011 | mri.anatomy == 5012 | ... % cuneus L/R 
-    mri.anatomy == 5021 | mri.anatomy == 5022 | ... % lingual L/R 
-    mri.anatomy == 5101 | mri.anatomy == 5102 | ... % occipital superior L/R 
-    mri.anatomy == 5201 | mri.anatomy == 5202 | ... % occipital middle L/R 
-    mri.anatomy == 5301 | mri.anatomy == 5302; % occiptial inferior L/R 
+% save data
+save([dir_bids,'derivatives/group/eeg/group_task-all_eeg-stat.mat'],'stat','tbl');
 
-% reshape mri.anatomy
-mri.anatomy = reshape(mri.anatomy,orig_shape);
+%% Create Surface Plots
+% load template MRI
+load([dir_tool,'fieldtrip-20170319/template/sourcemodel/standard_sourcemodel3d10mm.mat']);
 
-% interpolate mri with grid
-cfg                 = [];
-cfg.parameter       = 'anatomy';
-cfg.interpmethod    = 'nearest';
-occipital_roi       = ft_sourceinterpolate(cfg,mri,sourcemodel);
+% define plot names
+plot_names = {'phasesim'};
 
-% determine inside
-occipital_roi.anatomy = occipital_roi.anatomy(:);
-occipital_roi.inside  = occipital_roi.anatomy>0 & roi.inside>0;
+% cycle through conditions
+for i = 1 : numel(stat)
+        
+    % get indices of clusters
+    clus_idx = stat{i}.posclusterslabelmat==1;
 
-% get labels inside
-coi = occipital_roi.anatomy(roi.inside>0)==1;
-
-%% Get ERP
-time = tml.time;
-avg  = squeeze(mean(mean(group_erp(:,coi,:),2),1));
-plot(time,avg);
-
-
+    % create source data structure
+    source                  = [];
+    source.inside           = stat{i}.inside;
+    source.dim              = stat{i}.dim;
+    source.pos              = stat{i}.pos*10;
+    source.unit             = 'mm';
+    
+    % define powspctrm of cluster
+    source.pow              = nan(size(stat{i}.pos,1),1);     
+    source.pow(clus_idx)	= stat{i}.stat(clus_idx); 
+    
+    % reshape data to 3D
+    source.pow              = reshape(source.pow,source.dim);
+    source.inside           = reshape(source.inside,source.dim);
+    
+    % add transformation matrix
+    source.transform        = [1,0,0,-91;
+                               0,1,0,-127;
+                               0,0,1,-73;
+                               0,0,0,1];
+                           
+    % export
+    cfg = [];
+    cfg.parameter     = 'pow';               % specify the functional parameter to write to the .nii file
+    cfg.filename      = [dir_bids,'derivatives/group/eeg/group_task-',plot_names{i},'_eeg-map.nii'];  % enter the desired file name
+    cfg.filetype      = 'nifti';
+    cfg.coordsys      = 'spm';
+    cfg.vmpversion    = 2;
+    cfg.datatype      = 'float';
+    ft_volumewrite(cfg,source);      % be sure to use your interpolated source data
+    
+    % reslice to 1mm isometric to match template MRI
+    reslice_nii([dir_bids,'derivatives/group/eeg/group_task-',plot_names{i},'_eeg-map.nii'],[dir_bids,'derivatives/group/eeg/group_task-',plot_names{i},'_eeg-map.nii'],[1 1 1]);
+    copyfile([dir_bids,'derivatives/group/eeg/group_task-',plot_names{i},'_eeg-map.nii'],[dir_repos,'data/fig2_data/group_task-',plot_names{i},'_eeg-map.nii'])    
+end

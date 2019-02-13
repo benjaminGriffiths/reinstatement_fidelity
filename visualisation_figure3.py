@@ -31,7 +31,7 @@ def custom_rainplot(data,colour,axes,fontname,labels,ylim,offset,pvalue):
                        ax = axes)
     
     # plot mean and confidence intervals
-    axes=sns.boxplot(data = data, palette = colour, width = 0.1, ax = axes, linewidth = 1, fliersize = 1)
+    axes=sns.boxplot(data = data, palette = colour, width = 0.1, ax = axes, linewidth = 1, fliersize = 1, whis = 2)
     
     # plot significance
     sig_offset = ylim[1]-(ylim[1]*0.05)
@@ -69,7 +69,43 @@ def custom_rainplot(data,colour,axes,fontname,labels,ylim,offset,pvalue):
     axes.spines['right'].set_visible(False)
     axes.spines['bottom'].set_visible(False)
     axes.spines['left'].set_linewidth(1)
-
+              
+def custom_timeseriesplot(data,variables,axes,colour,labels,xlim,ylim,xtick,vertical,horizontal):
+    
+    sns.lineplot(x=variables['x'],
+             y=variables['y'],
+             data=data,
+             ci=90,
+             hue=variables['condition'],
+             palette=colour,
+             ax = axes,
+             linewidth=1)
+        
+    # add horizontal line
+    if vertical:
+        ax.axvline(x=0, linewidth = 1, color = [0,0,0], linestyle='--')
+    if horizontal:
+        ax.axhline(y=0, linewidth = 1, color = [0,0,0], linestyle='-')
+    
+    # aesthetics
+    ax.set_ylabel(labels['ylabel'],fontname='Calibri',fontsize=6,labelpad=-5,fontweight='light')   # add Y axis label
+    ax.set_xlabel(labels['xlabel'],fontname='Calibri',fontsize=6,labelpad=3,fontweight='light')   # add Y axis label
+    ax.set_ylim(ylim)                  # set Y axis range to 0 -> 1
+    ax.set_xlim(xlim)                  # set Y axis range to 0 -> 1  
+    ax.set_yticks([ylim[0],0,ylim[1]])
+    ax.set_xticks(xtick)
+    ax.set_yticklabels([ylim[0],0,ylim[1]],fontname='Calibri',fontweight='light',fontsize=5)
+    ax.set_xticklabels(xtick,fontname='Calibri',fontweight='light',fontsize=5)
+    ax.tick_params(axis='both',          # change X tick parameters
+                       pad=3,
+                       length=2.5)
+    # change axes
+    ax.spines['top'].set_visible(False)
+    ax.spines['right'].set_visible(False)
+    
+    # remove legend
+    ax.get_legend().remove()
+    
 # %% -- define key parameters ----------------------------------------------- #
 # get current directory
 wdir = 'E:/bjg335/projects/reinstatement_fidelity/'
@@ -78,12 +114,12 @@ wdir = 'E:/bjg335/projects/reinstatement_fidelity/'
 sns.set_context("paper")
 
 # set plot defaults
-mpl.rcParams['xtick.major.width'] = 3
-mpl.rcParams['ytick.major.width'] = 3
+mpl.rcParams['xtick.major.width'] = 1
+mpl.rcParams['ytick.major.width'] = 1
 mpl.rcParams['xtick.color'] = [0,0,0]
 mpl.rcParams['ytick.color'] = [0,0,0]
-mpl.rcParams['lines.linewidth'] = 3
-mpl.rcParams['axes.linewidth'] = 3
+mpl.rcParams['lines.linewidth'] = 1
+mpl.rcParams['axes.linewidth'] = 1
 
 # %% -- prepare data -------------------------------------------- #
 # define raincloud data filename
@@ -119,3 +155,64 @@ custom_rainplot(data_raincloud,colour,ax,'calibri',labels,[-0.4,0.4],0.125,[0.01
    
 # save image
 pyplot.savefig(wdir + "/figures/fig3a.jpg",bbox_inches='tight',transparent=True,dpi='figure')
+
+# --- freq series plot --- # 
+# load frequency data
+data = pandas.read_csv(wdir + "data/fig3_data/group_task-all_eeg-freqseries.csv",
+                       delimiter=',')
+
+# restrict to remembered data
+data = data[data['condition']==2]
+
+# create figure
+f,ax = pyplot.subplots(1,1)
+f.set_figheight(2.5/2.54) # 4inches 
+f.set_figwidth(4/2.54) # 12inches
+f.set_dpi(300)
+
+# define colour scheme
+colour = sns.color_palette("Greens",n_colors=7)
+colour = [colour[4]]
+
+
+# define labels and variables
+labels = {'legend':[''],
+          'ylabel':'Power (z)',
+          'xlabel':'Frequency (Hz.)'}
+
+variables = {'x':'freq',
+             'y':'signal',
+             'condition':'condition'}
+
+# plot frequency series
+custom_timeseriesplot(data,variables,ax,colour,labels,[3,30],[-0.1,0.05],[5,10,15,20,25,30],False,True)
+
+# --- time series plot --- # 
+# load time data
+data = pandas.read_csv(wdir + "data/fig3_data/group_task-all_eeg-timeseries.csv",
+                       delimiter=',')
+
+# restrict to remembered data
+data = data[data['condition']==2]
+
+# create figure
+f,ax = pyplot.subplots(1,1)
+f.set_figheight(2.5/2.54) # 4inches 
+f.set_figwidth(4/2.54) # 12inches
+f.set_dpi(300)
+
+# define colour scheme
+colour = sns.color_palette("Greens",n_colors=7)
+colour = [colour[4]]
+
+# define labels and variables
+labels = {'legend':[''],
+          'ylabel':'Power (z)',
+          'xlabel':'Time (s)'}
+
+variables = {'x':'time',
+             'y':'signal',
+             'condition':'condition'}
+
+# plot time series
+custom_timeseriesplot(data,variables,ax,colour,labels,[-0.5,2],[-0.1,0.1],[-0.5,0,0.5,1,1.5,2],True,True)
