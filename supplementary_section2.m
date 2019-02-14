@@ -51,7 +51,10 @@ for subj = 1 : n_subj
     
     % get time-frequency representaiton of data for specified conditions
     group_freq{subj,1} = get_phasesim(source,'encoding','visual');
-    %group_freq{subj,2} = get_memdiff_timefrequency(source,'retrieval','visual');
+    group_freq{subj,2} = get_phasesim(source,'retrieval','visual');
+    
+    % update command line
+    fprintf('Subject %02.0f of %02.0f complete...\n',subj,n_subj)
 end
     
 % predefine cells to house concatenated group data
@@ -92,7 +95,28 @@ cfg.parameter   = 'pow';
 [stat,tbl]      = run_oneSampleT(cfg, grand_freq);
 
 % save data
-save([dir_bids,'derivatives/group/eeg/group_task-all_eeg-stat.mat'],'stat','tbl');
+save([dir_bids,'derivatives/group/eeg/group_task-all_eeg-phasestat.mat'],'stat','tbl');
+
+%% Extract Raw Power of Cluster 
+% define cluster names
+plot_names = {'phasesim'};
+
+% prepare table for stat values
+tbl = array2table(zeros(n_subj,numel(plot_names)),'VariableNames',plot_names);
+
+% cycle through conditions
+for i = 1 : numel(stat)
+     
+    % get indices of clusters
+    clus_idx = stat{i}.posclusterslabelmat==1;
+
+    % create table
+    tbl.(plot_names{i})(:,1) = nanmean(grand_freq{i}.pow(:,clus_idx),2);
+end
+
+% write table
+writetable(tbl,[dir_bids,'derivatives/group/eeg/group_task-all_eeg-phasecluster.csv'],'Delimiter',',')
+copyfile([dir_bids,'derivatives/group/eeg/group_task-all_eeg-phasecluster.csv'],[dir_repos,'data/sup2_data/group_task-rf_eeg-phasecluster.csv'])
 
 %% Create Surface Plots
 % load template MRI
@@ -140,5 +164,5 @@ for i = 1 : numel(stat)
     
     % reslice to 1mm isometric to match template MRI
     reslice_nii([dir_bids,'derivatives/group/eeg/group_task-',plot_names{i},'_eeg-map.nii'],[dir_bids,'derivatives/group/eeg/group_task-',plot_names{i},'_eeg-map.nii'],[1 1 1]);
-    copyfile([dir_bids,'derivatives/group/eeg/group_task-',plot_names{i},'_eeg-map.nii'],[dir_repos,'data/fig2_data/group_task-',plot_names{i},'_eeg-map.nii'])    
+    copyfile([dir_bids,'derivatives/group/eeg/group_task-',plot_names{i},'_eeg-map.nii'],[dir_repos,'data/sup2_data/group_task-',plot_names{i},'_eeg-map.nii'])    
 end

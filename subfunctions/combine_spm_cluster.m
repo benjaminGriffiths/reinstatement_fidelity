@@ -1,7 +1,7 @@
 function combine_spm_cluster(cluster_dir)
 
 % get cluster files
-files = dir([cluster_dir,'\clus*.nii']);
+files = dir([cluster_dir,'clus*.nii']);
 
 % load first file
 nii = load_nii([files(1).folder,'\',files(1).name]);

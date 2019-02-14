@@ -70,20 +70,39 @@ for subj = 1 : n_subj
     load([dir_eeg,'/eeg/',subj_handle,'_task-rf_eeg-source.mat'])
     
     % find audio/video hit/miss trials
-    isvis   = nan(size(source.trialinfo));
-    isenc   = nan(size(source.trialinfo));
-    ismem   = nan(size(source.trialinfo));
-    trl_no  = nan(size(source.trialinfo));
+    isvis       = nan(size(source.trialinfo));
+    isenc       = nan(size(source.trialinfo));
+    ismem       = nan(size(source.trialinfo));
+    trl_no_enc  = nan(size(source.trialinfo));
+    trl_no_ret  = nan(size(source.trialinfo));
     for trl = 1 : numel(source.trialinfo)
         isvis(trl,1) = strcmpi(source.trialinfo{trl}.modality,'visual');
         isenc(trl,1) = strcmpi(source.trialinfo{trl}.operation,'encoding');
         ismem(trl,1) = source.trialinfo{trl}.recalled;
-        trl_no(trl,1) = source.trialinfo{trl}.trl_at_retrieval;
+        
+        if isenc(trl,1) == 1
+            trl_no_enc(trl,1) = source.trialinfo{trl}.trl_at_encoding;
+        else
+            trl_no_ret(trl,1) = source.trialinfo{trl}.trl_at_retrieval;
+        end
     end
+    
+    % fix encoding trial numbers
+    trl_no_enc(trl_no_enc>144 & trl_no_enc<=192)  = trl_no_enc(trl_no_enc>144 & trl_no_enc<=192) + 144;
+    trl_no_enc(trl_no_enc>96 & trl_no_enc<=144)   = trl_no_enc(trl_no_enc>96 & trl_no_enc<=144) + 96;
+    trl_no_enc(trl_no_enc>48 & trl_no_enc<=96)    = trl_no_enc(trl_no_enc>48 & trl_no_enc<=96) + 48;
+    
+    % fix retrieval trial numbers
+    trl_no_ret(trl_no_ret>144 & trl_no_ret<=192)  = trl_no_ret(trl_no_ret>144 & trl_no_ret<=192) + 192;
+    trl_no_ret(trl_no_ret>96 & trl_no_ret<=144)   = trl_no_ret(trl_no_ret>96 & trl_no_ret<=144) + 144;
+    trl_no_ret(trl_no_ret>48 & trl_no_ret<=96)    = trl_no_ret(trl_no_ret>48 & trl_no_ret<=96) + 96;
+    trl_no_ret(trl_no_ret>0 & trl_no_ret<=48)     = trl_no_ret(trl_no_ret>0 & trl_no_ret<=48) + 48;
+    
+    % conjoin encoding and retrieval trial numbers
+    trl_no = cat(1,trl_no_enc(~isnan(trl_no_enc)),trl_no_ret(~isnan(trl_no_ret)));
     
     % get time-frequency representation of data
     cfg             = [];
-    cfg.trials      = isvis & ~isenc;
     cfg.channel     = source.label(coi);
     cfg.keeptrials  = 'yes';
     cfg.method      = 'wavelet';
@@ -94,6 +113,19 @@ for subj = 1 : n_subj
     cfg.pad         = 'nextpow2';
     freq            = ft_freqanalysis(cfg, source); clear source
 
+    % get time-averaged mean and standard deviation of power for each channel and frequency
+    raw_pow = mean(freq.powspctrm,4);
+    avg_pow = mean(raw_pow,1);
+    std_pow = std(raw_pow,[],1);
+
+    % replicate matrices to match freq.powspctrm
+    avg_pow = repmat(avg_pow,[size(freq.powspctrm,1) 1 1 size(freq.powspctrm,4)]);
+    std_pow = repmat(std_pow,[size(freq.powspctrm,1) 1 1 size(freq.powspctrm,4)]);
+
+    % z-transform power
+    freq.powspctrm = (freq.powspctrm - avg_pow) ./ std_pow;
+    clear raw_pow avg_pow std_pow
+    
     % average over time and frequency
     cfg             = [];
     cfg.avgoverchan = 'yes';
@@ -101,24 +133,20 @@ for subj = 1 : n_subj
     cfg.avgoverfreq = 'yes';
     freq            = ft_selectdata(cfg,freq);
        
-    % split into hits and misses
-    pow_hit             = zscore(freq.powspctrm(ismem(isvis&~isenc)==1));
-    pow_miss            = zscore(freq.powspctrm(ismem(isvis&~isenc)==0));
-    num_hit             = trl_no(ismem==1&isvis&~isenc);
-    num_miss            = trl_no(ismem==0&isvis&~isenc);
-    
-    % fix trial numbers
-    num_hit(num_hit>48 & num_hit<=96)    = num_hit(num_hit>48 & num_hit<=96) - 48;
-    num_hit(num_hit>96 & num_hit<=144)   = num_hit(num_hit>96 & num_hit<=144) - 48;
-    num_hit(num_hit>144 & num_hit<=192)  = num_hit(num_hit>144 & num_hit<=192) - 96;
-    num_miss(num_miss>48 & num_miss<=96)    = num_miss(num_miss>48 & num_miss<=96) - 48;
-    num_miss(num_miss>96 & num_miss<=144)   = num_miss(num_miss>96 & num_miss<=144) - 48;
-    num_miss(num_miss>144 & num_miss<=192)  = num_miss(num_miss>144 & num_miss<=192) - 96;
-    
-    % get glm verison of power
-    glm_pow             = zeros(96,2);
-    glm_pow(num_hit,1)  = pow_hit;
-    glm_pow(num_miss,2) = pow_miss;
+    % z-score within condition
+    for a = 0:1
+        for b = 0:1
+            for c = 0:1
+                freq.powspctrm(isvis==a & isenc==b & ismem==c) = zscore(freq.powspctrm(isvis==a & isenc==b & ismem==c));
+            end
+        end
+    end
+     
+    % create glm pow structure
+    glm_pow = zeros(n_trials*2,1);
+    for i = 1 : numel(freq.powspctrm)
+        glm_pow(trl_no(i)) = freq.powspctrm(i);
+    end
     
     % --- Prepare fMRI --- %
     % create cell to hold events data
@@ -245,56 +273,56 @@ for subj = 1 : n_subj
     matlabbatch{1}.spm.stats.fmri_spec.sess.cond(1).duration    = 3;
     matlabbatch{1}.spm.stats.fmri_spec.sess.cond(1).tmod        = 0;
     matlabbatch{1}.spm.stats.fmri_spec.sess.cond(1).orth        = 1;
-    matlabbatch{1}.spm.stats.fmri_spec.sess.cond(1).pmod        = struct('name',{},'param',{},'poly',{});
+    matlabbatch{1}.spm.stats.fmri_spec.sess.cond(1).pmod        = struct('name','pow','param',glm_pow(events_table.isVisual == 1 & events_table.isEncoding == 1 & events_table.isRemembered == 1),'poly',1);
     
     matlabbatch{1}.spm.stats.fmri_spec.sess.cond(2).name        = 'Visual_Encoding_Forgotten';
     matlabbatch{1}.spm.stats.fmri_spec.sess.cond(2).onset       = events_table.onset(events_table.isVisual == 1 & events_table.isEncoding == 1 & events_table.isRemembered == 0);
     matlabbatch{1}.spm.stats.fmri_spec.sess.cond(2).duration    = 3;
     matlabbatch{1}.spm.stats.fmri_spec.sess.cond(2).tmod        = 0;
     matlabbatch{1}.spm.stats.fmri_spec.sess.cond(2).orth        = 1;
-    matlabbatch{1}.spm.stats.fmri_spec.sess.cond(2).pmod        = struct('name',{},'param',{},'poly',{});
+    matlabbatch{1}.spm.stats.fmri_spec.sess.cond(2).pmod        = struct('name','pow','param',glm_pow(events_table.isVisual == 1 & events_table.isEncoding == 1 & events_table.isRemembered == 0),'poly',1);
     
     matlabbatch{1}.spm.stats.fmri_spec.sess.cond(3).name        = 'Visual_Retrieval_Recalled';
     matlabbatch{1}.spm.stats.fmri_spec.sess.cond(3).onset       = events_table.onset(events_table.isVisual == 1 & events_table.isEncoding == 0 & events_table.isRemembered == 1);
     matlabbatch{1}.spm.stats.fmri_spec.sess.cond(3).duration    = 3;
     matlabbatch{1}.spm.stats.fmri_spec.sess.cond(3).tmod        = 0;
     matlabbatch{1}.spm.stats.fmri_spec.sess.cond(3).orth        = 1;
-    matlabbatch{1}.spm.stats.fmri_spec.sess.cond(3).pmod        = struct('name','pow','param',glm_pow(events_table.isRemembered(events_table.isVisual == 1&events_table.isEncoding==0)==1,1),'poly',1);
+    matlabbatch{1}.spm.stats.fmri_spec.sess.cond(3).pmod        = struct('name','pow','param',glm_pow(events_table.isVisual == 1 & events_table.isEncoding == 0 & events_table.isRemembered == 1),'poly',1);
     
     matlabbatch{1}.spm.stats.fmri_spec.sess.cond(4).name        = 'Visual_Retrieval_Forgotten';
     matlabbatch{1}.spm.stats.fmri_spec.sess.cond(4).onset       = events_table.onset(events_table.isVisual == 1 & events_table.isEncoding == 0 & events_table.isRemembered == 0);
     matlabbatch{1}.spm.stats.fmri_spec.sess.cond(4).duration    = 3;
     matlabbatch{1}.spm.stats.fmri_spec.sess.cond(4).tmod        = 0;
     matlabbatch{1}.spm.stats.fmri_spec.sess.cond(4).orth        = 1;
-    matlabbatch{1}.spm.stats.fmri_spec.sess.cond(4).pmod        = struct('name','pow','param',glm_pow(events_table.isRemembered(events_table.isVisual == 1&events_table.isEncoding==0)==0,2),'poly',1);
+    matlabbatch{1}.spm.stats.fmri_spec.sess.cond(4).pmod        = struct('name','pow','param',glm_pow(events_table.isVisual == 1 & events_table.isEncoding == 0 & events_table.isRemembered == 0),'poly',1);
        
     matlabbatch{1}.spm.stats.fmri_spec.sess.cond(5).name        = 'Auditory_Encoding_Recalled';
     matlabbatch{1}.spm.stats.fmri_spec.sess.cond(5).onset       = events_table.onset(events_table.isVisual == 0 & events_table.isEncoding == 1 & events_table.isRemembered == 1);
     matlabbatch{1}.spm.stats.fmri_spec.sess.cond(5).duration    = 3;
     matlabbatch{1}.spm.stats.fmri_spec.sess.cond(5).tmod        = 0;
     matlabbatch{1}.spm.stats.fmri_spec.sess.cond(5).orth        = 1;
-    matlabbatch{1}.spm.stats.fmri_spec.sess.cond(5).pmod        = struct('name',{},'param',{},'poly',{});
+    matlabbatch{1}.spm.stats.fmri_spec.sess.cond(5).pmod        = struct('name','pow','param',glm_pow(events_table.isVisual == 0 & events_table.isEncoding == 1 & events_table.isRemembered == 1),'poly',1);
     
     matlabbatch{1}.spm.stats.fmri_spec.sess.cond(6).name        = 'Auditory_Encoding_Forgotten';
     matlabbatch{1}.spm.stats.fmri_spec.sess.cond(6).onset       = events_table.onset(events_table.isVisual == 0 & events_table.isEncoding == 1 & events_table.isRemembered == 0);
     matlabbatch{1}.spm.stats.fmri_spec.sess.cond(6).duration    = 3;
     matlabbatch{1}.spm.stats.fmri_spec.sess.cond(6).tmod        = 0;
     matlabbatch{1}.spm.stats.fmri_spec.sess.cond(6).orth        = 1;
-    matlabbatch{1}.spm.stats.fmri_spec.sess.cond(6).pmod        = struct('name',{},'param',{},'poly',{});
+    matlabbatch{1}.spm.stats.fmri_spec.sess.cond(6).pmod        = struct('name','pow','param',glm_pow(events_table.isVisual == 0 & events_table.isEncoding == 1 & events_table.isRemembered == 0),'poly',1);
     
     matlabbatch{1}.spm.stats.fmri_spec.sess.cond(7).name        = 'Auditory_Retrieval_Recalled';
     matlabbatch{1}.spm.stats.fmri_spec.sess.cond(7).onset       = events_table.onset(events_table.isVisual == 0 & events_table.isEncoding == 0 & events_table.isRemembered == 1);
     matlabbatch{1}.spm.stats.fmri_spec.sess.cond(7).duration    = 3;
     matlabbatch{1}.spm.stats.fmri_spec.sess.cond(7).tmod        = 0;
     matlabbatch{1}.spm.stats.fmri_spec.sess.cond(7).orth        = 1;
-    matlabbatch{1}.spm.stats.fmri_spec.sess.cond(7).pmod        = struct('name',{},'param',{},'poly',{});
+    matlabbatch{1}.spm.stats.fmri_spec.sess.cond(7).pmod        = struct('name','pow','param',glm_pow(events_table.isVisual == 0 & events_table.isEncoding == 0 & events_table.isRemembered == 1),'poly',1);
     
     matlabbatch{1}.spm.stats.fmri_spec.sess.cond(8).name        = 'Auditory_Retrieval_Forgotten';
     matlabbatch{1}.spm.stats.fmri_spec.sess.cond(8).onset       = events_table.onset(events_table.isVisual == 0 & events_table.isEncoding == 0 & events_table.isRemembered == 0);
     matlabbatch{1}.spm.stats.fmri_spec.sess.cond(8).duration    = 3;
     matlabbatch{1}.spm.stats.fmri_spec.sess.cond(8).tmod        = 0;
     matlabbatch{1}.spm.stats.fmri_spec.sess.cond(8).orth        = 1;
-    matlabbatch{1}.spm.stats.fmri_spec.sess.cond(8).pmod        = struct('name',{},'param',{},'poly',{});
+    matlabbatch{1}.spm.stats.fmri_spec.sess.cond(8).pmod        = struct('name','pow','param',glm_pow(events_table.isVisual == 0 & events_table.isEncoding == 0 & events_table.isRemembered == 0),'poly',1);
     
     matlabbatch{1}.spm.stats.fmri_spec.sess.cond(9).name        = 'ButtonPress';
     matlabbatch{1}.spm.stats.fmri_spec.sess.cond(9).onset       = button_onset;
@@ -314,17 +342,30 @@ for subj = 1 : n_subj
       
     % contrast betas
     matlabbatch{2}.spm.stats.con.delete                         = 0;
-    matlabbatch{2}.spm.stats.con.consess{1}.tcon.name           = 'retrieval_hits';
-    matlabbatch{2}.spm.stats.con.consess{1}.tcon.convec         = -ones(31,1)/30;
-    matlabbatch{2}.spm.stats.con.consess{1}.tcon.convec(3)      = 1;
+    matlabbatch{2}.spm.stats.con.consess{1}.tcon.name           = 'retrieval_visual_hits';
+    matlabbatch{2}.spm.stats.con.consess{1}.tcon.convec         = [0 0 1 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0];
     matlabbatch{2}.spm.stats.con.consess{1}.tcon.sessrep        = 'none';
-    matlabbatch{2}.spm.stats.con.consess{2}.tcon.name           = 'retrieval_misses';
-    matlabbatch{2}.spm.stats.con.consess{2}.tcon.convec         = -ones(31,1)/30;
-    matlabbatch{2}.spm.stats.con.consess{2}.tcon.convec(4)      = 1;
+    matlabbatch{2}.spm.stats.con.consess{2}.tcon.name           = 'retrieval_audio_hits';
+    matlabbatch{2}.spm.stats.con.consess{2}.tcon.convec         = [0 0 0 0 0 0 1 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0];
     matlabbatch{2}.spm.stats.con.consess{2}.tcon.sessrep        = 'none';
-    matlabbatch{2}.spm.stats.con.consess{3}.tcon.name           = 'retrieval_memory';
-    matlabbatch{2}.spm.stats.con.consess{3}.tcon.convec         = [0 0 1 -1 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0];
+    matlabbatch{2}.spm.stats.con.consess{3}.tcon.name           = 'encoding_visual_all';
+    matlabbatch{2}.spm.stats.con.consess{3}.tcon.convec         = [1 1 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0];
     matlabbatch{2}.spm.stats.con.consess{3}.tcon.sessrep        = 'none';
+    matlabbatch{2}.spm.stats.con.consess{4}.tcon.name           = 'encoding_audio_all';
+    matlabbatch{2}.spm.stats.con.consess{4}.tcon.convec         = [0 0 0 0 1 1 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0];
+    matlabbatch{2}.spm.stats.con.consess{4}.tcon.sessrep        = 'none';
+    matlabbatch{2}.spm.stats.con.consess{5}.tcon.name           = 'retrieval_memory';
+    matlabbatch{2}.spm.stats.con.consess{5}.tcon.convec         = [0 0 1 -1 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0];
+    matlabbatch{2}.spm.stats.con.consess{5}.tcon.sessrep        = 'none';
+    matlabbatch{2}.spm.stats.con.consess{6}.tcon.name           = 'encoding_memory';
+    matlabbatch{2}.spm.stats.con.consess{6}.tcon.convec         = [1 -1 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0];
+    matlabbatch{2}.spm.stats.con.consess{6}.tcon.sessrep        = 'none';
+    matlabbatch{2}.spm.stats.con.consess{7}.tcon.name           = 'retrieval_modality';
+    matlabbatch{2}.spm.stats.con.consess{7}.tcon.convec         = [0 0 1 0 0 0 -1 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0];
+    matlabbatch{2}.spm.stats.con.consess{7}.tcon.sessrep        = 'none';
+    matlabbatch{2}.spm.stats.con.consess{8}.tcon.name           = 'encoding_modality';
+    matlabbatch{2}.spm.stats.con.consess{8}.tcon.convec         = [1 1 0 0 -1 -1 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0];
+    matlabbatch{2}.spm.stats.con.consess{8}.tcon.sessrep        = 'none';
     matlabbatch{2}.spm.stats.con.spmmat(1)                      = {'C:/tmp_mri/spm/SPM.mat'};    
     
     % run job
@@ -338,7 +379,7 @@ end
 
 %% Run Second-Level Stats
 % define each first-level contrast name
-contrast_labels = {'retrieval_hits' 'retrieval_misses' 'retrieval_memory'};
+contrast_labels = {'retrieval_visual_hits' 'retrieval_audio_hits' 'encoding_visual_all' 'encoding_visual_audio' 'retrieval_memory' 'encoding_memory' 'retrieval_modality' 'encoding_modality'};
 
 % cycle through each first-level contrast
 for i = 1 : numel(contrast_labels)
@@ -346,6 +387,9 @@ for i = 1 : numel(contrast_labels)
     % define directory for second-level analysis
     stat_dir = [dir_root,'bids_data/derivatives/group/univariateEEGfMRI/',contrast_labels{i},'/'];
     mkdir(stat_dir)
+    
+    % delete old SPM file if it exists
+    if exist([stat_dir,'/SPM.mat'],'file'); delete([stat_dir,'/SPM.mat']); end
     
     % predefine cell to hold contrast filenames
     contrast_files = cell(n_subj,1);
@@ -392,28 +436,30 @@ for i = 1 : numel(contrast_labels)
 end
 
 %% Extract Metrics for Visualisation
+% define each first-level contrast name
+contrast_labels = {'retrieval_memory' 'encoding_memory'};
+
 % define cluster regions
-clus_name{1} = {'occipital','leftTemporalPole','rightTemporalPole'};
-clus_name{2} = {'rightFusiform','leftFusiform'};
-clus_name{3} = {'occipital','limbic'};
+clus_name{1} = {'occipital','parietal'};
+clus_name{2} = {'occipital','parietal'};
 
 % cycle through each first-level contrast
-for i = 1 : 3
+for i = 1 : numel(contrast_labels)
     
     % combine visual cluster and save
-    combine_spm_cluster([dir_root,'bids_data/derivatives/group/spm/',contrast_labels{i},'/'])
+    combine_spm_cluster([dir_root,'bids_data/derivatives/group/univariateEEGfMRI/',contrast_labels{i},'/'])
 
     % load SPM details
-    load([dir_root,'bids_data/derivatives/group/spm/',contrast_labels{i},'/SPM.mat'])
+    load([dir_root,'bids_data/derivatives/group/univariateEEGfMRI/',contrast_labels{i},'/SPM.mat'])
 
     % extract subject values for each cluster
-    [betas,d] = extract_sample_points([dir_root,'bids_data/derivatives/group/spm/',contrast_labels{i},'/'],SPM);
+    [betas,d] = extract_sample_points([dir_root,'bids_data/derivatives/group/univariateEEGfMRI/',contrast_labels{i},'/'],SPM);
 
     % save betas as table
     tbl = array2table(betas','VariableNames',clus_name{i});
-    writetable(tbl,[dir_repos,'data/sup1_data/',contrast_labels{i},'_betas.csv'],'Delimiter',',')
+    writetable(tbl,[dir_repos,'data/sup3_data/',contrast_labels{i},'_betas.csv'],'Delimiter',',')
 
     % save effect size as table
     tbl = array2table(d','VariableNames',clus_name{i});
-    writetable(tbl,[dir_repos,'data/sup1_data/',contrast_labels{i},'_cohensD.csv'],'Delimiter',',')
+    writetable(tbl,[dir_repos,'data/sup3_data/',contrast_labels{i},'_cohensD.csv'],'Delimiter',',')
 end
