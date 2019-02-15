@@ -745,6 +745,158 @@ tbl.partial(:,1)    = grand_freq_partial.powspctrm;
 writetable(tbl,[dir_bids,'derivatives/group/rsa-correlation/group_task-all_eeg-cluster.csv'],'Delimiter',',')
 copyfile([dir_bids,'derivatives/group/rsa-correlation/group_task-all_eeg-cluster.csv'],[dir_repos,'data/fig3_data/group_task-all_eeg-cluster.csv'])
 
+%% Rerun Analysis on Theta Band
+% predefine cell for group data
+group_freq   = cell(n_subj,2);
+
+% cycle through each subject
+for subj = 1 : n_subj
+    
+    % define subject data directory
+    dir_subj = [dir_bids,'sourcedata/',sprintf('sub-%02.0f',subj),'/eeg/'];
+    
+    % load in raw data
+    load([dir_subj,sprintf('sub-%02.0f',subj),'_task-rf_eeg-source.mat'])  
+    
+    % define custom resolution
+    resolution.toi = -1:0.05:3;
+    resolution.foi = 3:8;
+    
+    % get time-frequency representaiton of data for specified conditions
+    group_freq{subj,1} = get_basic_timefrequency(source,'encoding','visual',resolution);
+    group_freq{subj,2} = get_basic_timefrequency(source,'retrieval','visual',resolution);
+       
+    % do the same for gamma
+    resolution.foi = 30:50;
+    group_freq{subj,3} = get_basic_timefrequency(source,'encoding','visual',resolution);
+    group_freq{subj,4} = get_basic_timefrequency(source,'retrieval','visual',resolution);
+    
+    % cycle through each condition
+    for i = 1 : 4
+        
+        % average over time and freq to save space
+        cfg                 = [];
+        cfg.avgovertime     = 'yes';
+        cfg.avgoverfreq     = 'yes';
+        group_freq{subj,i}  = ft_selectdata(cfg,group_freq{subj,i});
+    end
+    
+    % update command line
+    fprintf('\nSubject %02.0f of %02.0f complete...\n\n',subj,n_subj)
+end
+ 
+% save data
+save([dir_bids,'derivatives/group/rsa-correlation/group_task-all_eeg-thetagamma.mat'],'group_freq','-v7.3'); 
+
+%% Correlate Similarity and Power
+% load EEG stat
+load([dir_bids,'derivatives/group/eeg/group_task-all_eeg-stat.mat'])
+
+% load in similarity index
+load([dir_root,'bids_data/derivatives/group/rsa-correlation/group_task-all_fmri-si'])
+
+% predefine matrix for correlation values
+r = zeros(n_subj,numel(mask_names)+1,2);
+
+% cycle through each subject
+for subj = 1 : n_subj
+    
+    % cycle through each mask (plus one for forgotten ers)
+    for mask = 1 : numel(mask_names)+1
+    
+        % switch based on mask
+        switch mask
+            case 1
+                % get channels in roi
+                coi = stat{mask}.negclusterslabelmat(stat{mask}.inside==1)==1;
+        
+                % extract all trial numbers from powspctrm
+                idx         = 1 : size(group_freq{subj,mask}.trialinfo,1);
+                trl_nums    = group_freq{subj,mask}.trialinfo(idx,1);
+                
+            case 2
+                % get channels in roi
+                coi = stat{mask}.negclusterslabelmat(stat{mask}.inside==1)==1;
+                
+                % extract recalled trial numbers from powspctrm
+                idx         = group_freq{subj,mask}.trialinfo(:,2)==1;
+                trl_nums    = group_freq{subj,mask}.trialinfo(idx,1);
+
+            case 3
+                % get channels in roi
+                coi = stat{mask-1}.negclusterslabelmat(stat{mask-1}.inside==1)==1;
+                
+                % extract forgotten trial numbers from powspctrm
+                idx         = group_freq{subj,mask-1}.trialinfo(:,2)==0;
+                trl_nums    = group_freq{subj,mask-1}.trialinfo(idx,1);   
+        end
+
+        % fix numbers
+        trl_nums(trl_nums>48 & trl_nums<=96)    = trl_nums(trl_nums>48 & trl_nums<=96) - 48;
+        trl_nums(trl_nums>96 & trl_nums<=144)   = trl_nums(trl_nums>96 & trl_nums<=144) - 48;
+        trl_nums(trl_nums>144 & trl_nums<=192)  = trl_nums(trl_nums>144 & trl_nums<=192) - 96;
+
+        % switch based on mask
+        if mask ~= 3
+
+            % extract vectors for items
+            X = squeeze(rsa_vec(subj,mask,trl_nums));
+            Y = nanmean(nanmean(group_freq{subj,mask}.powspctrm(idx,coi,:),3),2);
+            Z = group_freq{subj,mask}.trialinfo(idx,3);
+            
+        else
+            % extract vectors for items
+            X = squeeze(rsa_vec(subj,mask-1,trl_nums));
+            Y = nanmean(nanmean(group_freq{subj,mask-1}.powspctrm(idx,coi,:),3),2);
+            Z = group_freq{subj,mask-1}.trialinfo(idx,3);
+        end
+        
+        % correlate
+        r(subj,mask,1) = atanh(corr(X,Y));
+        r(subj,mask,2) = atanh(partialcorr(X,Y,Z));
+    end
+end
+
+% prepare data structure for one-sample t-test
+grand_freq{1}              = [];
+grand_freq{1}.time         = 1;
+grand_freq{1}.freq         = 1;
+grand_freq{1}.label        = {'dummy'};
+grand_freq{1}.dimord       = 'subj_chan_freq_time';
+grand_freq{1}.powspctrm    = r(:,1,1);
+
+% duplicate data structure for ERS recalled data
+grand_freq{2}               = grand_freq{1};
+grand_freq{2}.powspctrm     = r(:,2,1);
+
+% duplicate data structure for ERS forgotten data
+grand_freq{3}               = grand_freq{1};
+grand_freq{3}.powspctrm     = r(:,3,1);
+
+% save data
+save([dir_bids,'derivatives/group/rsa-correlation/group_task-all_comb-theta.mat'],'grand_freq'); 
+
+%% Run Statistics
+% predefine cell for statistics
+cfg             = [];
+cfg.tail        = -1;
+[stat,tbl]      = run_oneSampleT(cfg, grand_freq);
+   
+% save data
+save([dir_bids,'derivatives/group/rsa-correlation/group_task-retrieval_comb-stat.mat'],'stat','tbl');
+
+% check partial correlation controlling for memory confidence
+grand_freq_partial = grand_freq{2};
+grand_freq_partial.powspctrm = r(:,2,2);
+
+% predefine cell for statistics
+cfg             = [];
+cfg.tail        = -1;
+[stat,tbl]      = run_oneSampleT(cfg, grand_freq_partial);
+   
+% save data
+save([dir_bids,'derivatives/group/rsa-correlation/group_task-retrieval_comb-partialstat.mat'],'stat','tbl');
+   
 %% Get Time/Freq Series of Data
 % load EEG stat
 load([dir_bids,'derivatives/group/eeg/group_task-all_eeg-stat.mat'])

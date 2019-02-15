@@ -90,16 +90,28 @@ save([dir_bids,'derivatives/group/eeg/group_task-all_eeg-phasesim.mat'],'grand_f
 
 %% Run Statistics
 % predefine cell for statistics
-cfg.tail        = 1;
-cfg.parameter   = 'pow';
-[stat,tbl]      = run_oneSampleT(cfg, grand_freq);
+cfg.tail            = 1;
+cfg.parameter       = 'pow';
+[stat_ee,tbl_ee]    = run_oneSampleT(cfg, grand_freq{1});
+
+% use EES mask over ERS mask
+grand_freq{2}.inside = stat_ee{1}.posclusterslabelmat==1;
+
+% run ERS statistics
+cfg.tail            = 1;
+cfg.parameter       = 'pow';
+[stat_er,tbl_er]    = run_oneSampleT(cfg, grand_freq{2});
+
+% combine data
+stat = {stat_ee{1},stat_er{1}};
+tbl  = [tbl_ee;tbl_er];
 
 % save data
 save([dir_bids,'derivatives/group/eeg/group_task-all_eeg-phasestat.mat'],'stat','tbl');
 
 %% Extract Raw Power of Cluster 
 % define cluster names
-plot_names = {'phasesim'};
+plot_names = {'eesim','ersim'};
 
 % prepare table for stat values
 tbl = array2table(zeros(n_subj,numel(plot_names)),'VariableNames',plot_names);
@@ -123,7 +135,7 @@ copyfile([dir_bids,'derivatives/group/eeg/group_task-all_eeg-phasecluster.csv'],
 load([dir_tool,'fieldtrip-20170319/template/sourcemodel/standard_sourcemodel3d10mm.mat']);
 
 % define plot names
-plot_names = {'phasesim'};
+plot_names = {'eesim','ersim'};
 
 % cycle through conditions
 for i = 1 : numel(stat)

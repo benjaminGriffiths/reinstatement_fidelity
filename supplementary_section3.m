@@ -437,11 +437,13 @@ end
 
 %% Extract Metrics for Visualisation
 % define each first-level contrast name
-contrast_labels = {'retrieval_memory' 'encoding_memory'};
+contrast_labels = {'retrieval_memory' 'encoding_memory' 'retrieval_modality' 'encoding_modality'};
 
 % define cluster regions
 clus_name{1} = {'occipital','parietal'};
 clus_name{2} = {'occipital','parietal'};
+clus_name{3} = {'fusiform','parietal','leftFrontal','rightFrontal','leftIFG'};
+clus_name{4} = {'fusiform','parietal','leftFrontal','rightFrontal'};
 
 % cycle through each first-level contrast
 for i = 1 : numel(contrast_labels)

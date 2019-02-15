@@ -38,15 +38,16 @@ for condition = 1 : n_data
     issource = false;
     issingle = false;
     
-    % check whether data is in source space
-    if ~isfield(data{condition},'label')
-        fprintf('No label information detected, assuming data is in source space...\n')
-        issource = true;
         
     % check if there is only a single comparison
-    elseif size(data{condition},2) == 1 && size(data{condition},3) == 1 && size(data{condition},4) == 1
+    if size(data{condition}.(cfg.parameter),2) == 1 && size(data{condition}.(cfg.parameter),3) == 1 && size(data{condition}.(cfg.parameter),4) == 1
         issingle = true;
         fprintf('Assuming data has a single comparison...\n')
+       
+    % check whether data is in source space
+    elseif ~isfield(data{condition},'label')
+        fprintf('No label information detected, assuming data is in source space...\n')
+        issource = true;
         
     else
         fprintf('Assuming data is channel level...\n')
@@ -60,7 +61,7 @@ for condition = 1 : n_data
     null_freq = create_null_hypothesis(data{condition},config.parameter);
     
     % if data is in source space
-    if issource
+    if issource && ~issingle
         
         % run statistics
         config.dim      = data{condition}.dim;  % specify dimensions of your source grid

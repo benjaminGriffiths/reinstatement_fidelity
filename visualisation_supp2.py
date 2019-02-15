@@ -87,7 +87,7 @@ mpl.rcParams['axes.linewidth'] = 3
 
 # %% -- prepare data -------------------------------------------- #
 # define raincloud data filename
-data_fname = wdir + "data/fig2_data/group_task-rf_eeg-phasecluster.csv"
+data_fname = wdir + "data/sup2_data/group_task-rf_eeg-phasecluster.csv"
 
 # ----- RSA Plot ----- # 
 # load raincloud data
@@ -97,22 +97,22 @@ data_raincloud = pandas.read_csv(data_fname,
 # create figure
 f,ax = pyplot.subplots(1,1)
 f.set_figheight(6.3/2.54) # 4inches 
-f.set_figwidth(3/2.54) # 12inches
+f.set_figwidth(4/2.54) # 12inches
 f.set_dpi(300)
 
 # define colour scheme
 colour = sns.color_palette("Blues",n_colors=7)
-colour = [colour[3]]
+colour = [colour[2],colour[3]]
 
 # define labels
 labels = {'title':'',
-          'ylabel':'Encoding-Encoding Similarity Index (z)',
-          'xticklabel':[''],
+          'ylabel':'Similarity Index (z)',
+          'xticklabel':['Perception','Retrieval'],
           'yticks':[-0.02,0,0.02,0.04],
           'yticklabel':['-0.02','0','0.02','0.04']}
 
 # plot raincloud
-custom_rainplot(data_raincloud,colour,ax,'calibri',labels,[-0.02,0.04],0.15,[0.013])
+custom_rainplot(data_raincloud,colour,ax,'calibri',labels,[-0.02,0.04],0.15,[0.013,0.07])
    
 # save image
 pyplot.savefig(wdir + "/figures/supp2a.jpg",bbox_inches='tight',transparent=True,dpi='figure')
