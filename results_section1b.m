@@ -851,8 +851,17 @@ for subj = 1 : n_subj
     tmpA = rsa.stat.fisherDiscrTRDM_trainAtestB(X.b,Y.b,X.a,Y.a,size(X.b,2)-8,1:8);
 
     % get mean
-    group_rdm(subj,:,:) = mean(cat(3,tmpA,tmpB),3);
+    group_rdm(subj,:,:,1) = tmpA;%mean(cat(3,tmpA,tmpB),3);
+    group_rdm(subj,:,:,2) = tmpB;%mean(cat(3,tmpA,tmpB),3);
     
     fprintf('Subject %02.0f of %02.0f completed...\n',subj,n_subj)
     clear X Y SPM
 end
+
+% get group average
+grand_rdm = squeeze(mean(mean(group_rdm(:,1:4,5:8,:),4),1));
+
+% get difference from ers
+
+
+
