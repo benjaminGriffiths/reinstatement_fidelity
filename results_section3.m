@@ -469,12 +469,19 @@ for subj = 1 : n_subj
         Y.sa = sv(1:numel(sv)/2);
         Y.sb = sv(numel(sv)/2+1:end);
         clear sv i j
+        
+        % add memory details
+        mem = stim_details.memory(stim_details.modality==1);
+        Y.ma = mem(1:numel(mem)/2,1);
+        Y.mb = mem(numel(mem)/2+1:end,1);
 
         % reorder from trial order to stimulus order
         [Y.sa,Y.sai] = sort(Y.sa);
         [Y.sb,Y.sbi] = sort(Y.sb);
         X.at(:,1:96) = X.at(:,Y.sai);
         X.bt(:,1:96) = X.bt(:,Y.sbi);
+        Y.ma         = Y.ma(Y.sai,:);
+        Y.mb         = Y.mb(Y.sbi,:);
 
         % switch approach based on data type
         if mask == 1
@@ -514,6 +521,9 @@ rsa_vec  = nan(n_subj,numel(mask_names),n_trials/2);
 
 % cycle through each subject
 for subj = 1 : n_subj
+    
+    % define key subject strings
+    subj_handle = sprintf('sub-%02.0f',subj);   
     
     % define key subject strings
     subj_handle = sprintf('sub-%02.0f',subj);

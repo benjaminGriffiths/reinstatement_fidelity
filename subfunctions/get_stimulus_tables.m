@@ -6,7 +6,7 @@ n_volumes = 255;
 n_runs = 8;
 
 % create table to record stimulus detail
-stim_details  = array2table(zeros(n_trials*2,2),'VariableNames', {'encoding','modality'});
+stim_details  = array2table(zeros(n_trials*2,3),'VariableNames', {'encoding','modality','memory'});
 stim_count = 1;
 
 % create table to record scan details
@@ -46,6 +46,9 @@ for run = 1 : n_runs
                 stim_details.stimulus(stim_count,1) = stim_details.stimulus(stim_count,1) + 4;
             end
 
+            % get memory
+            stim_details.memory(stim_count) = tbl.recalled(e);
+            
             % update counter
             stim_count = stim_count + 1; 
 
