@@ -503,6 +503,10 @@ for subj = 1 : n_subj
         % record original trial numbers
         [~,RDM.ta] = sort(Y.sai);
         [~,RDM.tb] = sort(Y.sbi);
+        
+        % store memory details
+        RDM.ma = Y.ma;
+        RDM.mb = Y.mb;
 
         % save subject RDM    
         save([dir_subj,'/rsa-correlation/',subj_handle,'_task-',mask_names{mask},'_rsa-rdm.mat'],'RDM')
@@ -521,9 +525,6 @@ rsa_vec  = nan(n_subj,numel(mask_names),n_trials/2);
 
 % cycle through each subject
 for subj = 1 : n_subj
-    
-    % define key subject strings
-    subj_handle = sprintf('sub-%02.0f',subj);   
     
     % define key subject strings
     subj_handle = sprintf('sub-%02.0f',subj);
