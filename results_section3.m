@@ -565,6 +565,10 @@ for subj = 1 : n_subj
                 % reorder trial order from stimulus order to trial order
                 rsa_vec(subj,mask,1:48)     = rsa_vec(subj,mask,RDM.ta(49:end)-48);
                 rsa_vec(subj,mask,49:96)    = rsa_vec(subj,mask,RDM.tb(49:end));
+                
+                % extract memory details
+                mem_perf(subj,1:48) = RDM.ma(RDM.ta(49:end));
+                mem_perf(subj,49:96) = RDM.ma(RDM.ta(49:end));
         end
         
         % tidy up
@@ -575,6 +579,11 @@ for subj = 1 : n_subj
     % clear details
     clear subj_handle dir_subj
 end
+
+mem_rsa = squeeze(rsa_vec(:,2,:));
+figure; hold on
+histogram(mem_rsa(mem_perf==1),-0.975:0.05:0.975)
+histogram(mem_rsa(mem_perf==0),-0.975:0.05:0.975)
 
 % save RSA vector
 save([dir_root,'bids_data/derivatives/group/rsa-correlation/group_task-all_fmri-si'],'rsa_vec')
