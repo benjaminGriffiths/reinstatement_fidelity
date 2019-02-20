@@ -550,7 +550,7 @@ for subj = 1 : n_subj
 
                 % reorder trial order from stimulus order to trial order
                 rsa_vec(subj,mask,1:48)     = rsa_vec(subj,mask,RDM.ta(1:48));
-                rsa_vec(subj,mask,49:96)    = rsa_vec(subj,mask,RDM.tb(1:48)+48);             
+                rsa_vec(subj,mask,49:96)    = rsa_vec(subj,mask,RDM.tb(1:48)+48);
                 
             case 2     
                 
@@ -570,10 +570,9 @@ for subj = 1 : n_subj
                 mem_perf(subj,1:48) = RDM.ma(RDM.ta(49:end));
                 mem_perf(subj,49:96) = RDM.ma(RDM.ta(49:end));
         end
-        
+                
         % tidy up
-        clear RDM trl
-        
+        clear RDM trl        
     end
 
     % clear details
@@ -582,8 +581,8 @@ end
 
 mem_rsa = squeeze(rsa_vec(:,2,:));
 figure; hold on
-histogram(mem_rsa(mem_perf==1),-0.975:0.05:0.975)
-histogram(mem_rsa(mem_perf==0),-0.975:0.05:0.975)
+histogram(mem_rsa(mem_perf==1),-0.95:0.1:0.95)
+histogram(mem_rsa(mem_perf==0),-0.95:0.1:0.95)
 
 % save RSA vector
 save([dir_root,'bids_data/derivatives/group/rsa-correlation/group_task-all_fmri-si'],'rsa_vec')
@@ -651,6 +650,7 @@ load([dir_root,'bids_data/derivatives/group/rsa-correlation/group_task-all_fmri-
 
 % predefine matrix for correlation values
 r = zeros(n_subj,numel(mask_names)+1,2);
+Xs = {}; Ys = {};
 
 % cycle through each subject
 for subj = 1 : n_subj
@@ -662,7 +662,7 @@ for subj = 1 : n_subj
         switch mask
             case 1
                 % get channels in roi
-                coi = stat{mask}.negclusterslabelmat(stat{mask}.inside==1)==1;
+                coi = mask_roi{mask}.inside(stat{mask}.inside==1);%stat{mask}.negclusterslabelmat(stat{mask}.inside==1)==1;
         
                 % extract all trial numbers from powspctrm
                 idx         = 1 : size(group_freq{subj,mask}.trialinfo,1);
@@ -670,7 +670,7 @@ for subj = 1 : n_subj
                 
             case 2
                 % get channels in roi
-                coi = stat{mask}.negclusterslabelmat(stat{mask}.inside==1)==1;
+                coi = mask_roi{mask}.inside(stat{mask}.inside==1);%stat{mask}.negclusterslabelmat(stat{mask}.inside==1)==1;
                 
                 % extract recalled trial numbers from powspctrm
                 idx         = group_freq{subj,mask}.trialinfo(:,2)==1;
@@ -678,7 +678,7 @@ for subj = 1 : n_subj
 
             case 3
                 % get channels in roi
-                coi = stat{mask-1}.negclusterslabelmat(stat{mask-1}.inside==1)==1;
+                coi = mask_roi{mask-1}.inside(stat{mask-1}.inside==1);%stat{mask-1}.negclusterslabelmat(stat{mask-1}.inside==1)==1;
                 
                 % extract forgotten trial numbers from powspctrm
                 idx         = group_freq{subj,mask-1}.trialinfo(:,2)==0;
@@ -708,6 +708,11 @@ for subj = 1 : n_subj
         % correlate
         r(subj,mask,1) = atanh(corr(X,Y));
         r(subj,mask,2) = atanh(partialcorr(X,Y,Z));
+        
+        if mask == 2 && (subj == 15 || subj == 17)
+            Xs{end+1} = X;
+            Ys{end+1} = Y;
+        end
     end
 end
 
@@ -729,6 +734,12 @@ grand_freq{3}.powspctrm     = r(:,3,1);
 
 % save data
 save([dir_bids,'derivatives/group/rsa-correlation/group_task-all_comb-freq.mat'],'grand_freq'); 
+
+% save single subjects
+for i = 1 : 2
+    data = [zscore(Xs{i}) zscore(Ys{i})];
+    csvwrite([dir_repos,'data/fig3_data/',sprintf('subj-%02.0f_task-ers_xy.csv',i)],data)
+end
 
 %% Run Statistics
 % predefine cell for statistics
@@ -828,7 +839,7 @@ for subj = 1 : n_subj
         switch mask
             case 1
                 % get channels in roi
-                coi = stat{mask}.negclusterslabelmat(stat{mask}.inside==1)==1;
+                coi = mask_roi{mask}.inside(stat{mask}.inside==1);%stat{mask}.negclusterslabelmat(stat{mask}.inside==1)==1;
         
                 % extract all trial numbers from powspctrm
                 idx         = 1 : size(group_freq{subj,mask}.trialinfo,1);
@@ -836,16 +847,16 @@ for subj = 1 : n_subj
                 
             case 2
                 % get channels in roi
-                coi = stat{mask}.negclusterslabelmat(stat{mask}.inside==1)==1;
-                
+                coi = mask_roi{mask}.inside(stat{mask}.inside==1);%stat{mask}.negclusterslabelmat(stat{mask}.inside==1)==1;
+        
                 % extract recalled trial numbers from powspctrm
                 idx         = group_freq{subj,mask}.trialinfo(:,2)==1;
                 trl_nums    = group_freq{subj,mask}.trialinfo(idx,1);
 
             case 3
                 % get channels in roi
-                coi = stat{mask-1}.negclusterslabelmat(stat{mask-1}.inside==1)==1;
-                
+                coi = mask_roi{mask-1}.inside(stat{mask-1}.inside==1);%stat{mask}.negclusterslabelmat(stat{mask}.inside==1)==1;
+        
                 % extract forgotten trial numbers from powspctrm
                 idx         = group_freq{subj,mask-1}.trialinfo(:,2)==0;
                 trl_nums    = group_freq{subj,mask-1}.trialinfo(idx,1);   
@@ -937,8 +948,8 @@ for subj = 1 : n_subj
     load([dir_subj,sprintf('sub-%02.0f',subj),'_task-rf_eeg-source.mat'])  
     
     % get channels in roi
-    coi = stat{2}.negclusterslabelmat(stat{2}.inside==1)==1;
-
+    coi = mask_roi{2}.inside(stat{2}.inside==1);%stat{mask}.negclusterslabelmat(stat{mask}.inside==1)==1;
+        
     % select region of interest
     cfg = [];
     cfg.channel = source.label(coi);

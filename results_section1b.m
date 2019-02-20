@@ -729,6 +729,16 @@ for subj = 1 : n_subj
     % load pattern data {BUG: THIS WILL NOT WORK IF YOU HAVE NOT RUN SECTION 3 ANALYSIS}
     load([dir_subj,'/rsa-correlation/',subj_handle,'_task-all_rsa-maskedDemeanedVolume.mat'])
     patterns = patterns{2};
+   
+    % load mask index    
+    load([dir_root,'bids_data/derivatives/',subj_handle,'/rsa-correlation/',subj_handle,'_task-all_rsa-mask.mat'])
+    
+    % load small mask
+    nii = load_untouch_nii([dir_root,'bids_data/derivatives/',subj_handle,'/masks/rsa-peak_right_dilated.nii']);
+    
+    % define new mask
+    nm = nii.img(mask_idx==1)>0;
+    patterns = patterns(:,nm);
     
     % load SPM.mat
     load([dir_subj,'/rsa-ers/SPM.mat'])
@@ -797,6 +807,7 @@ for subj = 1 : n_subj
     clear run tbl e stim_count
     
     % get design matrix (X) and split into two groups (Xa and Xb)
+    X = [];
     X.raw = SPM.xX.X;
         
     % remove scans/regressors that are not visual (to
@@ -851,17 +862,31 @@ for subj = 1 : n_subj
     tmpA = rsa.stat.fisherDiscrTRDM_trainAtestB(X.b,Y.b,X.a,Y.a,size(X.b,2)-8,1:8);
 
     % get mean
-    group_rdm(subj,:,:,1) = tmpA;%mean(cat(3,tmpA,tmpB),3);
-    group_rdm(subj,:,:,2) = tmpB;%mean(cat(3,tmpA,tmpB),3);
+    group_rdm(subj,:,:,1) = reshape(tmpA(:),size(tmpA));%mean(cat(3,tmpA,tmpB),3);
+    group_rdm(subj,:,:,2) = reshape(tmpB(:),size(tmpB));%mean(cat(3,tmpA,tmpB),3);
     
     fprintf('Subject %02.0f of %02.0f completed...\n',subj,n_subj)
     clear X Y SPM
+end
+
+% cycle through subjects
+figure; hold on
+for subj = 1 : 21
+    subplot(6,4,subj);hold on
+    X = squeeze(mean(group_rdm(subj,1:4,5:8,:),4));
+    %X = reshape(tiedrank(X(:)),size(X));
+    imagesc(X);
+    xlim([0.5 4.5])
+    ylim([0.5 4.5]) 
+colormap(flipud(brewermap(16,'Reds')))   
 end
 
 % get group average
 grand_rdm = squeeze(mean(mean(group_rdm(:,1:4,5:8,:),4),1));
 
 % get difference from ers
-
-
+figure;
+gr = reshape(tiedrank(grand_rdm(:)),size(grand_rdm));
+imagesc(gr);
+colormap(flipud(brewermap(16,'Reds')))
 

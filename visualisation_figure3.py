@@ -147,11 +147,11 @@ colour = [colour[2],(0.7,0.7,0.7)]
 labels = {'title':'',
           'ylabel':'Power-Similarity Correlation (z)',
           'xticklabel':['Rem.','Forgot.'],
-          'yticks':[-0.4,-0.2,0,0.2,0.4],
-          'yticklabel':['-0.4','-0.2','0','0.2','0.4']}
+          'yticks':[-0.5,-0.25,0,0.25,0.5],
+          'yticklabel':['-0.5','-0.25','0','0.25','0.5']}
 
 # plot raincloud
-custom_rainplot(data_raincloud,colour,ax,'calibri',labels,[-0.4,0.4],0.125,[0.013,0.4])
+custom_rainplot(data_raincloud,colour,ax,'calibri',labels,[-0.5,0.5],0.125,[0.013,0.4])
    
 # save image
 pyplot.savefig(wdir + "/figures/fig3a.jpg",bbox_inches='tight',transparent=True,dpi='figure')

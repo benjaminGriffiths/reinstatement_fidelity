@@ -26,7 +26,7 @@ fov = size(nii.img);
 for vox = 1 : numel(img)
 
     % move on if voxel is not in mask
-    if nii.img(vox)~=1; continue; end
+    if nii.img(vox)<1; continue; end
     
     % get subscript co-ordinates of searchlight centre
     [x,y,z] = ind2sub(size(nii.img),vox);
@@ -42,11 +42,13 @@ for vox = 1 : numel(img)
     tmpZ(tmpZ<=0) = []; tmpZ(tmpZ>fov(3)) = [];
 
     % cycle through 3D space
-    for xi = tmpX
-        for yi = tmpY
-            for zi = tmpZ              
-                % mark voxel in new image
-                img(xi,yi,zi) = 1;                
+    for xi = 1:numel(tmpX)
+        for yi = 1:numel(tmpY)
+            for zi = 1:numel(tmpZ)       
+                if sphere(xi,yi,zi)       
+                    % mark voxel in new image
+                    img(tmpX(xi),tmpY(yi),tmpZ(zi)) = 1;   
+                end
             end
         end
     end

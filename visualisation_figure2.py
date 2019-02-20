@@ -136,6 +136,8 @@ data_raincloud = pandas.read_csv(data_fname,
 # restrict to retrieval data
 data_raincloud = data_raincloud.drop(labels = 'encoding', axis = 1)
 
+
+# -- prep frequency
 # load frequency data
 datatmp = pandas.read_csv(wdir + "data/fig2_data/group_task-memory_eeg-freqseries.csv",
                                  delimiter=',',
@@ -153,6 +155,20 @@ data_frequency = data_frequency.assign(condition=pandas.Series(np.tile(np.append
 # create frequency array
 data_frequency = data_frequency.assign(frequency=pandas.Series(np.tile(np.linspace(3,40,75),[42])).values)
 
+
+# -- prep frequency diff
+# get frames for hits and misses
+data_freqA = data_frequency[data_frequency['condition']==1];
+data_freqB = data_frequency[data_frequency['condition']==0];
+data_freqA = data_freqA.reset_index()
+data_freqB = data_freqB.reset_index()
+
+# create new frame
+data_freqdiff = data_freqA
+data_freqdiff['signal'] = data_freqB['signal']-data_freqA['signal']
+
+
+# -- prep time
 # load frequency data
 datatmp = pandas.read_csv(wdir + "data/fig2_data/group_task-memory_eeg-timeseries.csv",
                                  delimiter=',',
@@ -169,6 +185,19 @@ data_time = data_time.assign(condition=pandas.Series(np.tile(np.append(np.zeros(
 
 # create frequency array
 data_time = data_time.assign(frequency=pandas.Series(np.tile(np.linspace(-1,2,61),[42])).values)
+
+
+# -- prep frequency diff
+# get frames for hits and misses
+data_timeA = data_time[data_time['condition']==1];
+data_timeB = data_time[data_time['condition']==0];
+data_timeA = data_timeA.reset_index()
+data_timeB = data_timeB.reset_index()
+
+# create new frame
+data_timediff = data_timeA
+data_timediff['signal'] = data_timeB['signal']-data_timeA['signal']
+
 
 # ----- Raincloud Plot ----- # 
 # create figure
@@ -194,7 +223,7 @@ custom_rainplot(data_raincloud,colour,ax,'Calibri',labels,[-0.5,0.25],0.15,[0.01
 # save image
 pyplot.savefig(wdir + "/figures/fig2a.jpg",bbox_inches='tight',transparent=True,dpi='figure')
   
-# ----- Frequency Series ----- # 
+# ----- Frequency Individual Series ----- # 
 # create figure
 f,ax = pyplot.subplots(1,1)
 f.set_figheight(2.5/2.54) # 4inches 
@@ -220,6 +249,32 @@ custom_timeseriesplot(data_frequency,variables,ax,colour,labels,[3,40],[-0.25,0.
 # save image
 pyplot.savefig(wdir + "/figures/fig2b.jpg",bbox_inches='tight',transparent=True,dpi='figure')
 
+# ----- Frequency Difference Series ----- # 
+# create figure
+f,ax = pyplot.subplots(1,1)
+f.set_figheight(2.5/2.54) # 4inches 
+f.set_figwidth(4/2.54) # 12inches
+f.set_dpi(300)
+
+# define colour scheme
+colour = sns.color_palette("Blues",n_colors=7)
+colour = [colour[5],colour[5]]
+
+# define labels and variables
+labels = {'legend':[''],
+          'ylabel':'Power (z)',
+          'xlabel':'Frequency (Hz.)'}
+
+variables = {'x':'frequency',
+             'y':'signal',
+             'hue':'condition'}
+
+# plot frequency series
+custom_timeseriesplot(data_freqdiff,variables,ax,colour,labels,[3,40],[-0.5,0.5],[5,10,15,20,25,30,35,40],False,True)
+
+# save image
+pyplot.savefig(wdir + "/figures/fig2c.jpg",bbox_inches='tight',transparent=True,dpi='figure')
+
 # ----- Time Series ----- # 
 # create figure
 f,ax = pyplot.subplots(1,1)
@@ -244,4 +299,30 @@ variables = {'x':'frequency',
 custom_timeseriesplot(data_time,variables,ax,colour,labels,[-0.5,2],[-0.25,0.25],[-0.5,0,0.5,1,1.5,2],True,True)
 
 # save image
-pyplot.savefig(wdir + "/figures/fig2c.jpg",bbox_inches='tight',transparent=True,dpi='figure')
+pyplot.savefig(wdir + "/figures/fig2d.jpg",bbox_inches='tight',transparent=True,dpi='figure')
+
+# ----- Time Series ----- # 
+# create figure
+f,ax = pyplot.subplots(1,1)
+f.set_figheight(2.5/2.54) # 4inches 
+f.set_figwidth(4/2.54) # 12inches
+f.set_dpi(300)
+
+# define colour scheme
+colour = sns.color_palette("Blues",n_colors=7)
+colour = [colour[5],colour[5]]
+
+# define labels and variables
+labels = {'legend':[''],
+          'ylabel':'Power (z)',
+          'xlabel':'Time (s)'}
+
+variables = {'x':'frequency',
+             'y':'signal',
+             'hue':'condition'}
+
+# plot frequency series
+custom_timeseriesplot(data_timediff,variables,ax,colour,labels,[-0.5,2],[-0.3,0.3],[-0.5,0,0.5,1,1.5,2],False,True)
+
+# save image
+pyplot.savefig(wdir + "/figures/fig2e.jpg",bbox_inches='tight',transparent=True,dpi='figure')

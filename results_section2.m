@@ -232,7 +232,7 @@ for subj = 1 : n_subj
     freq = smooth_TF_GA(config,freq);
 
     % get pre-post difference
-    percept_diff(subj,:) = squeeze(mean(mean(mean(freq.powspctrm(:,:,:,freq.time>=0.5 & freq.time<=1.5),4) - mean(freq.powspctrm(:,:,:,freq.time<=0),4),2),1));    
+    percept_diff(subj,:,:) = squeeze(mean(mean(freq.powspctrm,2),1));
     
     % get retrieval data
     cfg.channel         = data.label(stat{2}.negclusterslabelmat(stat{1}.inside)==1);
@@ -265,15 +265,21 @@ for subj = 1 : n_subj
 end
 
 % extract variables of interest
-percept_freq = percept_diff;
+percept_freq(:,:,1) = squeeze(mean(percept_diff(:,:,freq.time>=0.5 & freq.time<=1.5),3));
+percept_freq(:,:,2) = squeeze(mean(percept_diff(:,:,freq.time>=-1 & freq.time<=0),3));
+percept_time        = squeeze(mean(percept_diff(:,freq.freq>=8 & freq.freq<=30,:),2));
+
+% extract variables of interest
 memory_freq  = squeeze(mean(memory_diff(:,:,freq.time>=0.5 & freq.time<=1.5,:),3));
 memory_time  = squeeze(mean(memory_diff(:,freq.freq>=8 & freq.freq<=30,:,:),2));
 
 % reshape memory variables
 memory_freq = reshape(memory_freq,[21 150]);
 memory_time = reshape(memory_time,[21 122]);
+percept_freq = reshape(percept_freq,[21 150]);
 
 % save as csv
 csvwrite([dir_repos,'data/fig2_data/group_task-percept_eeg-freqseries.csv'],percept_freq)
+csvwrite([dir_repos,'data/fig2_data/group_task-percept_eeg-timeseries.csv'],percept_time)
 csvwrite([dir_repos,'data/fig2_data/group_task-memory_eeg-freqseries.csv'],memory_freq)
 csvwrite([dir_repos,'data/fig2_data/group_task-memory_eeg-timeseries.csv'],memory_time)
