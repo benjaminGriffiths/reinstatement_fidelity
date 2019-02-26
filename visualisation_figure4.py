@@ -134,8 +134,8 @@ data_raincloud = data_raincloud.drop(labels = ['FrontCent','LeftTemp'], axis = 1
 
 # create figure
 f,ax = pyplot.subplots(1,1)
-f.set_figheight(6.3/2.54) # 4inches 
-f.set_figwidth(3.5/2.54) # 12inches
+f.set_figheight(6/2.54) # 4inches 
+f.set_figwidth(3/2.54) # 12inches
 f.set_dpi(300)
 
 # define colour scheme
@@ -168,8 +168,8 @@ data_raincloud = data_raincloud.drop(labels = 'retrieval', axis = 1)
 
 # create figure
 f,ax = pyplot.subplots(1,1)
-f.set_figheight(6.3/2.54) # 4inches 
-f.set_figwidth(3.5/2.54) # 12inches
+f.set_figheight(6/2.54) # 4inches 
+f.set_figwidth(3/2.54) # 12inches
 f.set_dpi(300)
 
 # define colour scheme
@@ -296,12 +296,12 @@ data_raincloud = pandas.read_csv(data_fname,
                        delimiter=",")
 
 # restrict to retrieval data
-data_raincloud = data_raincloud.drop(labels = ['retrieval','forgotten','partial'], axis = 1)
+data_raincloud = data_raincloud.drop(labels = ['retrieval','forgotten','per_noBold','ret_noBold','ret_noConf'], axis = 1)
 
 # create figure
 f,ax = pyplot.subplots(1,1)
-f.set_figheight(6.3/2.54) # 4inches 
-f.set_figwidth(3.5/2.54) # 12inches
+f.set_figheight(6/2.54) # 4inches 
+f.set_figwidth(3/2.54) # 12inches
 f.set_dpi(300)
 
 # define colour scheme

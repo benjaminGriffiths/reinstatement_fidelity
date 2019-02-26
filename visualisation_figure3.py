@@ -130,7 +130,7 @@ data_raincloud = pandas.read_csv(data_fname,
                        delimiter=",")
 
 # restrict to retrieval data
-data_raincloud = data_raincloud.drop(labels = ['perception','partial'], axis = 1)
+data_raincloud = data_raincloud.drop(labels = ['perception','retrieval','forgotten','ret_noConf'], axis = 1)
 
 # ----- Raincloud Plot ----- # 
 # create figure

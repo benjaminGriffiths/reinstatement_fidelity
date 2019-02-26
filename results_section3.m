@@ -378,7 +378,49 @@ for subj = 1 : n_subj
     clear subjHandle meanPattern patterns
 end
 
-%% Get 
+%% Get Trial BOLD 
+% predefine mean bold
+mean_bold = nan(n_subj,numel(mask_names),n_trials);
+
+% cycle through each subject
+for subj = 1 : n_subj
+       
+    % define key subject strings
+    subj_handle = sprintf('sub-%02.0f',subj);
+    dir_subj = [dir_root,'bids_data/derivatives/',subj_handle,'/'];
+    
+    % load pattern data
+    load([dir_subj,'/rsa-correlation/',subj_handle,'_task-all_rsa-maskedDemeanedVolume.mat'])
+    
+    % load SPM.mat
+    load([dir_subj,'/rsa-correlation/SPM.mat'])
+    
+    % get stimulus tables
+    [stim_details,scan_details] = get_stimulus_tables(dir_root,subj_handle);
+    
+    % cycle through each mask
+    for mask = 1 : numel(mask_names)
+
+        % get design matrix (X) and patterns (Y)
+        X = SPM.xX.X;
+        Y = patterns{mask};
+        
+        % cycle through each trial
+        for trl = 1 : n_trials
+                       
+            % get scans invovled in trial
+            idx = X(:,trl) > 0;
+            x = repmat(X(idx,trl),[1 size(Y,2)]);
+            y = Y(idx,:);
+            
+            % get mean bold signal
+            mean_bold(subj,mask,trl) = mean(mean(x .* y,2),1);
+        end
+    end
+end
+
+% save
+save([dir_root,'bids_data/derivatives/group/rsa-correlation/group_task-all_fmri-meanbold'],'mean_bold')
 
 %% Calculate LDt
 % cycle through each subject
@@ -650,8 +692,14 @@ load([dir_bids,'derivatives/group/eeg/group_task-all_eeg-stat.mat'])
 % load in similarity index
 load([dir_root,'bids_data/derivatives/group/rsa-correlation/group_task-all_fmri-si'])
 
+% load mean bold
+load([dir_root,'bids_data/derivatives/group/rsa-correlation/group_task-all_fmri-meanbold'])
+
+% remove encoding trials from bold
+mean_bold = mean_bold(:,:,[49:96 145:end]);
+
 % predefine matrix for correlation values
-r = zeros(n_subj,numel(mask_names)+1,2);
+r = zeros(n_subj,numel(mask_names)+1,3);
 Xs = {}; Ys = {};
 
 % cycle through each subject
@@ -698,20 +746,23 @@ for subj = 1 : n_subj
             % extract vectors for items
             X = squeeze(rsa_vec(subj,mask,trl_nums));
             Y = nanmean(nanmean(group_freq{subj,mask}.powspctrm(idx,coi,:),3),2);
-            Z = group_freq{subj,mask}.trialinfo(idx,3);
+            A = group_freq{subj,mask}.trialinfo(idx,3);
+            B = squeeze(mean_bold(subj,mask,trl_nums));
             
         else
             % extract vectors for items
             X = squeeze(rsa_vec(subj,mask-1,trl_nums));
             Y = nanmean(nanmean(group_freq{subj,mask-1}.powspctrm(idx,coi,:),3),2);
-            Z = group_freq{subj,mask-1}.trialinfo(idx,3);
+            A = group_freq{subj,mask-1}.trialinfo(idx,3);
+            B = squeeze(mean_bold(subj,mask-1,trl_nums));
         end
         
         %figure;plot(zscore(X),zscore(Y),'k*');title(sprintf('subj%02.0f',subj));xlim([-4 4]);ylim([-4 4])
         
         % correlate
         r(subj,mask,1) = atanh(corr(X,Y));
-        r(subj,mask,2) = atanh(partialcorr(X,Y,Z));
+        r(subj,mask,2) = atanh(partialcorr(X,Y,A));
+        r(subj,mask,3) = atanh(partialcorr(X,Y,B));
         
         if mask == 2 && (subj == 15 || subj == 12)
             Xs{end+1} = X;
@@ -755,8 +806,12 @@ cfg.tail        = -1;
 save([dir_bids,'derivatives/group/rsa-correlation/group_task-retrieval_comb-stat.mat'],'stat','tbl');
 
 % check partial correlation controlling for memory confidence
-grand_freq_partial = grand_freq{2};
-grand_freq_partial.powspctrm = r(:,2,2);
+grand_freq_partial{1}           = grand_freq{1};
+grand_freq_partial{1}.powspctrm = r(:,1,3);
+grand_freq_partial{2}           = grand_freq{2};
+grand_freq_partial{2}.powspctrm = r(:,2,3);
+grand_freq_partial{3}           = grand_freq{2};
+grand_freq_partial{3}.powspctrm = r(:,2,2);
 
 % predefine cell for statistics
 cfg             = [];
@@ -768,13 +823,15 @@ save([dir_bids,'derivatives/group/rsa-correlation/group_task-retrieval_comb-part
    
 %% Extract Raw Power of Cluster 
 % prepare table for stat values
-tbl = array2table(zeros(n_subj,4),'VariableNames',{'perception','retrieval','forgotten','partial'});
+tbl = array2table(zeros(n_subj,6),'VariableNames',{'perception','retrieval','forgotten','per_noBold','ret_noBold','ret_noConf'});
 
 % create table
 tbl.perception(:,1) = grand_freq{1}.powspctrm;
 tbl.retrieval(:,1)  = grand_freq{2}.powspctrm;
 tbl.forgotten(:,1)  = grand_freq{3}.powspctrm;
-tbl.partial(:,1)    = grand_freq_partial.powspctrm;
+tbl.per_noBold(:,1) = grand_freq_partial{1}.powspctrm;
+tbl.ret_noBold(:,1) = grand_freq_partial{2}.powspctrm;
+tbl.ret_noConf(:,1) = grand_freq_partial{3}.powspctrm;
 
 % write table
 writetable(tbl,[dir_bids,'derivatives/group/rsa-correlation/group_task-all_eeg-cluster.csv'],'Delimiter',',')
@@ -790,6 +847,10 @@ load([dir_bids,'derivatives/group/eeg/group_task-all_eeg-stat.mat'])
 % load in similarity index
 load([dir_root,'bids_data/derivatives/group/rsa-correlation/group_task-all_fmri-si'])
 
+% load mean bold
+load([dir_root,'bids_data/derivatives/group/rsa-correlation/group_task-all_fmri-meanbold'])
+mean_bold = mean_bold(:,:,[49:96 145:end]);
+
 % predefine matrix for correlation values
 r = [];
 
@@ -797,7 +858,7 @@ r = [];
 for subj = 1 : n_subj
       
     % extract recalled trial numbers from powspctrm
-    idx         = group_freq{subj,1}.trialinfo(:,2)==1;
+    idx         = 1:numel(group_freq{subj,1}.trialinfo(:,2));%==1;
     trl_nums    = group_freq{subj,1}.trialinfo(idx,1);
             
     % fix numbers
@@ -807,16 +868,17 @@ for subj = 1 : n_subj
     
     % extract vectors for items
     X = squeeze(rsa_vec(subj,1,trl_nums));
+    Z = squeeze(mean_bold(subj,1,trl_nums));
 
     % correlate
     for chan = 1 : size(group_freq{subj,1}.powspctrm,2)
         Y = nanmean(group_freq{subj,1}.powspctrm(idx,chan,:),3);
-        r(subj,chan) = atanh(corr(X,Y));
+        r(subj,chan) = atanh(partialcorr(X,Y,Z));
     end
 end
 
 % prepare data structure for one-sample t-test
-grand_freq{1}              = [];
+grand_freq                = cell(1,1);
 grand_freq{1}.powdimord   = 'rpt_pos';
 grand_freq{1}.dim         = roi.dim;
 grand_freq{1}.inside      = roi.inside(:);
