@@ -75,7 +75,7 @@ def custom_timeseriesplot(data,variables,axes,colour,labels,xlim,ylim,xtick,vert
     sns.lineplot(x=variables['x'],
              y=variables['y'],
              data=data,
-             ci=90,
+             ci='sem',
              hue=variables['condition'],
              palette=colour,
              ax = axes,
@@ -156,7 +156,81 @@ custom_rainplot(data_raincloud,colour,ax,'calibri',labels,[-0.5,0.5],0.125,[0.01
 # save image
 pyplot.savefig(wdir + "/figures/fig3a.jpg",bbox_inches='tight',transparent=True,dpi='figure')
 
-# --- freq series plot --- # 
+# %% --- correlation plot
+# define raincloud data filename
+data_fname = wdir + "data/fig3_data/subj-01_task-ers_xy.csv"
+
+# create figure
+f,ax = pyplot.subplots(1,1)
+f.set_figheight(2.3/2.54) # 4inches 
+f.set_figwidth(2.3/2.54) # 12inches
+f.set_dpi(300)
+
+# load raincloud data
+data_corr = pandas.read_csv(data_fname,
+                       delimiter=",",
+                       header=None,
+                       names=['X','Y'])
+
+# define colour scheme
+colour = sns.color_palette("Greens",n_colors=7)
+colour = [colour[4]]
+
+# draw scatter
+sns.scatterplot(x='X',y='Y',data=data_corr,linewidth=0,alpha = 0.7,ax=ax,**{'s':3,'edgecolors':colour,'c':colour})
+sns.regplot(x='X',y='Y',data=data_corr,ax=ax,scatter=False,color=colour[0])
+
+# aesthetics
+ax.set_ylabel('Similarity Index (z)',fontname='Calibri',fontsize=6,labelpad=5,fontweight='light')   # add Y axis label
+ax.set_xlabel('Alpha/Beta Power (z)',fontname='Calibri',fontsize=6,labelpad=3,fontweight='light')   # add Y axis label
+
+ax.set_ylim(-2,2.6)                  # set Y axis range to 0 -> 1
+ax.set_xlim(-2.5,2.1)                  # set Y axis range to 0 -> 1  
+ax.set_yticks([])
+ax.set_xticks([])
+
+# change axes
+ax.spines['top'].set_visible(False)
+ax.spines['right'].set_visible(False)
+
+# %% Corr 2
+# define raincloud data filename
+data_fname = wdir + "data/fig3_data/subj-02_task-ers_xy.csv"
+
+# create figure
+f,ax = pyplot.subplots(1,1)
+f.set_figheight(2.3/2.54) # 4inches 
+f.set_figwidth(2.3/2.54) # 12inches
+f.set_dpi(300)
+
+# load raincloud data
+data_corr = pandas.read_csv(data_fname,
+                       delimiter=",",
+                       header=None,
+                       names=['X','Y'])
+
+# define colour scheme
+colour = sns.color_palette("Greens",n_colors=7)
+colour = [colour[4]]
+
+# draw scatter
+sns.scatterplot(x='X',y='Y',data=data_corr,linewidth=0,alpha = 0.7,ax=ax,**{'s':3,'edgecolors':colour,'c':colour})
+sns.regplot(x='X',y='Y',data=data_corr,ax=ax,scatter=False,color=colour[0])
+
+# aesthetics
+ax.set_ylabel('Similarity Index (z)',fontname='Calibri',fontsize=6,labelpad=5,fontweight='light')   # add Y axis label
+ax.set_xlabel('Alpha/Beta Power (z)',fontname='Calibri',fontsize=6,labelpad=3,fontweight='light')   # add Y axis label
+
+ax.set_ylim(-2.3,2.6)                  # set Y axis range to 0 -> 1
+ax.set_xlim(-2.6,3.1)                  # set Y axis range to 0 -> 1  
+ax.set_yticks([])
+ax.set_xticks([])
+
+# change axes
+ax.spines['top'].set_visible(False)
+ax.spines['right'].set_visible(False)
+
+# %% --- freq series plot --- # 
 # load frequency data
 data = pandas.read_csv(wdir + "data/fig3_data/group_task-all_eeg-freqseries.csv",
                        delimiter=',')
@@ -166,14 +240,13 @@ data = data[data['condition']==2]
 
 # create figure
 f,ax = pyplot.subplots(1,1)
-f.set_figheight(2.5/2.54) # 4inches 
-f.set_figwidth(4/2.54) # 12inches
+f.set_figheight(2/2.54) # 4inches 
+f.set_figwidth(3.7/2.54) # 12inches
 f.set_dpi(300)
 
 # define colour scheme
 colour = sns.color_palette("Greens",n_colors=7)
 colour = [colour[4]]
-
 
 # define labels and variables
 labels = {'legend':[''],
@@ -185,9 +258,9 @@ variables = {'x':'freq',
              'condition':'condition'}
 
 # plot frequency series
-custom_timeseriesplot(data,variables,ax,colour,labels,[3,30],[-0.1,0.05],[5,10,15,20,25,30],False,True)
+custom_timeseriesplot(data,variables,ax,colour,labels,[3,30],[-0.1,0.08],[5,10,15,20,25,30],False,True)
 
-# --- time series plot --- # 
+# %% --- time series plot --- # 
 # load time data
 data = pandas.read_csv(wdir + "data/fig3_data/group_task-all_eeg-timeseries.csv",
                        delimiter=',')
@@ -197,8 +270,8 @@ data = data[data['condition']==2]
 
 # create figure
 f,ax = pyplot.subplots(1,1)
-f.set_figheight(2.5/2.54) # 4inches 
-f.set_figwidth(4/2.54) # 12inches
+f.set_figheight(2/2.54) # 4inches 
+f.set_figwidth(3.7/2.54) # 12inches
 f.set_dpi(300)
 
 # define colour scheme
@@ -215,4 +288,4 @@ variables = {'x':'time',
              'condition':'condition'}
 
 # plot time series
-custom_timeseriesplot(data,variables,ax,colour,labels,[-0.5,2],[-0.1,0.1],[-0.5,0,0.5,1,1.5,2],True,True)
+custom_timeseriesplot(data,variables,ax,colour,labels,[-0.5,2],[-0.1,0.05],[-0.5,0,0.5,1,1.5,2],True,True)

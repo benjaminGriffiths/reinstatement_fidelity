@@ -203,7 +203,7 @@ for subj = 1 : n_subj
     cfg.method          = 'wavelet';
     cfg.width           = 6;
     cfg.output          = 'pow';
-    cfg.toi             = -1:0.05:2;
+    cfg.toi             = -2:0.05:2;
     cfg.foi             = 3:0.5:40;
     cfg.pad             = 'nextpow2';
     
@@ -224,7 +224,7 @@ for subj = 1 : n_subj
     % z-transform power
     freq.powspctrm = (freq.powspctrm - avg_pow) ./ std_pow;
     clear raw_pow avg_pow std_pow
-
+    
     % smooth
     config = [];
     config.fwhm_t=0.2;

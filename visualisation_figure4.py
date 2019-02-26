@@ -75,7 +75,7 @@ def custom_timeseriesplot(data,variables,axes,colour,labels,xlim,ylim,xtick,vert
     sns.lineplot(x=variables['x'],
              y=variables['y'],
              data=data,
-             ci=90,
+             ci='sem',
              hue=variables['condition'],
              palette=colour,
              ax = axes,

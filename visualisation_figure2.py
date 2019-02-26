@@ -71,14 +71,14 @@ def custom_rainplot(data,colour,axes,fontname,labels,ylim,offset,pvalue):
     axes.spines['left'].set_linewidth(1)
     
                
-def custom_timeseriesplot(data,variables,axes,colour,labels,xlim,ylim,xtick,legend,vertical):
+def custom_timeseriesplot(data,variables,axes,colour,labels,xlim,ylim,xtick,legend,vertical,horizontal=False):
     
     sns.lineplot(x=variables['x'],
              y=variables['y'],
              data=data,
              hue=variables['hue'],
              hue_order=[1,0],
-             ci=90,
+             ci='sem',
              palette=colour,
              ax = axes,
              linewidth=1)
@@ -93,6 +93,8 @@ def custom_timeseriesplot(data,variables,axes,colour,labels,xlim,ylim,xtick,lege
     # add horizontal line
     if vertical:
         ax.axvline(x=0, linewidth = 1, color = [0,0,0], linestyle='--')
+    if horizontal:
+        ax.axhline(y=0, linewidth = 1, color = [0,0,0], linestyle='-')
     
     # aesthetics
     ax.set_ylabel(labels['ylabel'],fontname='Calibri',fontsize=6,labelpad=-5,fontweight='light')   # add Y axis label
@@ -199,7 +201,7 @@ data_timediff = data_timeA
 data_timediff['signal'] = data_timeB['signal']-data_timeA['signal']
 
 
-# ----- Raincloud Plot ----- # 
+# %% ----- Raincloud Plot ----- # 
 # create figure
 f,ax = pyplot.subplots(1,1)
 f.set_figheight(6.2/2.54) # 4inches 
@@ -223,7 +225,7 @@ custom_rainplot(data_raincloud,colour,ax,'Calibri',labels,[-0.5,0.25],0.15,[0.01
 # save image
 pyplot.savefig(wdir + "/figures/fig2a.jpg",bbox_inches='tight',transparent=True,dpi='figure')
   
-# ----- Frequency Individual Series ----- # 
+# %% ----- Frequency Individual Series ----- # 
 # create figure
 f,ax = pyplot.subplots(1,1)
 f.set_figheight(2.5/2.54) # 4inches 
@@ -249,7 +251,7 @@ custom_timeseriesplot(data_frequency,variables,ax,colour,labels,[3,40],[-0.25,0.
 # save image
 pyplot.savefig(wdir + "/figures/fig2b.jpg",bbox_inches='tight',transparent=True,dpi='figure')
 
-# ----- Frequency Difference Series ----- # 
+# %% ----- Frequency Difference Series ----- # 
 # create figure
 f,ax = pyplot.subplots(1,1)
 f.set_figheight(2.5/2.54) # 4inches 
@@ -262,7 +264,7 @@ colour = [colour[5],colour[5]]
 
 # define labels and variables
 labels = {'legend':[''],
-          'ylabel':'Power (z)',
+          'ylabel':'Power\n(Rem. > Forg.; z)',
           'xlabel':'Frequency (Hz.)'}
 
 variables = {'x':'frequency',
@@ -270,12 +272,12 @@ variables = {'x':'frequency',
              'hue':'condition'}
 
 # plot frequency series
-custom_timeseriesplot(data_freqdiff,variables,ax,colour,labels,[3,40],[-0.5,0.5],[5,10,15,20,25,30,35,40],False,True)
+custom_timeseriesplot(data_freqdiff,variables,ax,colour,labels,[3,40],[-0.25,0.1],[5,10,15,20,25,30,35,40],False,True,True)
 
 # save image
 pyplot.savefig(wdir + "/figures/fig2c.jpg",bbox_inches='tight',transparent=True,dpi='figure')
 
-# ----- Time Series ----- # 
+# %% ----- Time Series ----- # 
 # create figure
 f,ax = pyplot.subplots(1,1)
 f.set_figheight(2.5/2.54) # 4inches 
@@ -301,7 +303,7 @@ custom_timeseriesplot(data_time,variables,ax,colour,labels,[-0.5,2],[-0.25,0.25]
 # save image
 pyplot.savefig(wdir + "/figures/fig2d.jpg",bbox_inches='tight',transparent=True,dpi='figure')
 
-# ----- Time Series ----- # 
+# %% ----- Time Series Individual ----- # 
 # create figure
 f,ax = pyplot.subplots(1,1)
 f.set_figheight(2.5/2.54) # 4inches 
@@ -314,7 +316,7 @@ colour = [colour[5],colour[5]]
 
 # define labels and variables
 labels = {'legend':[''],
-          'ylabel':'Power (z)',
+          'ylabel':'Power\n(Rem. > Forg.; z)',
           'xlabel':'Time (s)'}
 
 variables = {'x':'frequency',
@@ -322,7 +324,7 @@ variables = {'x':'frequency',
              'hue':'condition'}
 
 # plot frequency series
-custom_timeseriesplot(data_timediff,variables,ax,colour,labels,[-0.5,2],[-0.3,0.3],[-0.5,0,0.5,1,1.5,2],False,True)
+custom_timeseriesplot(data_timediff,variables,ax,colour,labels,[-0.5,2],[-0.3,0.2],[-0.5,0,0.5,1,1.5,2],False,True,True)
 
 # save image
 pyplot.savefig(wdir + "/figures/fig2e.jpg",bbox_inches='tight',transparent=True,dpi='figure')
