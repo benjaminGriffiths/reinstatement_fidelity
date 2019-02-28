@@ -122,4 +122,4 @@ labels = {'title':'',
 custom_rainplot(data_raincloud,colour,ax,'calibri',labels,[-0.1,0.2],0.125,[0.0001,0.0001])
    
 # save image
-pyplot.savefig(wdir + "/figures/fig1a.jpg",bbox_inches='tight',transparent=True,dpi='figure')
+pyplot.savefig(wdir + "/figures/fig1a.tif",bbox_inches='tight',transparent=True,dpi='figure')

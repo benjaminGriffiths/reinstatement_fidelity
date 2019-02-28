@@ -187,7 +187,7 @@ labels = {'title':'',
 custom_rainplot(data_raincloud,colour,ax,'calibri',labels,[-0.5,0.25],0.125,[0.0001])
    
 # save image
-pyplot.savefig(wdir + "/figures/fig4a.jpg",bbox_inches='tight',transparent=True,dpi='figure')
+pyplot.savefig(wdir + "/figures/fig4b.jpg",bbox_inches='tight',transparent=True,dpi='figure')
 
 
 # -- prep frequency
@@ -241,7 +241,7 @@ variables = {'x':'frequency',
 custom_timeseriesplot(data_freqdiff,variables,ax,colour,labels,[3,40],[-0.5,0.1],[5,10,15,20,25,30,35,40],True,True)
 
 # save image
-pyplot.savefig(wdir + "/figures/fig2b.jpg",bbox_inches='tight',transparent=True,dpi='figure')
+pyplot.savefig(wdir + "/figures/fig4c.jpg",bbox_inches='tight',transparent=True,dpi='figure')
 
 
 # -- prep time
@@ -285,7 +285,7 @@ variables = {'x':'frequency',
 custom_timeseriesplot(data_time,variables,ax,colour,labels,[-0.5,2],[-0.25,0.25],[-0.5,0,0.5,1,1.5,2],True,True)
 
 # save image
-pyplot.savefig(wdir + "/figures/fig2b.jpg",bbox_inches='tight',transparent=True,dpi='figure')
+pyplot.savefig(wdir + "/figures/fig4d.jpg",bbox_inches='tight',transparent=True,dpi='figure')
 
 # %% ----- Correlation Plot ----- # 
 # define raincloud data filename
@@ -319,4 +319,4 @@ labels = {'title':'',
 custom_rainplot(data_raincloud,colour,ax,'calibri',labels,[-0.4,0.4],0.125,[0.033])
    
 # save image
-pyplot.savefig(wdir + "/figures/fig3a.jpg",bbox_inches='tight',transparent=True,dpi='figure')
+pyplot.savefig(wdir + "/figures/fig4e.jpg",bbox_inches='tight',transparent=True,dpi='figure')

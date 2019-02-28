@@ -130,7 +130,7 @@ data_raincloud = pandas.read_csv(data_fname,
                        delimiter=",")
 
 # restrict to retrieval data
-data_raincloud = data_raincloud.drop(labels = ['perception','retrieval','forgotten','ret_noConf'], axis = 1)
+data_raincloud = data_raincloud.drop(labels = ['perception','per_noBold','ret_noBold','ret_noConf'], axis = 1)
 
 # ----- Raincloud Plot ----- # 
 # create figure
@@ -193,6 +193,9 @@ ax.set_xticks([])
 ax.spines['top'].set_visible(False)
 ax.spines['right'].set_visible(False)
 
+# save image
+pyplot.savefig(wdir + "/figures/fig3b.jpg",bbox_inches='tight',transparent=True,dpi='figure')
+
 # %% Corr 2
 # define raincloud data filename
 data_fname = wdir + "data/fig3_data/subj-02_task-ers_xy.csv"
@@ -230,62 +233,5 @@ ax.set_xticks([])
 ax.spines['top'].set_visible(False)
 ax.spines['right'].set_visible(False)
 
-# %% --- freq series plot --- # 
-# load frequency data
-data = pandas.read_csv(wdir + "data/fig3_data/group_task-all_eeg-freqseries.csv",
-                       delimiter=',')
-
-# restrict to remembered data
-data = data[data['condition']==2]
-
-# create figure
-f,ax = pyplot.subplots(1,1)
-f.set_figheight(2/2.54) # 4inches 
-f.set_figwidth(3.7/2.54) # 12inches
-f.set_dpi(300)
-
-# define colour scheme
-colour = sns.color_palette("Greens",n_colors=7)
-colour = [colour[4]]
-
-# define labels and variables
-labels = {'legend':[''],
-          'ylabel':'Power (z)',
-          'xlabel':'Frequency (Hz.)'}
-
-variables = {'x':'freq',
-             'y':'signal',
-             'condition':'condition'}
-
-# plot frequency series
-custom_timeseriesplot(data,variables,ax,colour,labels,[3,30],[-0.1,0.08],[5,10,15,20,25,30],False,True)
-
-# %% --- time series plot --- # 
-# load time data
-data = pandas.read_csv(wdir + "data/fig3_data/group_task-all_eeg-timeseries.csv",
-                       delimiter=',')
-
-# restrict to remembered data
-data = data[data['condition']==2]
-
-# create figure
-f,ax = pyplot.subplots(1,1)
-f.set_figheight(2/2.54) # 4inches 
-f.set_figwidth(3.7/2.54) # 12inches
-f.set_dpi(300)
-
-# define colour scheme
-colour = sns.color_palette("Greens",n_colors=7)
-colour = [colour[4]]
-
-# define labels and variables
-labels = {'legend':[''],
-          'ylabel':'Power (z)',
-          'xlabel':'Time (s)'}
-
-variables = {'x':'time',
-             'y':'signal',
-             'condition':'condition'}
-
-# plot time series
-custom_timeseriesplot(data,variables,ax,colour,labels,[-0.5,2],[-0.1,0.05],[-0.5,0,0.5,1,1.5,2],True,True)
+# save image
+pyplot.savefig(wdir + "/figures/fig3c.jpg",bbox_inches='tight',transparent=True,dpi='figure')

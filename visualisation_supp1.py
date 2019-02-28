@@ -116,7 +116,7 @@ labels = {'title':'',
 custom_rainplot(data_raincloud,colour,ax,'calibri',labels,[-1,4],0.125,[0.0001,0.005,0.008])
    
 # save image
-pyplot.savefig(wdir + "/figures/fig4a.jpg",bbox_inches='tight',transparent=True,dpi='figure')
+pyplot.savefig(wdir + "/figures/sup1a.jpg",bbox_inches='tight',transparent=True,dpi='figure')
 
 # ----- Retrieval Plot ----- # 
 # define raincloud data filename
@@ -147,7 +147,7 @@ labels = {'title':'',
 custom_rainplot(data_raincloud,colour,ax,'calibri',labels,[-1,4],0.125,[0.0001,0.0005])
    
 # save image
-pyplot.savefig(wdir + "/figures/fig4b.jpg",bbox_inches='tight',transparent=True,dpi='figure')
+pyplot.savefig(wdir + "/figures/sup1b.jpg",bbox_inches='tight',transparent=True,dpi='figure')
 
 # ----- Memory Plot ----- # 
 # define raincloud data filename
@@ -178,5 +178,5 @@ labels = {'title':'',
 custom_rainplot(data_raincloud,colour,ax,'calibri',labels,[-1,2],0.125,[0.0001,0.005,0.008])
    
 # save image
-pyplot.savefig(wdir + "/figures/fig4c.jpg",bbox_inches='tight',transparent=True,dpi='figure')
+pyplot.savefig(wdir + "/figures/sup1c.jpg",bbox_inches='tight',transparent=True,dpi='figure')
 
