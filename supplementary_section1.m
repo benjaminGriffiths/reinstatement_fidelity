@@ -9,6 +9,7 @@ spm_jobman('initcfg');
 
 % add RSA toolbox to path
 addpath(genpath('Y:/projects/general/rsatoolbox-develop'))
+addpath(genpath('Y:\projects\general\GLMdenoise-1.4\'))
 
 %% Define Key Parameters
 dir_root    = 'Y:/projects/reinstatement_fidelity/';        % data directory
@@ -49,93 +50,55 @@ for subj = 1 : n_subj
     % define 'length of scan'
     LoS = 0;
         
+    % predefine data and design cells
+    data    = cell(1,8);
+    design  = cell(1,8);
+    
     % cycle through each run
     for run = 1 : n_runs
 
+        % load data
+        nii = load_nii([dir_root,'bids_data/derivatives/',subj_handle,'/func/swua',subj_handle,'_task-rf_run-',num2str(run),'_bold.nii']);
+        
+        % add bold to data cell
+        data{run} = single(nii.img(:,:,:,4:end-5));
+        
         % load event table
         tbl = readtable([dir_root,'bids_data/',subj_handle,'/func/',subj_handle,'_task-rf_run-',num2str(run),'_events.tsv'],'FileType','text','Delimiter','\t');
         
         % remove first three volumes and last five volumes
         tbl = tbl(4:end-5,:);
         
-        % adjust time accordingly
-        tbl.onset = tbl.onset - 30000;
-        
-        % add length of prior scans to this event table
-        tbl.onset = tbl.onset + LoS;
-        
-        % extract 'length of scan' and add on additional scan for next iteration
-        LoS = max(tbl.onset) + (TR*EEG_sample)-1;
-        
-        % cut table to stimulus onset
-        tbl = tbl(ismember(tbl.trial_type,'Stimulus Onset'),:);
+        % predefine design matrix
+        design{run} = zeros(size(data{run},4),1);
         
         % cycle through every event
         for e = 1 : size(tbl,1)
             
-            % add key values
-            events_table.onset(count)           = tbl.onset(e);
-            events_table.isVisual(count)        = strcmpi(tbl.modality(e),'visual');
-            events_table.isEncoding(count)      = strcmpi(tbl.operation(e),'encoding');
-            events_table.isRemembered(count)    = tbl.recalled(e);
-            
-            % get button press onset (if pressed)
-            if ~isnan(tbl.rt(e)); button_onset(end+1,1) = tbl.onset(e) + tbl.rt(e); end %#ok<SAGROW>
+            % find stimulus onset
+            if strcmpi(tbl.trial_type{e},'stimulus onset')
                 
-            % update counter
-            count = count + 1;
-            
+                % get all other trials
+                all_others  = tbl.onset(~ismember(1:numel(tbl.onset),e));
+                all_labels  = tbl.trial_type(~ismember(1:numel(tbl.onset),e));
+                                
+                % find nearest scan
+                idx         = knnsearch(all_others,tbl.onset(e));
+                
+                % get volume number
+                vol_num = str2double(all_labels{idx}(7:end))-3;
+                
+                % add to design
+                design{run}(vol_num,1) = 1;               
+            end            
         end
     end
        
-    % convert event onsets and button presses from EEG samples to seconds
-    events_table.onset =  events_table.onset ./ EEG_sample;
-    button_onset = button_onset ./ EEG_sample;    
     
-    % load movement parameters
-    R = load([dir_root,'bids_data/derivatives/',subj_handle,'/func/rp_a',subj_handle,'_task-rf_run-1_bold.txt']);
+    % run glm denoise
+    [results,denoiseddata] = GLMdenoisedata(design,data,3,TR,[],[],[],'example1figures');
     
-    % find first three volumes and last five volumes of each run
-    bad_scans = zeros(8*n_runs,1);
-    for run = 1 : n_runs
-        bad_scans(1+(8*(run-1)):8*run) = [1 2 3 251 252 253 254 255] + n_volumes*(run-1);
-    end
     
-    % remove these scans
-    R(bad_scans,:) = [];
-    
-    % define number of volumes remaining in a run
-    n_volumes_adj = n_volumes - 8;
-    
-    % add regressors that model the per-block linear change
-    R(1+(n_volumes_adj*0):n_volumes_adj*1,7) = linspace(0,1,n_volumes_adj);
-    R(1+(n_volumes_adj*2):n_volumes_adj*3,8) = linspace(0,1,n_volumes_adj);
-    R(1+(n_volumes_adj*4):n_volumes_adj*5,9) = linspace(0,1,n_volumes_adj);
-    R(1+(n_volumes_adj*6):n_volumes_adj*7,10) = linspace(0,1,n_volumes_adj);
-    R(1+(n_volumes_adj*1):n_volumes_adj*2,11) = linspace(0,1,n_volumes_adj);
-    R(1+(n_volumes_adj*3):n_volumes_adj*4,12) = linspace(0,1,n_volumes_adj);
-    R(1+(n_volumes_adj*5):n_volumes_adj*6,13) = linspace(0,1,n_volumes_adj);
-    R(1+(n_volumes_adj*7):n_volumes_adj*8,14) = linspace(0,1,n_volumes_adj);
-    
-    % add regressors that model the per-block constant
-    R(1+(n_volumes_adj*0):n_volumes_adj*1,15) = zeros(1,n_volumes_adj);
-    R(1+(n_volumes_adj*2):n_volumes_adj*3,16) = zeros(1,n_volumes_adj);
-    R(1+(n_volumes_adj*4):n_volumes_adj*5,17) = zeros(1,n_volumes_adj);
-    R(1+(n_volumes_adj*6):n_volumes_adj*7,18) = zeros(1,n_volumes_adj);
-    R(1+(n_volumes_adj*1):n_volumes_adj*2,19) = zeros(1,n_volumes_adj);
-    R(1+(n_volumes_adj*3):n_volumes_adj*4,20) = zeros(1,n_volumes_adj);
-    R(1+(n_volumes_adj*5):n_volumes_adj*6,21) = zeros(1,n_volumes_adj);
-    R(1+(n_volumes_adj*7):n_volumes_adj*8,21) = zeros(1,n_volumes_adj); 
-    
-    % save nuisance regressors
-    save([dir_root,'bids_data/derivatives/',subj_handle,'/spm/R.mat'],'R')            
-    
-    % get all scans for GLM
-    all_scans = get_functional_files([dir_root,'bids_data/derivatives/',subj_handle,'/'],'swua');
-    all_scans = all_scans{1};
-    
-    % remove bad scans
-    all_scans(bad_scans) = [];
     
     % define parameters for GLM
     matlabbatch{1}.spm.stats.fmri_spec.volt             = 1;
