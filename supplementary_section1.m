@@ -26,7 +26,7 @@ scan_vox    = [3 3 4];                                      % scan voxel size
 % add subfunctions
 addpath([dir_repos,'subfunctions'])
 
-%% Run First-Level Analysis
+%% Get Denoised GLM
 % cycle through each subject
 for subj = 1 : n_subj
     
@@ -34,22 +34,6 @@ for subj = 1 : n_subj
     subj_handle = sprintf('sub-%02.0f',subj);
     dir_subj = [dir_root,'bids_data/',subj_handle,'/'];
     
-    % make directory for SPM data
-    mkdir([dir_root,'bids_data/derivatives/',subj_handle,'/spm/'])
-    
-    % delete old SPM file if it exists
-    if exist([dir_root,'bids_data/derivatives/',subj_handle,'/spm/SPM.mat'],'file'); delete([dir_root,'bids_data/derivatives/',subj_handle,'/spm/SPM.mat']); end
-    
-    % create cell to hold events data
-    events_table  = array2table(zeros(n_trials*2,4), 'VariableNames', {'onset','isVisual','isEncoding','isRemembered'});
-    count = 1;
-    
-    % create array to hold button press onsets
-    button_onset = [];
-    
-    % define 'length of scan'
-    LoS = 0;
-        
     % predefine data and design cells
     data    = cell(1,8);
     design  = cell(1,8);
@@ -70,7 +54,7 @@ for subj = 1 : n_subj
         tbl = tbl(4:end-5,:);
         
         % predefine design matrix
-        design{run} = zeros(size(data{run},4),1);
+        design{run} = zeros(size(data{run},4),6);
         
         % cycle through every event
         for e = 1 : size(tbl,1)
@@ -88,17 +72,128 @@ for subj = 1 : n_subj
                 % get volume number
                 vol_num = str2double(all_labels{idx}(7:end))-3;
                 
+                % define regressor num
+                if strcmpi(tbl.operation{e},'encoding') && strcmpi(tbl.modality{e},'visual')
+                    reg_num = 1;
+                elseif strcmpi(tbl.operation{e},'encoding') && strcmpi(tbl.modality{e},'auditory')
+                    reg_num = 2;
+                elseif strcmpi(tbl.operation{e},'retrieval') && strcmpi(tbl.modality{e},'visual') && tbl.recalled(e) == 1
+                    reg_num = 3;
+                elseif strcmpi(tbl.operation{e},'retrieval') && strcmpi(tbl.modality{e},'auditory') && tbl.recalled(e) == 1
+                    reg_num = 4;
+                elseif strcmpi(tbl.operation{e},'retrieval') && strcmpi(tbl.modality{e},'visual') && tbl.recalled(e) == 0
+                    reg_num = 5;
+                elseif strcmpi(tbl.operation{e},'retrieval') && strcmpi(tbl.modality{e},'auditory') && tbl.recalled(e) == 0
+                    reg_num = 6;
+                end
+                                    
                 % add to design
-                design{run}(vol_num,1) = 1;               
+                design{run}(vol_num,reg_num) = 1;    
             end            
         end
     end
-       
+           
+    % combine runs 1-4 and 5-8
+    cat_data{1} = cat(4,data{1},data{2},data{3},data{4});
+    cat_data{2} = cat(4,data{5},data{6},data{7},data{8});
+    
+    % combine designs 1-4 and 5-8
+    cat_design{1} = cat(1,design{1},design{2},design{3},design{4});
+    cat_design{2} = cat(1,design{5},design{6},design{7},design{8});
     
     % run glm denoise
-    [results,denoiseddata] = GLMdenoisedata(design,data,3,TR,[],[],[],'example1figures');
+    [results] = GLMdenoisedata(cat_design,cat_data,3,TR,'assume',[],struct('numboots',100,'numpcstotry',20,'wantparametric',1),[]);
     
+    % extract beta maps
+    beta = results.parametric.parameters;
     
+    % save denoised data
+    for run = 1 : n_runs
+        
+        % get idx
+        idx     = mod(run,4); if idx==0;idx=4;end
+        block   = floor((run-1)/4)+1;
+        trls    = size(design{1})*(idx-1)+1 : size(design{1},1)*idx;
+        
+        % load old data
+        nii = load_nii([dir_root,'bids_data/derivatives/',subj_handle,'/func/swua',subj_handle,'_task-rf_run-',num2str(run),'_bold.nii']);
+        
+        % replace image with new data
+        nii.img = cat_data{block}(:,:,:,trls);
+            
+        % update template name and variables
+        nii.hdr.dime.dim(5) = 247;
+        nii.fileprefix = [dir_root,'bids_data/derivatives/',subj_handle,'/func/dswua',subj_handle,'_task-rf_run-',num2str(run),'_bold'];
+        
+        % save nii
+        save_nii(nii,[dir_root,'bids_data/derivatives/',subj_handle,'/func/dswua',subj_handle,'_task-rf_run-',num2str(run),'_bold.nii'])
+        
+    end
+end  
+    
+%% Run First-Level Analysis
+% cycle through each subject
+for subj = 1 : n_subj
+    
+    % define key subject strings
+    subj_handle = sprintf('sub-%02.0f',subj);
+    dir_subj = [dir_root,'bids_data/',subj_handle,'/'];
+    
+    % make directory for SPM data
+    mkdir([dir_root,'bids_data/derivatives/',subj_handle,'/spm_denoised/'])
+    
+    % delete old SPM file if it exists
+    if exist([dir_root,'bids_data/derivatives/',subj_handle,'/spm_denoised/SPM.mat'],'file'); delete([dir_root,'bids_data/derivatives/',subj_handle,'/spm_denoised/SPM.mat']); end
+    
+    % create cell to hold events data
+    events_table  = array2table(zeros(n_trials*2,4), 'VariableNames', {'onset','isVisual','isEncoding','isRemembered'});
+    count = 1;
+    
+    % define 'length of scan'
+    LoS = 0;
+        
+    % cycle through each run
+    for run = 1 : n_runs
+
+        % load event table
+        tbl = readtable([dir_root,'bids_data/',subj_handle,'/func/',subj_handle,'_task-rf_run-',num2str(run),'_events.tsv'],'FileType','text','Delimiter','\t');
+        
+        % remove first three volumes and last five volumes
+        tbl = tbl(4:end-5,:);
+        
+        % adjust time accordingly
+        tbl.onset = tbl.onset - 30000;
+        
+        % add length of prior scans to this event table
+        tbl.onset = tbl.onset + LoS;
+        
+        % extract 'length of scan' and add on additional scan for next iteration
+        LoS = max(tbl.onset) + (TR*EEG_sample)-1;
+        
+        % cut table to stimulus onset
+        tbl = tbl(ismember(tbl.trial_type,'Stimulus Onset'),:);
+        
+        % cycle through every event
+        for e = 1 : size(tbl,1)
+            
+            % add key values
+            events_table.onset(count)           = tbl.onset(e);
+            events_table.isVisual(count)        = strcmpi(tbl.modality(e),'visual');
+            events_table.isEncoding(count)      = strcmpi(tbl.operation(e),'encoding');
+            events_table.isRemembered(count)    = tbl.recalled(e);
+            
+            % update counter
+            count = count + 1;
+            
+        end
+    end
+       
+    % convert event onsets and button presses from EEG samples to seconds
+    events_table.onset =  events_table.onset ./ EEG_sample;
+    
+    % get all scans for GLM
+    all_scans = get_functional_files([dir_root,'bids_data/derivatives/',subj_handle,'/'],'dswua',true);
+    all_scans = all_scans{1};
     
     % define parameters for GLM
     matlabbatch{1}.spm.stats.fmri_spec.volt             = 1;
@@ -106,14 +201,14 @@ for subj = 1 : n_subj
     matlabbatch{1}.spm.stats.fmri_spec.mthresh          = 0.8;
     matlabbatch{1}.spm.stats.fmri_spec.mask             = {''};
     matlabbatch{1}.spm.stats.fmri_spec.cvi              = 'AR(1)';
-    matlabbatch{1}.spm.stats.fmri_spec.dir              = {[dir_root,'bids_data/derivatives/',subj_handle,'/spm']};
+    matlabbatch{1}.spm.stats.fmri_spec.dir              = {[dir_root,'bids_data/derivatives/',subj_handle,'/spm_denoised']};
     matlabbatch{1}.spm.stats.fmri_spec.fact             = struct('name', {}, 'levels', {});
     matlabbatch{1}.spm.stats.fmri_spec.bases.hrf.derivs = [0 0];
     matlabbatch{1}.spm.stats.fmri_spec.sess.multi       = {''};
     matlabbatch{1}.spm.stats.fmri_spec.sess.regress     = struct('name', {}, 'val', {});
     matlabbatch{1}.spm.stats.fmri_spec.sess.hpf         = 128;
     matlabbatch{1}.spm.stats.fmri_spec.sess.scans       = all_scans;
-    matlabbatch{1}.spm.stats.fmri_spec.sess.multi_reg   = {[dir_root,'bids_data/derivatives/',subj_handle,'/spm/R.mat']};   
+    matlabbatch{1}.spm.stats.fmri_spec.sess.multi_reg   = {''};   
     matlabbatch{1}.spm.stats.fmri_spec.timing.units     = 'secs';
     matlabbatch{1}.spm.stats.fmri_spec.timing.RT        = 2;
     matlabbatch{1}.spm.stats.fmri_spec.timing.fmri_t    = 32;
@@ -175,13 +270,6 @@ for subj = 1 : n_subj
     matlabbatch{1}.spm.stats.fmri_spec.sess.cond(8).tmod        = 0;
     matlabbatch{1}.spm.stats.fmri_spec.sess.cond(8).orth        = 1;
     matlabbatch{1}.spm.stats.fmri_spec.sess.cond(8).pmod        = struct('name',{},'param',{},'poly',{});
-    
-    matlabbatch{1}.spm.stats.fmri_spec.sess.cond(9).name        = 'ButtonPress';
-    matlabbatch{1}.spm.stats.fmri_spec.sess.cond(9).onset       = button_onset;
-    matlabbatch{1}.spm.stats.fmri_spec.sess.cond(9).duration    = 0.5;
-    matlabbatch{1}.spm.stats.fmri_spec.sess.cond(9).tmod        = 0;
-    matlabbatch{1}.spm.stats.fmri_spec.sess.cond(9).orth        = 1;
-    matlabbatch{1}.spm.stats.fmri_spec.sess.cond(9).pmod        = struct('name',{},'param',{},'poly',{});
         
     % specify model
     spm_jobman('run',matlabbatch)
@@ -190,23 +278,23 @@ for subj = 1 : n_subj
     % estimate GLM
     matlabbatch{1}.spm.stats.fmri_est.write_residuals           = 0;
     matlabbatch{1}.spm.stats.fmri_est.method.Classical          = 1;
-    matlabbatch{1}.spm.stats.fmri_est.spmmat                    = {[dir_root,'bids_data/derivatives/',subj_handle,'/spm/SPM.mat']};
+    matlabbatch{1}.spm.stats.fmri_est.spmmat                    = {[dir_root,'bids_data/derivatives/',subj_handle,'/spm_denoised/SPM.mat']};
       
     % contrast betas
     matlabbatch{2}.spm.stats.con.delete                         = 0;
     matlabbatch{2}.spm.stats.con.consess{1}.tcon.name           = 'contrastModality_atEncoding';
-    matlabbatch{2}.spm.stats.con.consess{1}.tcon.convec         = [1 0 0 0 -1 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0];
+    matlabbatch{2}.spm.stats.con.consess{1}.tcon.convec         = [1 1 -1 -1 0 0 0 0];
     matlabbatch{2}.spm.stats.con.consess{1}.tcon.sessrep        = 'none';
     matlabbatch{2}.spm.stats.con.consess{2}.tcon.name           = 'contrastModality_atRetrieval';
-    matlabbatch{2}.spm.stats.con.consess{2}.tcon.convec         = [0 0 1 0 0 0 -1 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0];
+    matlabbatch{2}.spm.stats.con.consess{2}.tcon.convec         = [0 0 0 0 1 1 -1 -1];
     matlabbatch{2}.spm.stats.con.consess{2}.tcon.sessrep        = 'none';
     matlabbatch{2}.spm.stats.con.consess{3}.tcon.name           = 'retrievalSuccess_visual';
-    matlabbatch{2}.spm.stats.con.consess{3}.tcon.convec         = [0 0 1 -1 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0];
+    matlabbatch{2}.spm.stats.con.consess{3}.tcon.convec         = [0 0 0 0 1 -1 0 0];
     matlabbatch{2}.spm.stats.con.consess{3}.tcon.sessrep        = 'none';
     matlabbatch{2}.spm.stats.con.consess{4}.tcon.name           = 'retrievalSuccess_auditory';
-    matlabbatch{2}.spm.stats.con.consess{4}.tcon.convec         = [0 0 0 0 0 0 1 -1 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0];
+    matlabbatch{2}.spm.stats.con.consess{4}.tcon.convec         = [0 0 0 0 0 0 1 -1];
     matlabbatch{2}.spm.stats.con.consess{4}.tcon.sessrep        = 'none';
-    matlabbatch{2}.spm.stats.con.spmmat(1)                      = {[dir_root,'bids_data/derivatives/',subj_handle,'/spm/SPM.mat']};    
+    matlabbatch{2}.spm.stats.con.spmmat(1)                      = {[dir_root,'bids_data/derivatives/',subj_handle,'/spm_denoised/SPM.mat']};    
     
     % run job
     spm_jobman('run',matlabbatch)
@@ -222,7 +310,7 @@ contrast_labels = {'contrastModality_atEncoding' 'contrastModality_atRetrieval' 
 for i = 1 : numel(contrast_labels)
     
     % define directory for second-level analysis
-    stat_dir = [dir_root,'bids_data/derivatives/group/spm/',contrast_labels{i},'/'];
+    stat_dir = [dir_root,'bids_data/derivatives/group/spm_denoised/',contrast_labels{i},'/'];
     mkdir(stat_dir)
     
     % predefine cell to hold contrast filenames
@@ -233,7 +321,7 @@ for i = 1 : numel(contrast_labels)
         
         % add filename of contrast image to group cell
         subj_handle = sprintf('sub-%02.0f',subj);
-        contrast_files{subj,1} = [dir_root,'bids_data/derivatives/',subj_handle,'/spm/con_',sprintf('%04.0f',i),'.nii'];
+        contrast_files{subj,1} = [dir_root,'bids_data/derivatives/',subj_handle,'/spm_denoised/con_',sprintf('%04.0f',i),'.nii'];
         
         clear subj_handle
     end
