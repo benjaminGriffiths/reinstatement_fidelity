@@ -421,6 +421,7 @@ end
 
 % save
 save([dir_root,'bids_data/derivatives/group/rsa-correlation/group_task-all_fmri-meanbold'],'mean_bold')
+clear X Y x y
 
 %% Calculate LDt
 % cycle through each subject
@@ -625,8 +626,8 @@ end
 
 mem_rsa = squeeze(rsa_vec(:,2,:));
 figure; hold on
-histogram(mem_rsa(mem_perf==1),-0.95:0.1:0.95)
-histogram(mem_rsa(mem_perf==0),-0.95:0.1:0.95)
+histogram(mem_rsa(mem_perf==1),-0.975:0.05:0.975)
+histogram(mem_rsa(mem_perf==0),-0.975:0.05:0.975)
 
 % save RSA vector
 save([dir_root,'bids_data/derivatives/group/rsa-correlation/group_task-all_fmri-si'],'rsa_vec')
