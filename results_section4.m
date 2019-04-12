@@ -101,6 +101,18 @@ cfg.tail            = 1;
 cfg.parameter       = 'powspctrm';
 [stat,tbl]          = run_oneSampleT(cfg, grand_freq);
 
+% define variables
+B   = 0.3;
+M   = mean(grand_freq{2}.powspctrm);
+SD  = std(grand_freq{2}.powspctrm);
+sN  = sqrt(numel(grand_freq{1}.powspctrm));
+
+t   = (M - (B.*SD))./ (SD./sN);
+p1  = tcdf(t,numel(grand_freq{1}.powspctrm)-1);
+
+t   = (M + B.*(SD./sN))./ (SD./sN);
+p2  = tcdf(-t,numel(grand_freq{1}.powspctrm)-1);
+
 % save data
 save([dir_bids,'derivatives/group/eeg/group_task-all_eeg-phasestat.mat'],'stat','tbl');
 

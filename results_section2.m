@@ -51,7 +51,8 @@ for subj = 1 : n_subj
     
     % get time-frequency representaiton of data for specified conditions
     group_freq{subj,1} = get_basediff_timefrequency(source,'encoding','visual');
-    group_freq{subj,2} = get_memdiff_timefrequency(source,'retrieval','visual');
+    group_freq{subj,2} = get_basediff_timefrequency(source,'retrieval','visual');
+    group_freq{subj,3} = get_memdiff_timefrequency(source,'retrieval','visual');
 end
     
 % predefine cells to house concatenated group data
@@ -99,10 +100,10 @@ save([dir_bids,'derivatives/group/eeg/group_task-all_eeg-stat.mat'],'stat','tbl'
 
 %% Extract Raw Power of Cluster 
 % define cluster names
-plot_names = {'encoding','retrieval'};
+plot_names = {'encoding','retrieval','rse'};
 
 % prepare table for stat values
-tbl = array2table(zeros(n_subj,2),'VariableNames',plot_names);
+tbl = array2table(zeros(n_subj,3),'VariableNames',plot_names);
 
 % cycle through conditions
 for i = 1 : numel(stat)
@@ -123,7 +124,7 @@ copyfile([dir_bids,'derivatives/group/eeg/group_task-all_eeg-cluster.csv'],[dir_
 load([dir_tool,'fieldtrip-20170319/template/sourcemodel/standard_sourcemodel3d10mm.mat']);
 
 % define plot names
-plot_names = {'encoding','retrieval'};
+plot_names = {'encoding','retrieval','rse'};
 
 % cycle through conditions
 for i = 1 : numel(stat)

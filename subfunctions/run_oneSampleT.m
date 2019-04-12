@@ -29,6 +29,7 @@ config.clusteralpha      = 0.05;
 config.numrandomization  = 2000;
 config.alpha             = 0.05;
 config.tail              = cfg.tail;
+config.correcttail       = 'prob';
 config.parameter         = cfg.parameter;
 
 % cycle through data structures
@@ -37,8 +38,7 @@ for condition = 1 : n_data
     % predefine conditionals
     issource = false;
     issingle = false;
-    
-        
+            
     % check if there is only a single comparison
     if size(data{condition}.(cfg.parameter),2) == 1 && size(data{condition}.(cfg.parameter),3) == 1 && size(data{condition}.(cfg.parameter),4) == 1
         issingle = true;
@@ -65,7 +65,7 @@ for condition = 1 : n_data
         
         % run statistics
         config.dim      = data{condition}.dim;  % specify dimensions of your source grid
-        config.clustertail       = cfg.tail;
+        config.clustertail = cfg.tail;
         stat{condition} = ft_sourcestatistics(config, data{condition}, null_freq);
         
     % if data consists of a single comparison
@@ -90,31 +90,57 @@ for condition = 1 : n_data
         stat{condition}     = ft_freqstatistics(config, data{condition}, null_freq);
     end
         
-    % define clusters of interest
-    if cfg.tail==1
-        tailname = 'posclusters';
-    else
-        tailname = 'negclusters';
-    end
-    
-    % if data does not consist of a single value
-    if ~issingle
-        
-        % extract key values
-        tbl.p(condition,1)  = round(stat{condition,1}.(tailname)(1).prob,3);
-        tbl.t(condition,1)  = round(stat{condition,1}.(tailname)(1).clusterstat ./ sum(stat{condition,1}.([(tailname),'labelmat'])(:) == 1),3);
-        tbl.ci(condition,1) = round(stat{condition,1}.(tailname)(1).cirange,3);
+    % if one-tailed test
+    if cfg.tail~=0
 
-        % calculate cohen's dz
-        tbl.d(condition,1) = round(tbl.t(condition,1)./ sqrt(n_subj),3);
+        % define clusters of interest
+        if cfg.tail==1
+            tailname = 'posclusters';
+        elseif cfg.tail==-1
+            tailname = 'negclusters';
+        end
+
+        % if data does not consist of a single value
+        if ~issingle
+
+            % extract key values
+            tbl.p(condition,1)  = round(stat{condition,1}.(tailname)(1).prob,3);
+            tbl.t(condition,1)  = round(stat{condition,1}.(tailname)(1).clusterstat ./ sum(stat{condition,1}.([(tailname),'labelmat'])(:) == 1),3);
+            tbl.ci(condition,1) = round(stat{condition,1}.(tailname)(1).cirange,3);
+
+            % calculate cohen's dz
+            tbl.d(condition,1) = round(tbl.t(condition,1)./ sqrt(n_subj),3);
+
+        else
+            % extract key values
+            tbl.p(condition,1)  = round(stat{condition,1}.prob,3);
+            tbl.t(condition,1)  = round(stat{condition,1}.stat,3);
+            tbl.ci(condition,1) = round(stat{condition,1}.cirange,3);
+
+            % calculate cohen's dz
+            tbl.d(condition,1) = round(tbl.t(condition,1)./ sqrt(n_subj),3);
+        end
         
     else
-        % extract key values
-        tbl.p(condition,1)  = round(stat{condition,1}.prob,3);
-        tbl.t(condition,1)  = round(stat{condition,1}.stat,3);
-        tbl.ci(condition,1) = round(stat{condition,1}.cirange,3);
+        % if data does not consist of a single value
+        if ~issingle % CURRENTLY NOT FUNCTIONAL
 
-        % calculate cohen's dz
-        tbl.d(condition,1) = round(tbl.t(condition,1)./ sqrt(n_subj),3);
+            % extract key values
+            tbl.p(condition,1)  = round(stat{condition,1}.(tailname)(1).prob,3);
+            tbl.t(condition,1)  = round(stat{condition,1}.(tailname)(1).clusterstat ./ sum(stat{condition,1}.([(tailname),'labelmat'])(:) == 1),3);
+            tbl.ci(condition,1) = round(stat{condition,1}.(tailname)(1).cirange,3);
+
+            % calculate cohen's dz
+            tbl.d(condition,1) = round(tbl.t(condition,1)./ sqrt(n_subj),3);
+
+        else
+            % extract key values
+            tbl.p(condition,1)  = round(stat{condition,1}.prob,3);
+            tbl.t(condition,1)  = round(stat{condition,1}.stat,3);
+            tbl.ci(condition,1) = round(stat{condition,1}.cirange,3);
+
+            % calculate cohen's dz
+            tbl.d(condition,1) = round(tbl.t(condition,1)./ sqrt(n_subj),3);
+        end
     end
 end

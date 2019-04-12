@@ -1,4 +1,4 @@
-function freq = get_phasesim(data,operation,modality)
+function freq = get_powersim(data,operation,modality)
 
 % define time/frequency resolution
 if strcmpi(operation,'encoding')
@@ -53,15 +53,26 @@ cfg                 = [];
 cfg.keeptrials      = 'yes';
 cfg.method          = 'wavelet';
 cfg.width           = 6;
-%cfg.output          = 'fourier';
 cfg.toi             = toi;
 cfg.foi             = foi;
 cfg.pad             = 'nextpow2';
 freq                = ft_freqanalysis(cfg, data);
 clear data
 
+% get time-averaged mean and standard deviation of power for each channel and frequency
+raw_pow = mean(freq.powspctrm,4);
+avg_pow = mean(raw_pow,1);
+std_pow = std(raw_pow,[],1);
+
+% replicate matrices to match freq.powspctrm
+avg_pow = repmat(avg_pow,[size(freq.powspctrm,1) 1 1 size(freq.powspctrm,4)]);
+std_pow = repmat(std_pow,[size(freq.powspctrm,1) 1 1 size(freq.powspctrm,4)]);
+
+% z-transform power
+freq.powspctrm = (freq.powspctrm - avg_pow) ./ std_pow;
+clear raw_pow avg_pow std_pow
+
 % extract phase
-%phase = angle(freq.fourierspctrm); <- HACKED
 phase = freq.powspctrm;
 
 % extract stim and operation values
@@ -86,19 +97,6 @@ if strcmpi(operation,'encoding')
     for i = 1 : size(phase,1)
         for j = i+1 : size(phase,1)
 
-%             % extract signal
-%             X = squeeze(phase(i,:,:,:));
-%             Y = squeeze(phase(j,:,:,:));
-% 
-%             % get single-trial phase-locking 
-%             obs_model(count,:) = mean(cos(X).*cos(Y) + sin(X).*sin(Y),2);   
-% 
-%             % get prediction
-%             hyp_model(count,1) = stimval(i)==stimval(j);
-%             count = count + 1;  
-%             
-            
-            % ___ POWER HACK ___ %
             % extract signal
             X = squeeze(phase(i,:,:,:));
             Y = squeeze(phase(j,:,:,:));
@@ -129,40 +127,11 @@ else
             % if stimulus is not recalled, skip
             if ret_stim(j) == 0; continue; end
             
-%             % extract signal at encoding
-%             X = squeeze(enc_phase(i,:,:,freq.time>0&freq.time<=1));
-%                  
-%             % extract signal at retrieval
-%             Y = squeeze(ret_phase(j,:,:,freq.time>=0.5&freq.time<=1.5));
-%             
-% %             % cycle through each time window of retrieval
-% %             for t = 1 : size(ret_phase,4)-size(X,2)
-% %                         
-% %                 % get retieval signal for this trial
-% %                 Y(:,:,t) = squeeze(ret_phase(j,:,:,t:t+100));
-% %             end
-%             
-%             % get single-trial phase-locking 
-%             obs_model(count,:) = abs(mean(exp(1i.*(X-Y)),2));   
-%                 
-%             % get prediction
-%             hyp_model(count,1) = enc_stim(i)==ret_stim(j);
-%             count = count + 1;      
-            
-                        
-            % ___ POWER HACK ___ %
             % extract signal at encoding
             X = squeeze(enc_phase(i,:,:,:));
                  
             % extract signal at retrieval
             Y = squeeze(ret_phase(j,:,:,:));
-            
-%             % cycle through each time window of retrieval
-%             for t = 1 : size(ret_phase,4)-size(X,2)
-%                         
-%                 % get retieval signal for this trial
-%                 Y(:,:,t) = squeeze(ret_phase(j,:,:,t:t+100));
-%             end
             
             % get single-trial phase-locking 
             obs_model(count,:) = atanh(corr(X(:),Y(:))); %abs(mean(exp(1i.*(X-Y)),2));   
@@ -175,20 +144,13 @@ else
             
         end
         if mod(i,10) == 0
-            fprintf('Computing phase similarity... %d%% complete...\n',round((i/size(enc_phase,1))*100));
+            fprintf('Computing power similarity... %d%% complete...\n',round((i/size(enc_phase,1))*100));
         end
     end
 end
     
-% predefine correlation vector
-r = nan(size(obs_model,2),1);
-
-% cycle through each channel
-for chan = 1% : size(obs_model,2) <- ___ POWER HACK ___
-    
-    % correlate observed and predicted model
-    r(chan,1) = atanh(partialcorr(obs_model(:,chan),hyp_model,t));
-end
+% correlate observed and predicted model
+r = atanh(corr(obs_model,hyp_model));
 
 % get difference between means
 freq            = rmfield(freq,{'powspctrm','cumtapcnt','cfg','trialinfo'});

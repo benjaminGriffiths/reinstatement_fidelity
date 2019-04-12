@@ -112,6 +112,16 @@ elseif strcmpi(operation,'retrieval')
     cfg.latency = [0.5 1.5];
     freq        = ft_selectdata(cfg,freq);    
     
+    % get pre- and post- power
+    %prepow  = mean(freq.powspctrm(:,:,:,freq.time<=0),4);
+    %postpow = mean(freq.powspctrm(:,:,:,freq.time>=0.5&freq.time<=1.5),4);
+    
+    % add difference to freq
+    %freq.powspctrm = postpow - prepow;
+    
+    % update time
+    freq.time = 1;
+          
     % resort trialinfo
     new_info = zeros(numel(freq.trialinfo),3);
     for i = 1 : numel(freq.trialinfo)
