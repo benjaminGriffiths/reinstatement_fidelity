@@ -853,43 +853,54 @@ load([dir_root,'bids_data/derivatives/group/rsa-correlation/group_task-all_fmri-
 mean_bold = mean_bold(:,:,[49:96 145:end]);
 
 % predefine matrix for correlation values
-r = [];
+r           = [];
+grand_freq  = cell(2,1);
 
 % cycle through each subject
 for subj = 1 : n_subj
-      
-    % extract recalled trial numbers from powspctrm
-    idx         = 1:numel(group_freq{subj,1}.trialinfo(:,2));%==1;
-    trl_nums    = group_freq{subj,1}.trialinfo(idx,1);
-            
-    % fix numbers
-    trl_nums(trl_nums>48 & trl_nums<=96)    = trl_nums(trl_nums>48 & trl_nums<=96) - 48;
-    trl_nums(trl_nums>96 & trl_nums<=144)   = trl_nums(trl_nums>96 & trl_nums<=144) - 48;
-    trl_nums(trl_nums>144 & trl_nums<=192)  = trl_nums(trl_nums>144 & trl_nums<=192) - 96;
     
-    % extract vectors for items
-    X = squeeze(rsa_vec(subj,1,trl_nums));
-    Z = squeeze(mean_bold(subj,1,trl_nums));
+    for mask = 1 : numel(mask_names)
 
-    % correlate
-    for chan = 1 : size(group_freq{subj,1}.powspctrm,2)
-        Y = nanmean(group_freq{subj,1}.powspctrm(idx,chan,:),3);
-        r(subj,chan) = atanh(partialcorr(X,Y,Z));
+        switch mask
+            case 1
+                % extract recalled trial numbers from powspctrm
+                idx         = 1:numel(group_freq{subj,mask}.trialinfo(:,2));
+                trl_nums    = group_freq{subj,mask}.trialinfo(idx,1);
+                
+            case 2
+                % extract recalled trial numbers from powspctrm
+                idx         = group_freq{subj,mask}.trialinfo(:,2)==1;
+                trl_nums    = group_freq{subj,mask}.trialinfo(idx,1);
+        end
+
+        % fix numbers
+        trl_nums(trl_nums>48 & trl_nums<=96)    = trl_nums(trl_nums>48 & trl_nums<=96) - 48;
+        trl_nums(trl_nums>96 & trl_nums<=144)   = trl_nums(trl_nums>96 & trl_nums<=144) - 48;
+        trl_nums(trl_nums>144 & trl_nums<=192)  = trl_nums(trl_nums>144 & trl_nums<=192) - 96;
+
+        % extract vectors for items
+        X = squeeze(rsa_vec(subj,mask,trl_nums));
+        Z = squeeze(mean_bold(subj,mask,trl_nums));
+
+        % correlate
+        for chan = 1 : size(group_freq{subj,mask}.powspctrm,2)
+            Y = nanmean(group_freq{subj,mask}.powspctrm(idx,chan,:),3);
+            r(subj,mask,chan) = atanh(partialcorr(X,Y,Z));
+        end
+               
+        % prepare data structure for one-sample t-test
+        grand_freq{mask}.powdimord   = 'rpt_pos';
+        grand_freq{mask}.dim         = roi.dim;
+        grand_freq{mask}.inside      = roi.inside(:);
+        grand_freq{mask}.pos         = roi.pos;
+        grand_freq{mask}.cfg         = [];
+
+        % add in "outside" virtual electrods
+        tmp_pow = zeros(size(r,1),size(grand_freq{1}.inside,1));
+        tmp_pow(:,grand_freq{1}.inside) = squeeze(r(:,mask,:));
+        grand_freq{mask}.pow = tmp_pow;
     end
 end
-
-% prepare data structure for one-sample t-test
-grand_freq                = cell(1,1);
-grand_freq{1}.powdimord   = 'rpt_pos';
-grand_freq{1}.dim         = roi.dim;
-grand_freq{1}.inside      = roi.inside(:);
-grand_freq{1}.pos         = roi.pos;
-grand_freq{1}.cfg         = [];
-
-% add in "outside" virtual electrods
-tmp_pow = zeros(size(r,1),size(grand_freq{1}.inside,1));
-tmp_pow(:,grand_freq{1}.inside) = r;
-grand_freq{1}.pow = tmp_pow;
 
 % predefine cell for statistics
 cfg             = [];

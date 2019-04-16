@@ -151,7 +151,7 @@ labels = {'title':'',
           'yticklabel':['-0.5','-0.25','0','0.25','0.5']}
 
 # plot raincloud
-custom_rainplot(data_raincloud,colour,ax,'calibri',labels,[-0.5,0.5],0.125,[0.013,0.02])
+custom_rainplot(data_raincloud,colour,ax,'calibri',labels,[-0.5,0.5],0.125,[1,1])
    
 # save image
 pyplot.savefig(wdir + "/figures/fig3a.jpg",bbox_inches='tight',transparent=True,dpi='figure')

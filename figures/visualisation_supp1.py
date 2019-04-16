@@ -113,7 +113,7 @@ labels = {'title':'',
           'yticklabel':['-1','0','1','2','3','4']}
 
 # plot raincloud
-custom_rainplot(data_raincloud,colour,ax,'calibri',labels,[-1,4],0.125,[0.0001,0.005,0.008])
+custom_rainplot(data_raincloud,colour,ax,'calibri',labels,[-1,4],0.125,[1,1,1])
    
 # save image
 pyplot.savefig(wdir + "/figures/sup1a.jpg",bbox_inches='tight',transparent=True,dpi='figure')
@@ -144,7 +144,7 @@ labels = {'title':'',
           'yticklabel':['-1','0','1','2','3','4']}
 
 # plot raincloud
-custom_rainplot(data_raincloud,colour,ax,'calibri',labels,[-1,4],0.125,[0.0001,0.0005])
+custom_rainplot(data_raincloud,colour,ax,'calibri',labels,[-1,4],0.125,[1,1])
    
 # save image
 pyplot.savefig(wdir + "/figures/sup1b.jpg",bbox_inches='tight',transparent=True,dpi='figure')
@@ -175,7 +175,7 @@ labels = {'title':'',
           'yticklabel':['-1','0','1','2']}
 
 # plot raincloud
-custom_rainplot(data_raincloud,colour,ax,'calibri',labels,[-1,2],0.125,[0.0001,0.005,0.008])
+custom_rainplot(data_raincloud,colour,ax,'calibri',labels,[-1,2],0.125,[1,1,1])
    
 # save image
 pyplot.savefig(wdir + "/figures/sup1c.jpg",bbox_inches='tight',transparent=True,dpi='figure')
