@@ -90,6 +90,9 @@ mkdir([dir_bids,'derivatives/group/eeg/'])
 save([dir_bids,'derivatives/group/eeg/group_task-all_eeg-source.mat'],'grand_freq');
 
 %% Run Statistics
+% set seed
+rng(1) 
+
 % predefine cell for statistics
 cfg.tail        = -1;
 cfg.parameter   = 'pow';

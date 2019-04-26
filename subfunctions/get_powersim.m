@@ -150,7 +150,7 @@ else
 end
     
 % correlate observed and predicted model
-r = atanh(corr(obs_model,hyp_model));
+r = atanh(corr(obs_model,hyp_model,'type','Spearman'));
 
 % get difference between means
 freq            = rmfield(freq,{'powspctrm','cumtapcnt','cfg','trialinfo'});

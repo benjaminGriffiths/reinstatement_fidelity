@@ -758,7 +758,7 @@ for subj = 1 : n_subj
             B = squeeze(mean_bold(subj,mask-1,trl_nums));
         end
         
-        %figure;plot(zscore(X),zscore(Y),'k*');title(sprintf('subj%02.0f',subj));xlim([-4 4]);ylim([-4 4])
+        %figure;plot(X,Y,'k*');title(sprintf('subj%02.0f',subj));%xlim([-4 4]);ylim([-4 4])
         
         % correlate
         r(subj,mask,1) = atanh(corr(X,Y));
@@ -791,13 +791,10 @@ grand_freq{3}.powspctrm     = r(:,3,1);
 % save data
 save([dir_bids,'derivatives/group/rsa-correlation/group_task-all_comb-freq.mat'],'grand_freq'); 
 
-% save single subjects
-for i = 1 : 2
-    data = [zscore(Xs{i}) zscore(Ys{i})];
-    csvwrite([dir_repos,'data/fig3_data/',sprintf('subj-%02.0f_task-ers_xy.csv',i)],data)
-end
-
 %% Run Statistics
+% set seed
+rng(1) 
+
 % predefine cell for statistics
 cfg             = [];
 cfg.tail        = -1;
@@ -910,18 +907,18 @@ cfg.parameter   = 'pow';
 save([dir_bids,'derivatives/group/rsa-correlation/group_task-percept_comb-sourcestat.mat'],'stat','tbl');
    
 % get indices of clusters
-clus_idx = stat{1}.negclusterslabelmat==1;
+clus_idx = stat{2}.negclusterslabelmat==1;
 
 % create source data structure
 source                  = [];
-source.inside           = stat{1}.inside;
-source.dim              = stat{1}.dim;
-source.pos              = stat{1}.pos*10;
+source.inside           = stat{2}.inside;
+source.dim              = stat{2}.dim;
+source.pos              = stat{2}.pos*10;
 source.unit             = 'mm';
 
 % define powspctrm of cluster
-source.pow              = nan(size(stat{1}.pos,1),1);     
-source.pow(clus_idx)	= stat{1}.stat(clus_idx); 
+source.pow              = nan(size(stat{2}.pos,1),1);     
+source.pow(clus_idx)	= stat{2}.stat(clus_idx); 
 
 % reshape data to 3D
 source.pow              = reshape(source.pow,source.dim);
@@ -936,7 +933,7 @@ source.transform        = [1,0,0,-91;
 % export
 cfg = [];
 cfg.parameter     = 'pow';               % specify the functional parameter to write to the .nii file
-cfg.filename      = [dir_bids,'derivatives/group/rsa-correlation/group_task-percept_eeg-map.nii'];  % enter the desired file name
+cfg.filename      = [dir_bids,'derivatives/group/rsa-correlation/group_task-ers_eeg-map.nii'];  % enter the desired file name
 cfg.filetype      = 'nifti';
 cfg.coordsys      = 'spm';
 cfg.vmpversion    = 2;
@@ -944,8 +941,8 @@ cfg.datatype      = 'float';
 ft_volumewrite(cfg,source);      % be sure to use your interpolated source data
 
 % reslice to 1mm isometric to match template MRI
-reslice_nii([dir_bids,'derivatives/group/rsa-correlation/group_task-percept_eeg-map.nii'],[dir_bids,'derivatives/group/rsa-correlation/group_task-percept_eeg-map.nii'],[1 1 1]);
-copyfile([dir_bids,'derivatives/group/rsa-correlation/group_task-percept_eeg-map.nii'],[dir_repos,'data/fig3_data/group_task-percept_eeg-map.nii'])    
+reslice_nii([dir_bids,'derivatives/group/rsa-correlation/group_task-ers_eeg-map.nii'],[dir_bids,'derivatives/group/rsa-correlation/group_task-ers_eeg-map.nii'],[1 1 1]);
+copyfile([dir_bids,'derivatives/group/rsa-correlation/group_task-ers_eeg-map.nii'],[dir_repos,'data/fig3_data/group_task-ers_eeg-map.nii'])    
 
    
 %% Rerun Analysis on Theta Band

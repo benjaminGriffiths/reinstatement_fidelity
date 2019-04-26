@@ -711,11 +711,11 @@ load([dir_root,'bids_data/derivatives/group/rsa-ers/SPM.mat'])
 [betas,d] = extract_sample_points([dir_root,'bids_data/derivatives/group/rsa-ers/'],SPM);
 
 % save betas as table
-tbl = array2table(betas','VariableNames',{'RightHemi','LeftHemi'});
+tbl = array2table(betas','VariableNames',{'LeftHemi','RightHemi'});
 writetable(tbl,[dir_repos,'data/ers_betas.csv'],'Delimiter',',')
 
 % save effect size as table
-tbl = array2table(d','VariableNames',{'RightHemi','LeftHemi'});
+tbl = array2table(d','VariableNames',{'LeftHemi','RightHemi'});
 writetable(tbl,[dir_repos,'data/ers_cohensD.csv'],'Delimiter',',')
 
 %% Get RDM Matrices

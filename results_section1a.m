@@ -689,9 +689,9 @@ load([dir_root,'bids_data/derivatives/group/rsa-percept/SPM.mat'])
 [betas,d] = extract_sample_points([dir_root,'bids_data/derivatives/group/rsa-percept/'],SPM);
 
 % save betas as table
-tbl = array2table(betas','VariableNames',{'Occipital','FrontCent','LeftTemp'});
+tbl = array2table(betas','VariableNames',{'Occipital','LeftTemp','FrontCent'});
 writetable(tbl,[dir_repos,'data/percept_betas.csv'],'Delimiter',',')
 
 % save effect size as table
-tbl = array2table(d','VariableNames',{'Occipital','FrontCent','LeftTemp'});
+tbl = array2table(d','VariableNames',{'Occipital','LeftTemp','FrontCent'});
 writetable(tbl,[dir_repos,'data/percept_cohensD.csv'],'Delimiter',',')

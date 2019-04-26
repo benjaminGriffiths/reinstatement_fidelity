@@ -1,4 +1,4 @@
-%% Phase Analysis
+%% Power Similarity Analysis
 % clear workspace
 clearvars
 close all
@@ -93,7 +93,7 @@ end
     
 % save data
 mkdir([dir_bids,'derivatives/group/eeg/'])
-save([dir_bids,'derivatives/group/eeg/group_task-all_eeg-phasesim.mat'],'grand_freq');
+save([dir_bids,'derivatives/group/eeg/group_task-all_eeg-powersim.mat'],'grand_freq');
 
 %% Run Statistics
 % predefine cell for statistics
@@ -101,87 +101,5 @@ cfg.tail            = 1;
 cfg.parameter       = 'powspctrm';
 [stat,tbl]          = run_oneSampleT(cfg, grand_freq);
 
-% define variables
-B   = 0.3;
-M   = mean(grand_freq{2}.powspctrm);
-SD  = std(grand_freq{2}.powspctrm);
-sN  = sqrt(numel(grand_freq{1}.powspctrm));
-
-t   = (M - (B.*SD))./ (SD./sN);
-p1  = tcdf(t,numel(grand_freq{1}.powspctrm)-1);
-
-t   = (M + B.*(SD./sN))./ (SD./sN);
-p2  = tcdf(-t,numel(grand_freq{1}.powspctrm)-1);
-
 % save data
-save([dir_bids,'derivatives/group/eeg/group_task-all_eeg-phasestat.mat'],'stat','tbl');
-
-%% Extract Raw Power of Cluster 
-% define cluster names
-plot_names = {'eesim','ersim'};
-
-% prepare table for stat values
-tbl = array2table(zeros(n_subj,numel(plot_names)),'VariableNames',plot_names);
-
-% cycle through conditions
-for i = 1 : numel(stat)
-     
-    % get indices of clusters
-    clus_idx = stat{i}.posclusterslabelmat==1;
-
-    % create table
-    tbl.(plot_names{i})(:,1) = nanmean(grand_freq{i}.pow(:,clus_idx),2);
-end
-
-% write table
-writetable(tbl,[dir_bids,'derivatives/group/eeg/group_task-all_eeg-phasecluster.csv'],'Delimiter',',')
-copyfile([dir_bids,'derivatives/group/eeg/group_task-all_eeg-phasecluster.csv'],[dir_repos,'data/sup2_data/group_task-rf_eeg-phasecluster.csv'])
-
-%% Create Surface Plots
-% load template MRI
-load([dir_tool,'fieldtrip-20170319/template/sourcemodel/standard_sourcemodel3d10mm.mat']);
-
-% define plot names
-plot_names = {'eesim','ersim'};
-
-% cycle through conditions
-for i = 1 : numel(stat)
-        
-    % get indices of clusters
-    clus_idx = stat{i}.posclusterslabelmat==1;
-
-    % create source data structure
-    source                  = [];
-    source.inside           = stat{i}.inside;
-    source.dim              = stat{i}.dim;
-    source.pos              = stat{i}.pos*10;
-    source.unit             = 'mm';
-    
-    % define powspctrm of cluster
-    source.pow              = nan(size(stat{i}.pos,1),1);     
-    source.pow(clus_idx)	= stat{i}.stat(clus_idx); 
-    
-    % reshape data to 3D
-    source.pow              = reshape(source.pow,source.dim);
-    source.inside           = reshape(source.inside,source.dim);
-    
-    % add transformation matrix
-    source.transform        = [1,0,0,-91;
-                               0,1,0,-127;
-                               0,0,1,-73;
-                               0,0,0,1];
-                           
-    % export
-    cfg = [];
-    cfg.parameter     = 'pow';               % specify the functional parameter to write to the .nii file
-    cfg.filename      = [dir_bids,'derivatives/group/eeg/group_task-',plot_names{i},'_eeg-map.nii'];  % enter the desired file name
-    cfg.filetype      = 'nifti';
-    cfg.coordsys      = 'spm';
-    cfg.vmpversion    = 2;
-    cfg.datatype      = 'float';
-    ft_volumewrite(cfg,source);      % be sure to use your interpolated source data
-    
-    % reslice to 1mm isometric to match template MRI
-    reslice_nii([dir_bids,'derivatives/group/eeg/group_task-',plot_names{i},'_eeg-map.nii'],[dir_bids,'derivatives/group/eeg/group_task-',plot_names{i},'_eeg-map.nii'],[1 1 1]);
-    copyfile([dir_bids,'derivatives/group/eeg/group_task-',plot_names{i},'_eeg-map.nii'],[dir_repos,'data/sup2_data/group_task-',plot_names{i},'_eeg-map.nii'])    
-end
+save([dir_bids,'derivatives/group/eeg/group_task-all_eeg-powerstat.mat'],'stat','tbl');

@@ -31,7 +31,7 @@ def custom_rainplot(data,colour,axes,fontname,labels,ylim,offset,pvalue):
                        ax = axes)
     
     # plot mean and confidence intervals
-    axes=sns.boxplot(data = data, palette = colour, width = 0.1, ax = axes, linewidth = 1, fliersize = 1, whis = 2)
+    axes=sns.boxplot(data = data, palette = colour, width = 0.1, ax = axes, linewidth = 1, fliersize = 1, whis = 3)
     
     # plot significance
     sig_offset = ylim[1]-(ylim[1]*0.05)
@@ -147,11 +147,11 @@ colour = [colour[1],colour[3]]
 labels = {'title':'',
           'ylabel':'Power-Similarity Correlation (z)',
           'xticklabel':['Perception','Retrieval'],
-          'yticks':[-0.5,-0.25,0,0.25,0.5],
-          'yticklabel':['-0.5','-0.25','0','0.25','0.5']}
+          'yticks':[-0.4,-0.2,0,0.2,0.4],
+          'yticklabel':['-0.4','-0.2','0','0.2','0.4']}
 
 # plot raincloud
-custom_rainplot(data_raincloud,colour,ax,'calibri',labels,[-0.5,0.5],0.125,[1,1])
+custom_rainplot(data_raincloud,colour,ax,'calibri',labels,[-0.4,0.4],0.125,[1,1])
    
 # save image
 pyplot.savefig(wdir + "/figures/fig3a.jpg",bbox_inches='tight',transparent=True,dpi='figure')
