@@ -16,7 +16,7 @@ n_data = numel(data);
 stat = cell(n_data,1);
 
 % prepare table for stat values
-tbl = array2table(zeros(n_data,4),'VariableNames',{'t','p','ci','d'});
+tbl = array2table(nan(n_data,4),'VariableNames',{'t','p','ci','d'});
 
 % define statisitics
 config                   = [];
@@ -25,16 +25,17 @@ config.ivar              = 2;
 config.method            = 'montecarlo';
 config.statistic         = 'ft_statfun_depsamplesT';
 config.correctm          = 'cluster';
-config.clusteralpha      = 0.05;
 config.numrandomization  = 2000;
 config.alpha             = 0.05;
-config.tail              = cfg.tail;
 config.correcttail       = 'prob';
 config.parameter         = cfg.parameter;
 
 % cycle through data structures
 for condition = 1 : n_data
 
+    % define tail    
+    config.tail = cfg.tail(condition);
+    
     % predefine conditionals
     issource = false;
     issingle = false;
@@ -64,13 +65,14 @@ for condition = 1 : n_data
     if issource && ~issingle
         
         % run statistics
-        config.dim      = data{condition}.dim;  % specify dimensions of your source grid
-        config.clustertail = cfg.tail;
-        stat{condition} = ft_sourcestatistics(config, data{condition}, null_freq);
+        config.dim          = data{condition}.dim;  % specify dimensions of your source grid        
+        config.clusteralpha = 0.05;
+        config.clustertail  = cfg.tail(condition);
+        stat{condition}     = ft_sourcestatistics(config, data{condition}, null_freq);
         
     % if data consists of a single comparison
     elseif issingle
-    
+        
         % run statistics
         config.correctm     = 'no'; % remove multiple comparisons
         stat{condition}     = ft_freqstatistics(config, data{condition}, null_freq);
@@ -85,18 +87,19 @@ for condition = 1 : n_data
 
         % run statistics
         config.frequency    = cfg.frequency;
-        config.latency      = cfg.latency;
-        config.clustertail       = cfg.tail;
+        config.latency      = cfg.latency;        
+        config.clusteralpha = 0.05;
+        config.clustertail  = cfg.tail;
         stat{condition}     = ft_freqstatistics(config, data{condition}, null_freq);
     end
         
     % if one-tailed test
-    if cfg.tail~=0
+    if cfg.tail(condition)~=0
 
         % define clusters of interest
-        if cfg.tail==1
+        if cfg.tail(condition)==1
             tailname = 'posclusters';
-        elseif cfg.tail==-1
+        elseif cfg.tail(condition)==-1
             tailname = 'negclusters';
         end
 
@@ -125,6 +128,21 @@ for condition = 1 : n_data
         % if data does not consist of a single value
         if ~issingle % CURRENTLY NOT FUNCTIONAL
 
+            % identify which p-value is larger
+            if isempty(stat{condition,1}.posclusters) && ~isempty(stat{condition,1}.negclusters)
+                tailname = 'negclusters';
+            elseif ~isempty(stat{condition,1}.posclusters) && isempty(stat{condition,1}.negclusters)
+                tailname = 'posclusters';
+            elseif ~isempty(stat{condition,1}.posclusters) && ~isempty(stat{condition,1}.negclusters)
+                if stat{condition,1}.posclusters(1).prob < stat{condition,1}.negclusters(1).prob
+                    tailname = 'posclusters';
+                else                    
+                    tailname = 'negclusters';
+                end
+            else
+                continue
+            end
+            
             % extract key values
             tbl.p(condition,1)  = round(stat{condition,1}.(tailname)(1).prob,3);
             tbl.t(condition,1)  = round(stat{condition,1}.(tailname)(1).clusterstat ./ sum(stat{condition,1}.([(tailname),'labelmat'])(:) == 1),3);

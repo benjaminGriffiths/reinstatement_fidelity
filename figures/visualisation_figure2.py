@@ -136,195 +136,78 @@ data_raincloud = pandas.read_csv(data_fname,
                        delimiter=",")
 
 # restrict to retrieval data
-data_raincloud = data_raincloud.drop(labels = ['encoding','retrieval'], axis = 1)
-
-
-# -- prep frequency
-# load frequency data
-datatmp = pandas.read_csv(wdir + "data/fig2_data/group_task-memory_eeg-freqseries.csv",
-                                 delimiter=',',
-                                 header=None)
-
-# create new structure for frequency data
-data_frequency = pandas.DataFrame(data=np.reshape(datatmp.values,[datatmp.size]),columns=['signal'])
-
-# create subject number array
-data_frequency = data_frequency.assign(subj=pandas.Series(np.repeat(np.arange(0,21),[150])).values)
-    
-# create condition array
-data_frequency = data_frequency.assign(condition=pandas.Series(np.tile(np.append(np.zeros(75),np.ones(75)),[21])).values)
-
-# create frequency array
-data_frequency = data_frequency.assign(frequency=pandas.Series(np.tile(np.linspace(3,40,75),[42])).values)
-
-
-# -- prep frequency diff
-# get frames for hits and misses
-data_freqA = data_frequency[data_frequency['condition']==1];
-data_freqB = data_frequency[data_frequency['condition']==0];
-data_freqA = data_freqA.reset_index()
-data_freqB = data_freqB.reset_index()
-
-# create new frame
-data_freqdiff = data_freqA
-data_freqdiff['signal'] = data_freqB['signal']-data_freqA['signal']
-
-
-# -- prep time
-# load frequency data
-datatmp = pandas.read_csv(wdir + "data/fig2_data/group_task-memory_eeg-timeseries.csv",
-                                 delimiter=',',
-                                 header=None)
-
-# create new structure for frequency data
-data_time = pandas.DataFrame(data=np.reshape(datatmp.values,[datatmp.size]),columns=['signal'])
-
-# create subject number array
-data_time = data_time.assign(subj=pandas.Series(np.repeat(np.arange(0,21),[122])).values)
-    
-# create condition array
-data_time = data_time.assign(condition=pandas.Series(np.tile(np.append(np.zeros(61),np.ones(61)),[21])).values)
-
-# create frequency array
-data_time = data_time.assign(frequency=pandas.Series(np.tile(np.linspace(-1,2,61),[42])).values)
-
-
-# -- prep frequency diff
-# get frames for hits and misses
-data_timeA = data_time[data_time['condition']==1];
-data_timeB = data_time[data_time['condition']==0];
-data_timeA = data_timeA.reset_index()
-data_timeB = data_timeB.reset_index()
-
-# create new frame
-data_timediff = data_timeA
-data_timediff['signal'] = data_timeB['signal']-data_timeA['signal']
-
+data_enc = data_raincloud.drop(labels = ['ret_pow','rse_pow','pre_pow','diff_pow','ret_slope','rse_slope','pre_slope','diff_slope','ret_offset','rse_offset','pre_offset','diff_offset'], axis = 1)
+data_ret = data_raincloud.drop(labels = ['enc_pow','rse_pow','pre_pow','diff_pow','enc_slope','rse_slope','pre_slope','diff_slope','enc_offset','rse_offset','pre_offset','diff_offset'], axis = 1)
+data_rse = data_raincloud.drop(labels = ['ret_pow','enc_pow','pre_pow','diff_pow','ret_slope','enc_slope','pre_slope','diff_slope','ret_offset','enc_offset','pre_offset','diff_offset'], axis = 1)
 
 # %% ----- Raincloud Plot ----- # 
 # create figure
 f,ax = pyplot.subplots(1,1)
-f.set_figheight(6.2/2.54) # 4inches 
-f.set_figwidth(3.1/2.54) # 12inches
+f.set_figheight(3.7/2.54) # 4inches 
+f.set_figwidth(5.7/2.54) # 12inches
 f.set_dpi(1000)
 
 # define colour scheme
 colour = sns.color_palette("Blues",n_colors=7)
-colour = [colour[3]]
+colour = [colour[2],colour[3],colour[4]]
 
 # define labels
 labels = {'title':'',
-          'ylabel':'Alpha/Beta Power (Rem. > Forgot.; z)',
-          'xticklabel':[''],
-          'yticks':[-0.5,-0.25,0,0.25],
-          'yticklabel':['-0.5','-0.25','0','0.25']}
+          'ylabel':'Normalised Beta (t)',
+          'xticklabel':['Osc. Power','Slope','Offset'],
+          'yticks':[-3,-1.5,0,1.5,3],
+          'yticklabel':['-3','-1.5','0','1.5','3']}
 
 # plot raincloud
-custom_rainplot(data_raincloud,colour,ax,'Calibri',labels,[-0.5,0.25],0.15,[1])
+custom_rainplot(data_enc,colour,ax,'Calibri',labels,[-3,3],0.15,[1])
    
 # save image
-pyplot.savefig(wdir + "/figures/fig2a.tif",bbox_inches='tight',transparent=True,dpi='figure')
+#pyplot.savefig(wdir + "/figures/fig2a.tif",bbox_inches='tight',transparent=True,dpi='figure')
   
-# %% ----- Frequency Individual Series ----- # 
+# %% ----- Raincloud Plot ----- # 
 # create figure
 f,ax = pyplot.subplots(1,1)
-f.set_figheight(2.5/2.54) # 4inches 
-f.set_figwidth(3.8/2.54) # 12inches
+f.set_figheight(3.7/2.54) # 4inches 
+f.set_figwidth(5.7/2.54) # 12inches
 f.set_dpi(1000)
 
 # define colour scheme
 colour = sns.color_palette("Blues",n_colors=7)
-colour = [(0.7,0.7,0.7),colour[5]]
+colour = [colour[2],colour[3],colour[4]]
 
-# define labels and variables
-labels = {'legend':['Forgot.','Rem.'],
-          'ylabel':'Power (z)',
-          'xlabel':'Frequency (Hz.)'}
+# define labels
+labels = {'title':'',
+          'ylabel':'Normalised Beta (t)',
+          'xticklabel':['Osc. Power','Slope','Offset'],
+          'yticks':[-3,-1.5,0,1.5,3],
+          'yticklabel':['-3','-1.5','0','1.5','3']}
 
-variables = {'x':'frequency',
-             'y':'signal',
-             'hue':'condition'}
-
-# plot frequency series
-custom_timeseriesplot(data_frequency,variables,ax,colour,labels,[3,40],[-0.25,0.25],[5,10,15,20,25,30,35,40],True,False)
-
+# plot raincloud
+custom_rainplot(data_ret,colour,ax,'Calibri',labels,[-3,3],0.15,[1])
+   
 # save image
-pyplot.savefig(wdir + "/figures/fig2b.tif",bbox_inches='tight',transparent=True,dpi='figure')
+#pyplot.savefig(wdir + "/figures/fig2a.tif",bbox_inches='tight',transparent=True,dpi='figure')
 
-# %% ----- Frequency Difference Series ----- # 
+# %% ----- Raincloud Plot ----- # 
 # create figure
 f,ax = pyplot.subplots(1,1)
-f.set_figheight(2.5/2.54) # 4inches 
-f.set_figwidth(3.8/2.54) # 12inches
+f.set_figheight(3.7/2.54) # 4inches 
+f.set_figwidth(5.7/2.54) # 12inches
 f.set_dpi(1000)
 
 # define colour scheme
 colour = sns.color_palette("Blues",n_colors=7)
-colour = [colour[5],colour[5]]
+colour = [colour[2],colour[3],colour[4]]
 
-# define labels and variables
-labels = {'legend':[''],
-          'ylabel':'Power\n(Rem. > Forg.; z)',
-          'xlabel':'Frequency (Hz.)'}
+# define labels
+labels = {'title':'',
+          'ylabel':'Normalised Beta (t)',
+          'xticklabel':['Osc. Power','Slope','Offset'],
+          'yticks':[-3,-1.5,0,1.5,3],
+          'yticklabel':['-3','-1.5','0','1.5','3']}
 
-variables = {'x':'frequency',
-             'y':'signal',
-             'hue':'condition'}
-
-# plot frequency series
-custom_timeseriesplot(data_freqdiff,variables,ax,colour,labels,[3,40],[-0.25,0.1],[5,10,15,20,25,30,35,40],False,True,True)
-
+# plot raincloud
+custom_rainplot(data_rse,colour,ax,'Calibri',labels,[-3,3],0.15,[1])
+   
 # save image
-pyplot.savefig(wdir + "/figures/fig2c.tif",bbox_inches='tight',transparent=True,dpi='figure')
-
-# %% ----- Time Series ----- # 
-# create figure
-f,ax = pyplot.subplots(1,1)
-f.set_figheight(2.5/2.54) # 4inches 
-f.set_figwidth(3.8/2.54) # 12inches
-f.set_dpi(1000)
-
-# define colour scheme
-colour = sns.color_palette("Blues",n_colors=7)
-colour = [(0.7,0.7,0.7),colour[5]]
-
-# define labels and variables
-labels = {'legend':['Forgot.','Rem.'],
-          'ylabel':'Power (z)',
-          'xlabel':'Time (s)'}
-
-variables = {'x':'frequency',
-             'y':'signal',
-             'hue':'condition'}
-
-# plot frequency series
-custom_timeseriesplot(data_time,variables,ax,colour,labels,[-0.5,2],[-0.25,0.25],[-0.5,0,0.5,1,1.5,2],True,True)
-
-# save image
-pyplot.savefig(wdir + "/figures/fig2d.tif",bbox_inches='tight',transparent=True,dpi='figure')
-
-# %% ----- Time Series Individual ----- # 
-# create figure
-f,ax = pyplot.subplots(1,1)
-f.set_figheight(2.5/2.54) # 4inches 
-f.set_figwidth(3.8/2.54) # 12inches
-f.set_dpi(1000)
-
-# define colour scheme
-colour = sns.color_palette("Blues",n_colors=7)
-colour = [colour[5],colour[5]]
-
-# define labels and variables
-labels = {'legend':[''],
-          'ylabel':'Power\n(Rem. > Forg.; z)',
-          'xlabel':'Time (s)'}
-
-variables = {'x':'frequency',
-             'y':'signal',
-             'hue':'condition'}
-
-# plot frequency series
-custom_timeseriesplot(data_timediff,variables,ax,colour,labels,[-0.5,2],[-0.3,0.2],[-0.5,0,0.5,1,1.5,2],False,True,True)
-
-# save image
-pyplot.savefig(wdir + "/figures/fig2e.tif",bbox_inches='tight',transparent=True,dpi='figure')
+#pyplot.savefig(wdir + "/figures/fig2a.tif",bbox_inches='tight',transparent=True,dpi='figure')

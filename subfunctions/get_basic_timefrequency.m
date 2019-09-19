@@ -1,13 +1,13 @@
 function freq = get_basic_timefrequency(data,operation,modality,resolution)
 
 % define time frequency analysis parameters based on data probability
-if numel(data.label) > 200
-    fprintf('More than 200 channels detected, assuming data is in source space...\n')
-    toi = -1:0.05:3;
+if numel(data.label) > 100
+    fprintf('More than 100 channels detected, assuming data is in source space...\n')
+    toi = -1:0.05:1.5;
     foi = 8:30;
 else
-    fprintf('Less than 200 channels detected, assuming data is channel level...\n')
-    toi = -1:0.05:3;
+    fprintf('Less than 100 channels detected, assuming data is channel level...\n')
+    toi = -1:0.05:1.5;
     foi = 3:0.5:40;
 end
 
@@ -71,27 +71,28 @@ freq                = ft_freqanalysis(cfg, data);
 clear data
 
 % get time-averaged mean and standard deviation of power for each channel and frequency
-raw_pow = mean(freq.powspctrm,4);
-avg_pow = mean(raw_pow,1);
-std_pow = std(raw_pow,[],1);
-
-% replicate matrices to match freq.powspctrm
-avg_pow = repmat(avg_pow,[size(freq.powspctrm,1) 1 1 size(freq.powspctrm,4)]);
-std_pow = repmat(std_pow,[size(freq.powspctrm,1) 1 1 size(freq.powspctrm,4)]);
-
-% z-transform power
-freq.powspctrm = (freq.powspctrm - avg_pow) ./ std_pow;
-clear raw_pow avg_pow std_pow
+% raw_pow = mean(freq.powspctrm,4);
+% avg_pow = mean(raw_pow,1);
+% std_pow = std(raw_pow,[],1);
+% 
+% % replicate matrices to match freq.powspctrm
+% avg_pow = repmat(avg_pow,[size(freq.powspctrm,1) 1 1 size(freq.powspctrm,4)]);
+% std_pow = repmat(std_pow,[size(freq.powspctrm,1) 1 1 size(freq.powspctrm,4)]);
+% 
+% % z-transform power
+% freq.powspctrm = (freq.powspctrm - avg_pow) ./ std_pow;
+% clear raw_pow avg_pow std_pow
 
 % if encoding, get event-related change
 if strcmpi(operation,'encoding')    
     
     % get pre- and post- power
-    prepow  = mean(freq.powspctrm(:,:,:,freq.time<=0),4);
+    prepow  = mean(freq.powspctrm(:,:,:,freq.time<=-0.375),4);
     postpow = mean(freq.powspctrm(:,:,:,freq.time>=0.5&freq.time<=1.5),4);
     
     % add difference to freq
-    freq.powspctrm = postpow - prepow;
+    freq.powspctrm = (postpow - repmat(mean(postpow,1),[size(postpow,1) 1 1])) ./ repmat(std(postpow,[],1),[size(postpow,1) 1 1]);
+    freq.prepow = (prepow - repmat(mean(prepow,1),[size(prepow,1) 1 1])) ./ repmat(std(prepow,[],1),[size(prepow,1) 1 1]);
     
     % update time
     freq.time = 1;
@@ -107,17 +108,13 @@ elseif strcmpi(operation,'retrieval')
     % get memory difference
     mem_diff = mean(mean(freq.powspctrm(mem_performance == 1,:,:)) - mean(freq.powspctrm(mem_performance == 0,:,:)),3);
     
-    % kick out forgotten trials
-    cfg         = [];
-    cfg.latency = [0.5 1.5];
-    freq        = ft_selectdata(cfg,freq);    
-    
     % get pre- and post- power
-    %prepow  = mean(freq.powspctrm(:,:,:,freq.time<=0),4);
-    %postpow = mean(freq.powspctrm(:,:,:,freq.time>=0.5&freq.time<=1.5),4);
+    prepow  = mean(freq.powspctrm(:,:,:,freq.time<=-0.375),4);
+    postpow = mean(freq.powspctrm(:,:,:,freq.time>=0.5&freq.time<=1.5),4);
     
     % add difference to freq
-    %freq.powspctrm = postpow - prepow;
+    freq.powspctrm = (postpow - repmat(mean(postpow,1),[size(postpow,1) 1 1])) ./ repmat(std(postpow,[],1),[size(postpow,1) 1 1]);
+    freq.prepow = (prepow - repmat(mean(prepow,1),[size(prepow,1) 1 1])) ./ repmat(std(prepow,[],1),[size(prepow,1) 1 1]);
     
     % update time
     freq.time = 1;

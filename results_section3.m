@@ -24,6 +24,7 @@ addpath([dir_root,'scripts/subfunctions'])
 
 % add developer rsa toolbox
 addpath([dir_tool,'rsatoolbox-develop'])
+addpath([dir_tool,'wen_spectral'])
 
 % load layout
 load([dir_root,'data/layout.mat'])
@@ -638,7 +639,11 @@ load([dir_tool,'fieldtrip-20170319/template/sourcemodel/standard_sourcemodel3d10
 
 % load whole brain
 mri = ft_read_mri([dir_bids,'sourcedata/masks/whole_brain.nii']);
-
+ 
+% load in raw data of subject 1
+dir_subj = [dir_bids,'sourcedata/sub-01/eeg/'];
+load([dir_subj,'sub-01_task-rf_eeg-source.mat'])  
+    
 % interpolate clusters with grid
 cfg             = [];
 cfg.parameter	= 'anatomy';
@@ -649,6 +654,7 @@ roi.inside      = roi.anatomy(:) > 0;
 roi.pos         = sourcemodel.pos;
 
 % create masks
+mask_roi = cell(numel(mask_names),1);
 for mask = 1 : numel(mask_names)
 
     % load mask
@@ -656,35 +662,63 @@ for mask = 1 : numel(mask_names)
 
     % interpolate
     mask_roi{mask} = ft_sourceinterpolate(cfg,mask_roi{mask},sourcemodel);
+    mask_roi{mask}.anatomy = mask_roi{mask}.anatomy(:);
 
     % add
+    mask_roi{mask}.freq_2_roi = find(mask_roi{mask}.anatomy(roi.inside==1)>0);
     mask_roi{mask}.inside	= mask_roi{mask}.anatomy(:) > 0 & roi.inside == 1;
+    mask_roi{mask}.label    = source.label(mask_roi{mask}.inside(roi.inside == 1));
     mask_roi{mask}.pos    	= sourcemodel.pos;
 end
 
-%% Get Timelocked Representation of Each Condition
-% predefine cell for group data
-group_freq   = cell(n_subj,2);
+% clean workspace
+clear mri source dir_subj roi cfg lay
 
-% cycle through each subject
-for subj = 1 : n_subj
-    
-    % define subject data directory
-    dir_subj = [dir_bids,'sourcedata/',sprintf('sub-%02.0f',subj),'/eeg/'];
-    
-    % load in raw data
-    load([dir_subj,sprintf('sub-%02.0f',subj),'_task-rf_eeg-source.mat'])  
-    
-    % get time-frequency representaiton of data for specified conditions
-    group_freq{subj,1} = get_basic_timefrequency(source,'encoding','visual');
-    group_freq{subj,2} = get_basic_timefrequency(source,'retrieval','visual');
-    
-    % update command line
-    fprintf('\nSubject %02.0f of %02.0f complete...\n\n',subj,n_subj)
-end
- 
-% save data
-save([dir_bids,'derivatives/group/rsa-correlation/group_task-all_eeg-freq.mat'],'group_freq','-v7.3'); 
+%% Get Timelocked Representation of Each Condition
+% % start parallel pool
+% p = gcp('nocreate'); % If no pool, do not create new one.
+% if isempty(p)
+%     tic; parpool(4); toc
+% end
+% 
+% % predefine cell for group data
+% group_freq  = cell(n_subj,2);
+% group_irasa = group_freq;
+% epoch       = {'encoding','retrieval'};
+% 
+% % cycle through each subject
+% for subj = 1 : n_subj
+%     
+%     % define subject data directory
+%     dir_subj = [dir_bids,'sourcedata/',sprintf('sub-%02.0f',subj),'/eeg/'];
+%     
+%     % load in raw data
+%     load([dir_subj,sprintf('sub-%02.0f',subj),'_task-rf_eeg-source.mat'])  
+%     
+%     % cycle through masks
+%     for mask = 1 : numel(mask_roi)
+%     
+%         % select channels in roi
+%         cfg         = [];
+%         cfg.channel = [mask_roi{mask}.label];
+%         tmp         = ft_selectdata(cfg,source);
+% 
+%         % get time-frequency representaiton of data for specified conditions
+%         group_freq{subj,mask} = get_basic_timefrequency(tmp,epoch{mask},'visual');
+%         
+%         % get irasa for subject
+%         group_irasa{subj,mask} = get_irasa(tmp,epoch{mask},'visual');
+%         clear tmp cfg
+%     end
+% 
+%     % update command line
+%     fprintf('\nSubject %02.0f of %02.0f complete...\n\n',subj,n_subj)
+%     clear mask dir_subj source
+% end
+%  
+% % save data
+% save([dir_bids,'derivatives/group/rsa-correlation/group_task-all_eeg-freq.mat'],'group_freq','-v7.3'); 
+% save([dir_bids,'derivatives/group/rsa-correlation/group_task-all_eeg-irasa.mat'],'group_irasa','-v7.3'); 
 
 %% Correlate Similarity and Power
 % load EEG stat
@@ -699,94 +733,167 @@ load([dir_root,'bids_data/derivatives/group/rsa-correlation/group_task-all_fmri-
 % remove encoding trials from bold
 mean_bold = mean_bold(:,:,[49:96 145:end]);
 
+% create cell for peak frequencies
+n_chan=1817;
+peak_idx = nan(n_subj,n_chan); tic
+                 
+% cycle through subjects
+for subj = 1 : n_subj
+        
+    % define subject data directory
+    dir_subj = [dir_bids,'sourcedata/',sprintf('sub-%02.0f',subj),'/eeg/'];
+    
+    % load irasa data
+    load([dir_subj,sprintf('sub-%02.0f',subj),'_task-rf_eeg-irasa.mat'])  
+    
+    % cycle through channels
+    for chan = 1 : n_chan
+
+        % get average oscillatory spectrum
+        osci_spec = cat(1,freq{1}.prepow(:,chan,:),freq{1}.powspctrm(:,chan,:),freq{2}.prepow(:,chan,:),freq{2}.powspctrm(:,chan,:));
+        osci_spec = squeeze(mean(osci_spec,1));
+
+        % find peaks of spectrum
+        [vals,idx] = findpeaks(osci_spec);
+
+        % if peaks are present
+        if ~isempty(idx)
+            [~,midx] = max(vals);
+            peak_idx(subj,chan) = idx(midx);
+        end
+    end
+
+    % update user
+    fprintf('peaks estimated for sub-%02.0f... time elapsed: %1.1f minutes\n',subj,toc/60);
+end
+
 % predefine matrix for correlation values
-r = zeros(n_subj,numel(mask_names)+1,3);
-Xs = {}; Ys = {};
+r = cell(2,1);
+m = r; tic
 
 % cycle through each subject
 for subj = 1 : n_subj
     
-    % cycle through each mask (plus one for forgotten ers)
-    for mask = 1 : numel(mask_names)+1
+    % ---- load data ---- %
+    % define subject data directory
+    dir_subj = [dir_bids,'sourcedata/',sprintf('sub-%02.0f',subj),'/eeg/'];
     
-        % switch based on mask
-        switch mask
-            case 1
-                % get channels in roi
-                coi = mask_roi{mask}.inside(stat{mask}.inside==1);%stat{mask}.negclusterslabelmat(stat{mask}.inside==1)==1;
-        
-                % extract all trial numbers from powspctrm
-                idx         = 1 : size(group_freq{subj,mask}.trialinfo,1);
-                trl_nums    = group_freq{subj,mask}.trialinfo(idx,1);
-                
-            case 2
-                % get channels in roi
-                coi = mask_roi{mask}.inside(stat{mask}.inside==1);%stat{mask}.negclusterslabelmat(stat{mask}.inside==1)==1;
-                
-                % extract recalled trial numbers from powspctrm
-                idx         = group_freq{subj,mask}.trialinfo(:,2)==1;
-                trl_nums    = group_freq{subj,mask}.trialinfo(idx,1);
-
-            case 3
-                % get channels in roi
-                coi = mask_roi{mask-1}.inside(stat{mask-1}.inside==1);%stat{mask-1}.negclusterslabelmat(stat{mask-1}.inside==1)==1;
-                
-                % extract forgotten trial numbers from powspctrm
-                idx         = group_freq{subj,mask-1}.trialinfo(:,2)==0;
-                trl_nums    = group_freq{subj,mask-1}.trialinfo(idx,1);   
-        end
+    % load irasa data
+    load([dir_subj,sprintf('sub-%02.0f',subj),'_task-rf_eeg-irasa.mat'])  
+    
+    % ---- resort trialinfo ---- %
+    % resort encoding trialinfo
+    new_info = zeros(numel(freq{1}.trialinfo),3);
+    for i = 1 : numel(freq{1}.trialinfo)
+        new_info(i,:) = [freq{1}.trialinfo{i}.trl_at_encoding freq{1}.trialinfo{i}.recalled freq{1}.trialinfo{i}.confidence];
+    end
+    freq{1}.trialinfo = new_info;
+    
+    % resort retrieval trialinfo
+    new_info = zeros(numel(freq{2}.trialinfo),3);
+    for i = 1 : numel(freq{2}.trialinfo)
+        new_info(i,:) = [freq{2}.trialinfo{i}.trl_at_retrieval freq{2}.trialinfo{i}.recalled freq{2}.trialinfo{i}.confidence];
+    end
+    freq{2}.trialinfo = new_info;
+    
+    % ---- prepare for regression ---- %
+    % cycle through each mask (plus one for forgotten ers)
+    for mask = 1 : numel(mask_names)
+    
+        % extract all trial numbers from powspctrm
+        trl_nums    = freq{mask}.trialinfo(:,1);
+        %if mask == 1 % no behaviour ignore
+            %nan_idx = true(size(freq{mask}.trialinfo,1),1);
+        %else            
+            nan_idx     = ~isnan(freq{mask}.trialinfo(:,3)) & ~isnan(freq{mask}.trialinfo(:,2));
+        %end
 
         % fix numbers
         trl_nums(trl_nums>48 & trl_nums<=96)    = trl_nums(trl_nums>48 & trl_nums<=96) - 48;
         trl_nums(trl_nums>96 & trl_nums<=144)   = trl_nums(trl_nums>96 & trl_nums<=144) - 48;
         trl_nums(trl_nums>144 & trl_nums<=192)  = trl_nums(trl_nums>144 & trl_nums<=192) - 96;
-
-        % switch based on mask
-        if mask ~= 3
-
-            % extract vectors for items
-            X = squeeze(rsa_vec(subj,mask,trl_nums));
-            Y = nanmean(nanmean(group_freq{subj,mask}.powspctrm(idx,coi,:),3),2);
-            A = group_freq{subj,mask}.trialinfo(idx,3);
-            B = squeeze(mean_bold(subj,mask,trl_nums));
+        
+        % define outcome regressor (i.e. similarity)
+        X = squeeze(rsa_vec(subj,mask,trl_nums));
+        
+        % extract offset and slope
+        powoffset = freq{mask}.powoffset(:,mask_roi{mask}.freq_2_roi);
+        powslope  = freq{mask}.powslope(:,mask_roi{mask}.freq_2_roi);
+        
+        % predefine matrix for power
+        n_trl   = size(freq{mask}.trialinfo,1);
+        n_chan  = numel(mask_roi{mask}.freq_2_roi);
+        pow     = nan(n_trl,n_chan,2);
+        
+        % cycle through each channel of mask
+        for chan = 1 : n_chan
+        
+            % get channel index
+            chan_idx = mask_roi{mask}.freq_2_roi(chan);
             
-        else
-            % extract vectors for items
-            X = squeeze(rsa_vec(subj,mask-1,trl_nums));
-            Y = nanmean(nanmean(group_freq{subj,mask-1}.powspctrm(idx,coi,:),3),2);
-            A = group_freq{subj,mask-1}.trialinfo(idx,3);
-            B = squeeze(mean_bold(subj,mask-1,trl_nums));
-        end
-        
-        %figure;plot(X,Y,'k*');title(sprintf('subj%02.0f',subj));%xlim([-4 4]);ylim([-4 4])
-        
-        % correlate
-        r(subj,mask,1) = atanh(corr(X,Y));
-        r(subj,mask,2) = atanh(partialcorr(X,Y,A));
-        r(subj,mask,3) = atanh(partialcorr(X,Y,B));
-        
-        if mask == 2 && (subj == 15 || subj == 12)
-            Xs{end+1} = X;
-            Ys{end+1} = Y;
+            % if peaks are present
+            if ~isnan(peak_idx(subj,chan_idx))
+                
+                % add peak power to regressor table    
+                pow(:,chan,1) = freq{mask}.prepow(:,chan_idx,peak_idx(subj,chan_idx));
+                pow(:,chan,2) = freq{mask}.powspctrm(:,chan_idx,peak_idx(subj,chan_idx));
+                 
+                % define predictor regressors
+                Y       = zeros(size(X,1),5);
+                Y(:,1)  = pow(:,chan,1);                    % prestim pow
+                Y(:,2)  = pow(:,chan,2);                    % poststim pow
+                Y(:,3)  = powoffset(:,chan);                % poststim offset
+                Y(:,4)  = powslope(:,chan);                 % poststim slope
+                Y(:,5)  = mean_bold(subj,mask,trl_nums);    % bold
+                Y(:,6)  = freq{mask}.trialinfo(:,1);        % trl no.
+
+                % if retrieval, add behaviour
+                if mask == 2
+                    Y(:,7)  = freq{mask}.trialinfo(:,3);    % confidence
+                    Y(:,8)  = freq{mask}.trialinfo(:,2);    % memory
+                end               
+                
+                % run linear model
+                B = fitlm(Y,X,'exclude',~nan_idx);
+
+                % store data
+                for i = 1 : size(Y,2)
+                    r{mask}(subj,i,chan) = B.Coefficients.tStat(i+1);
+                end  
+                
+            % else, nan out betas
+            else
+                r{mask}(subj,:,chan) = NaN;
+            end
         end
     end
+    
+    % update user
+    fprintf('sub-%02.0f complete... time elapsed: %1.1f seconds...\n',subj,round(toc,1))
 end
 
-% prepare data structure for one-sample t-test
-grand_freq{1}              = [];
-grand_freq{1}.time         = 1;
-grand_freq{1}.freq         = 1;
-grand_freq{1}.label        = {'dummy'};
-grand_freq{1}.dimord       = 'subj_chan_freq_time';
-grand_freq{1}.powspctrm    = r(:,1,1);
+% predefine grand_freq structure
+grand_freq = cell(14,1);
 
-% duplicate data structure for ERS recalled data
-grand_freq{2}               = grand_freq{1};
-grand_freq{2}.powspctrm     = r(:,2,1);
+% cycle through each regressor
+for i = 1 : size(r{1},2)
 
-% duplicate data structure for ERS forgotten data
-grand_freq{3}               = grand_freq{1};
-grand_freq{3}.powspctrm     = r(:,3,1);
+    % prepare data structure for one-sample t-test
+    grand_freq{i,1}              = [];
+    grand_freq{i,1}.time         = 1;
+    grand_freq{i,1}.freq         = 1;
+    grand_freq{i,1}.label        = {'dummy'};
+    grand_freq{i,1}.dimord       = 'subj_chan_freq_time';
+    grand_freq{i,1}.powspctrm    = nanmean(r{1}(:,i,:),3);
+end
+
+% do same for retrieval
+for i = 1 : size(r{2},2)
+
+    % duplicate data structure for ERS recalled data
+    grand_freq{i+6}             = grand_freq{1};
+    grand_freq{i+6}.powspctrm   = nanmean(r{2}(:,i,:),3);
+end
 
 % save data
 save([dir_bids,'derivatives/group/rsa-correlation/group_task-all_comb-freq.mat'],'grand_freq'); 
@@ -795,30 +902,41 @@ save([dir_bids,'derivatives/group/rsa-correlation/group_task-all_comb-freq.mat']
 % set seed
 rng(1) 
 
-% predefine cell for statistics
-cfg             = [];
-cfg.tail        = -1;
-[stat,tbl]      = run_oneSampleT(cfg, grand_freq);
-   
-% save data
-save([dir_bids,'derivatives/group/rsa-correlation/group_task-retrieval_comb-stat.mat'],'stat','tbl');
-
-% check partial correlation controlling for memory confidence
-grand_freq_partial{1}           = grand_freq{1};
-grand_freq_partial{1}.powspctrm = r(:,1,3);
-grand_freq_partial{2}           = grand_freq{2};
-grand_freq_partial{2}.powspctrm = r(:,2,3);
-grand_freq_partial{3}           = grand_freq{2};
-grand_freq_partial{3}.powspctrm = r(:,2,2);
+% define analysis label
+lab = {'enc: prepow','enc: postpow','enc: offset','enc: slope','enc: bold','enc: conf',...
+       'ret: prepow','ret: postpow','ret: offset','ret: slope','ret: bold','ret: conf','enc: conf','enc: conf'}';
 
 % predefine cell for statistics
 cfg             = [];
-cfg.tail        = -1;
-[stat,tbl]      = run_oneSampleT(cfg, grand_freq_partial);
-   
+cfg.tail        = zeros(16,1) - 1;%[-1 -1 0 0 -1 -1 -1 -1 0 0 -1 1];
+[stat,tbl]      = run_oneSampleT(cfg, grand_freq(:)); 
+tbl             = addvars(tbl,lab,'Before','t');
+disp(tbl)
+ 
+% plot
+figure; hold on
+for i = 1 : size(grand_freq,2)
+    subplot(2,1,i); hold on
+    for j = 1 : size(grand_freq,1)
+        plot(j,grand_freq{j,i}.powspctrm,'k*')
+        plot(j+.1,mean(grand_freq{j,i}.powspctrm),'ko')
+    end
+    set(gca,'xtick',1:size(grand_freq,1),'xticklabel',{'pre','post','conf','bold','acc'});
+    xlim([0.5 size(grand_freq,1)+.5])
+end
+
 % save data
-save([dir_bids,'derivatives/group/rsa-correlation/group_task-retrieval_comb-partialstat.mat'],'stat','tbl');
-   
+save([dir_bids,'derivatives/group/rsa-correlation/group_task-retrieval_comb-stat.mat'],'stat','tbl','stat2','tbl2');
+
+% run Hotelling's T [derived from: https://uk.mathworks.com/matlabcentral/fileexchange/2844-hotellingt2] 
+for i = 1 : 2
+    
+    X = cat(2,r(:,1,i),r(:,2,i));
+    pval(i) = multi_ttest(X);
+end
+
+disp(pval)
+
 %% Extract Raw Power of Cluster 
 % prepare table for stat values
 tbl = array2table(zeros(n_subj,6),'VariableNames',{'perception','retrieval','forgotten','per_noBold','ret_noBold','ret_noConf'});
