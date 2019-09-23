@@ -28,11 +28,14 @@ config.correctm          = 'cluster';
 config.numrandomization  = 2000;
 config.alpha             = 0.05;
 config.correcttail       = 'prob';
-config.parameter         = cfg.parameter;
+config.parameter         = 'pow';
 
 % cycle through data structures
 for condition = 1 : n_data
 
+    % create pow parameter
+    data{condition}.pow = data{condition}.(cfg.parameter);
+    
     % define tail    
     config.tail = cfg.tail(condition);
     

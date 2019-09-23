@@ -136,15 +136,15 @@ data_raincloud = pandas.read_csv(data_fname,
                        delimiter=",")
 
 # restrict to retrieval data
-data_enc = data_raincloud.drop(labels = ['ret_pow','rse_pow','pre_pow','diff_pow','ret_slope','rse_slope','pre_slope','diff_slope','ret_offset','rse_offset','pre_offset','diff_offset'], axis = 1)
-data_ret = data_raincloud.drop(labels = ['enc_pow','rse_pow','pre_pow','diff_pow','enc_slope','rse_slope','pre_slope','diff_slope','enc_offset','rse_offset','pre_offset','diff_offset'], axis = 1)
-data_rse = data_raincloud.drop(labels = ['ret_pow','enc_pow','pre_pow','diff_pow','ret_slope','enc_slope','pre_slope','diff_slope','ret_offset','enc_offset','pre_offset','diff_offset'], axis = 1)
+data_enc = data_raincloud.drop(labels = ['ret_pow','rse_pow','rse_prepow','ret_slope','rse_slope','rse_preslope',], axis = 1)
+#data_ret = data_raincloud.drop(labels = ['enc_pow','rse_pow','pre_pow','diff_pow','enc_slope','rse_slope','pre_slope','diff_slope','enc_offset','rse_offset','pre_offset','diff_offset'], axis = 1)
+#data_rse = data_raincloud.drop(labels = ['ret_pow','enc_pow','pre_pow','diff_pow','ret_slope','enc_slope','pre_slope','diff_slope','ret_offset','enc_offset','pre_offset','diff_offset'], axis = 1)
 
 # %% ----- Raincloud Plot ----- # 
 # create figure
 f,ax = pyplot.subplots(1,1)
 f.set_figheight(3.7/2.54) # 4inches 
-f.set_figwidth(5.7/2.54) # 12inches
+f.set_figwidth(4.2/2.54) # 12inches
 f.set_dpi(1000)
 
 # define colour scheme
@@ -154,7 +154,7 @@ colour = [colour[2],colour[3],colour[4]]
 # define labels
 labels = {'title':'',
           'ylabel':'Normalised Beta (t)',
-          'xticklabel':['Osc. Power','Slope','Offset'],
+          'xticklabel':['Osc. Power','Slope'],
           'yticks':[-3,-1.5,0,1.5,3],
           'yticklabel':['-3','-1.5','0','1.5','3']}
 

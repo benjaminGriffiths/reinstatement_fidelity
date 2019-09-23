@@ -32,31 +32,41 @@ for subj = 1 : n_subj
     fprintf('\nloading sub-%02.0f data...\n',subj);
     load([dir_subj,sprintf('sub-%02.0f',subj),'_task-rf_eeg-source.mat'])  
     
-    % run fooof analysis
-    [freq,spec,h] = get_fooof(source,'visual');
+    % run fooof analysis for visual encoding
+    [freq{1},spec{1},h] = get_fooof(source,'visual','encoding');
+    saveas(h,sprintf('%sderivatives/group/figures/fooof/sub-%02.0f_plot-visencfooof.jpg',dir_bids,subj),'jpg')  
     
+    % run fooof analysis for visual retrieval
+    [freq{2},spec{2},h] = get_fooof(source,'visual','retrieval');
+    saveas(h,sprintf('%sderivatives/group/figures/fooof/sub-%02.0f_plot-visretfooof.jpg',dir_bids,subj),'jpg')  
+    
+    % run fooof analysis for auditory encoding
+    [freq{3},spec{3},h] = get_fooof(source,'visual','encoding');
+    saveas(h,sprintf('%sderivatives/group/figures/fooof/sub-%02.0f_plot-audencfooof.jpg',dir_bids,subj),'jpg')  
+    
+    % run fooof analysis for auditory retrieval
+    [freq{4},spec{4},h] = get_fooof(source,'visual','retrieval');
+    saveas(h,sprintf('%sderivatives/group/figures/fooof/sub-%02.0f_plot-audretfooof.jpg',dir_bids,subj),'jpg')  
+       
     % save data
     save([dir_subj,sprintf('sub-%02.0f',subj),'_task-rf_eeg-fooof.mat'],'freq','spec')  
-    saveas(h,sprintf('%sderivatives/group/figures/sub-%02.0f_plot-fooof.jpg',dir_bids,subj),'jpg')  
     
     % update command line
-    fprintf('\nsub-%02.0f complete...\ntotal time elapsed: %1.1f hours...\nestimated time remaining: %1.1f hours...\n',subj,round(toc/3600,1),round(((toc/subj)*n_subj)/3600,1))
+    te = round(toc/3600,1);
+    tr = round((te/subj)*(n_subj-subj),1);
+    fprintf('\nsub-%02.0f complete...\ntotal time elapsed: %1.1f hours...\nestimated time remaining: %1.1f hours...\n',subj,te,tr)
     
     % tidy up
     close all
-    clear dir_subj subj freq spec h source
+    clear dir_subj subj freq spec h source te tr
 end
-    
-% save data
-mkdir([dir_bids,'derivatives/group/eeg/'])
-save([dir_bids,'derivatives/group/eeg/group_task-all_eeg-group_fooof.mat'],'group_freq','-v7.3');
 
 %% Run Per-Participant Regression
 % predefine group structure
 group_betas = cell(n_subj,4);
 
 % cycle through each subject
-for subj = 1 : 14% n_subj
+for subj = 1 :  n_subj
     
     % define subject data directory
     dir_subj = [dir_bids,'sourcedata/',sprintf('sub-%02.0f',subj),'/eeg/'];    
@@ -66,254 +76,87 @@ for subj = 1 : 14% n_subj
     load([dir_subj,sprintf('sub-%02.0f',subj),'_task-rf_eeg-fooof.mat']) 
     
     % run fooof analysis
-    [group_betas(subj,:),h] = get_betas(freq);
+    [group_betas(subj,:),h] = get_betas(freq,'linreg');
     
     % save figure    
-    saveas(h,sprintf('%sderivatives/group/figures/sub-%02.0f_plot-regression.jpg',dir_bids,subj),'jpg')  
+    saveas(h,sprintf('%sderivatives/group/figures/eeg_regression/sub-%02.0f_plot-regression.jpg',dir_bids,subj),'jpg')  
     close all
     clear h spec freq subj dir_subj
 end
     
 %% Get Group Average
-% load group data if needed
-if ~exist('group_irasa','var')
-    load([dir_bids,'derivatives/group/eeg/group_task-all_eeg-group_irasa.mat'])
+% create grand data cell
+grand_betas = cell(size(group_betas,2),1);
+
+% cycle through each condition
+for i = 1 : size(group_betas,2)
+    
+    % get grand average
+    cfg = [];
+    cfg.keepindividual = 'yes';
+    cfg.parameter = {'powspctrm','slope'};
+    grand_betas{i} = ft_freqgrandaverage(cfg,group_betas{:,i});    
 end
 
-% get number of channels
-n_chan = numel(group_irasa{1,1,1}.label);
-
-% create cell for peak frequencies
-peak_idx = nan(n_subj,n_chan); tic
-                 
-% cycle through subjects
-for subj = 1 : n_subj
-        
-    % cycle through channels
-    for chan = 1 : n_chan
-
-        % get average oscillatory spectrum
-        osci_spec = cat(1,group_irasa{subj,1,1}.prepow(:,chan,:),group_irasa{subj,1,1}.powspctrm(:,chan,:),group_irasa{subj,2,1}.prepow(:,chan,:),group_irasa{subj,2,1}.powspctrm(:,chan,:));
-        osci_spec = squeeze(mean(osci_spec,1));
-
-        % find peaks of spectrum
-        [vals,idx] = findpeaks(osci_spec);
-
-        % if peaks are present
-        if ~isempty(idx)
-            [~,midx] = max(vals);
-            peak_idx(subj,chan) = idx(midx);
-        end
-    end
-
-    % update user
-    fprintf('peaks estimated for sub-%02.0f... time elapsed: %1.1f minutes\n',subj,toc/60);
-end
-     
-% predefine cells to house concatenated group data
-grand_irasa = repmat({struct('cfg',[],'freq',8,'time',1,'label',{group_irasa{1,1,1}.label},...
-                     'dimord','subj_chan_freq_time','powspctrm',nan(n_subj,n_chan),...
-                     'powslope',nan(n_subj,n_chan),'powoffset',nan(n_subj,n_chan))},[5 1]); tic          
-        
-% cycle through subjects
-for subj = 1 : n_subj
-        
-    % cycle through channels
-    for chan = 1 : n_chan
-
-        % define linear name
-        ln = {'trl_at_encoding','trl_at_retrieval'};
-        
-        % cycle through encoding and retrieval
-        for i = 1 : 2
-
-            % get number of trials        
-            n_trl  = numel(group_irasa{subj,i,1}.trialinfo);
-        
-            % create pre/post model
-            Y = [ones(n_trl,1);zeros(n_trl,1)]+1;
-            
-            % create regressor table
-            X        = nan(n_trl*2,3);
-            X(:,1)   = cat(1,group_irasa{subj,i,1}.powslope(:,chan),group_irasa{subj,i,1}.preslope(:,chan));
-            X(:,2)   = cat(1,group_irasa{subj,i,1}.powoffset(:,chan),group_irasa{subj,i,1}.preoffset(:,chan));
-            
-            % get power regressor if peak found
-            idx = peak_idx(subj,chan);
-            if ~isnan(idx)
-                X(:,3)   = mean(cat(1,group_irasa{subj,i,1}.powspctrm(:,chan,idx-1:idx+1),group_irasa{subj,i,1}.prepow(:,chan,idx-1:idx+1)),3);
-            end
-            
-            % add linear regressor
-            for trl = 1 : n_trl
-                X(trl,4) = group_irasa{subj,i,1}.trialinfo{trl}.(ln{i});
-            end
-            
-            % handle NaNs
-            nidx = any(isnan(X),2);
-            X(nidx,:) = [];
-            Y(nidx,:) = [];
-            
-            % run multiregression (if peak found)
-            if ~isempty(X)
-                B = fitlm(X,Y);
-
-                % store data
-                grand_irasa{i,1}.powslope(subj,chan)    = B.Coefficients.tStat(2);
-                grand_irasa{i,1}.powoffset(subj,chan)   = B.Coefficients.tStat(3);
-                grand_irasa{i,1}.powspctrm(subj,chan)   = B.Coefficients.tStat(4);
-            end
-        end           
-    end    
-    
-    % update user
-    fprintf('sub-%02.0f complete... time elapsed: %1.1f minutes\n',subj,round(toc/60,1));
-    clear j k n_trl tmp_pd tmp_pow tmp_pp mid pid vals idx valp idxp erd    
-end
-
-% cycle through subjects
-for subj = 1 : n_subj
-
-    % get data of interest
-    data = group_irasa{subj,2,1};
-    
-    % get number of trials        
-    n_trl  = numel(data.trialinfo);
-    
-    % cycle through channels
-    for chan = 1 : n_chan
-        
-        % create regressor table
-        X        = nan(n_trl,7);
-        X(:,1)   = data.powslope(:,chan);
-        X(:,2)   = data.powoffset(:,chan);
-        X(:,4)   = data.preslope(:,chan);
-        X(:,5)   = data.preoffset(:,chan);
-                        
-        % get power regressor if peak found
-        idx = peak_idx(subj,chan);
-        if ~isnan(idx)
-            X(:,3)   = mean(data.powspctrm(:,chan,idx-1:idx+1),3);
-            X(:,6)   = mean(data.prepow(:,chan,idx-1:idx+1),3);
-        end
-
-        % create memory model
-        Y = nan(n_trl,1);
-        for i = 1 : n_trl
-            Y(i) = data.trialinfo{i}.recalled;
-            X(i,7) = data.trialinfo{i}.trl_at_retrieval;
-        end    
-        
-        % handle NaNs
-        idx = any(isnan(X),2);
-        X(idx,:) = [];        
-        Y(idx,:) = [];
-
-        % run multiregression (if peak found)
-        if ~isempty(X)
-            
-            % run multiple regression
-            B = fitlm(X,Y);
-
-            % store poststim data
-            grand_irasa{3,1}.powslope(subj,chan)    = B.Coefficients.tStat(2);
-            grand_irasa{3,1}.powoffset(subj,chan)   = B.Coefficients.tStat(3);
-            grand_irasa{3,1}.powspctrm(subj,chan)   = B.Coefficients.tStat(4);
-            
-            % store prestim data
-            grand_irasa{4,1}.powslope(subj,chan)    = B.Coefficients.tStat(5);
-            grand_irasa{4,1}.powoffset(subj,chan)   = B.Coefficients.tStat(6);
-            grand_irasa{4,1}.powspctrm(subj,chan)   = B.Coefficients.tStat(7);
-            
-            % create difference model
-            Xd = zeros(size(X,1),4);
-            Xd(:,1) = X(:,1) - X(:,4);
-            Xd(:,2) = X(:,2) - X(:,5);
-            Xd(:,3) = X(:,3) - X(:,6);
-            Xd(:,4) = X(:,7);
-            
-            % run multiple regression
-            B = fitlm(X,Y);
-
-            % store difference data
-            grand_irasa{5,1}.powslope(subj,chan)    = B.Coefficients.tStat(2);
-            grand_irasa{5,1}.powoffset(subj,chan)   = B.Coefficients.tStat(3);
-            grand_irasa{5,1}.powspctrm(subj,chan)   = B.Coefficients.tStat(4);           
-        end
-    end
-
-    % update user
-    fprintf('sub-%02.0f complete... time elapsed: %1.1f minutes\n',subj,toc/60);
-end
-    
-% save data
-save([dir_bids,'derivatives/group/eeg/group_task-all_eeg-irasa.mat'],'grand_irasa');
+% tidy workspace
+clear i group_betas cfg
 
 %% Change Datatype to Source
-% load sourcemodel
-load([dir_tool,'fieldtrip-20170319/template/sourcemodel/standard_sourcemodel3d10mm.mat']);
-
-% load AAL atlas
-mri = ft_read_mri([dir_bids,'sourcedata/masks/whole_brain.nii']);
- 
-% interpolate clusters with grid
-cfg             = [];
-cfg.parameter	= 'anatomy';
-roi             = ft_sourceinterpolate(cfg,mri,sourcemodel);
-
-% define additional roi parameters
-roi.inside      = ~isnan(roi.anatomy) & roi.anatomy > 0;
-roi.anatomy     = double(~isnan(roi.anatomy) & roi.anatomy > 0);
-roi.pos         = sourcemodel.pos;
+% load ROI data
+load([dir_bids,'derivatives/group/eeg/roi.mat'])
 
 % cycle through each data type
-for i = 1 : numel(grand_irasa)
+for i = 1 : numel(grand_betas)
     
     % add in source model details
-    grand_irasa{i,1}.powdimord   = 'rpt_pos';
-    grand_irasa{i,1}.dim         = roi.dim;
-    grand_irasa{i,1}.inside      = roi.inside(:);
-    grand_irasa{i,1}.pos         = roi.pos;
-    grand_irasa{i,1}.pow         = zeros(n_subj,numel(grand_irasa{i,1}.inside));
-    grand_irasa{i,1}.cfg         = [];
+    grand_betas{i,1}.powdimord   = 'rpt_pos';
+    grand_betas{i,1}.dim         = roi.dim;
+    grand_betas{i,1}.inside      = roi.inside(:);
+    grand_betas{i,1}.pos         = roi.pos;
+    grand_betas{i,1}.pow         = zeros(n_subj,numel(grand_betas{i,1}.inside));
+    grand_betas{i,1}.slp         = zeros(n_subj,numel(grand_betas{i,1}.inside));
+    grand_betas{i,1}.cfg         = [];
+    
+    % add in "outside" virtual electrodes to pow
+    tmp_pow = zeros(size(grand_betas{i,1}.pow,1),size(grand_betas{i,1}.inside,1));
+    tmp_pow(:,grand_betas{i,1}.inside) = grand_betas{i,1}.powspctrm;
+    grand_betas{i,1}.pow = tmp_pow;
+        
+    % add in "outside" virtual electrodes to slope
+    tmp_pow = zeros(size(grand_betas{i,1}.pow,1),size(grand_betas{i,1}.inside,1));
+    tmp_pow(:,grand_betas{i,1}.inside) = grand_betas{i,1}.slope;
+    grand_betas{i,1}.slp = tmp_pow;
     
     % remove freq details
-    grand_irasa{i,1} = rmfield(grand_irasa{i,1},{'label','freq','time','dimord'});
-end
-
-% create source data strucutre
-grand_freq = repmat(grand_irasa,[1 3]);
-powlabel = {'powspctrm','powslope','powoffset'};
-
-% cycle through each condition and metric
-for i = 1 : size(grand_freq,1)
-    for j = 1 : size(grand_freq,2)
-
-        % add in "outside" virtual electrods
-        tmp_pow = zeros(size(grand_freq{i,j}.pow,1),size(grand_freq{i,j}.inside,1));
-        tmp_pow(:,grand_freq{i,j}.inside) = grand_freq{i,j}.(powlabel{j});
-        grand_freq{i,j}.pow = tmp_pow;
-        
-        % remove irrelevant fields
-        grand_freq{i,j} = rmfield(grand_freq{i,j},powlabel);
-    end
+    grand_betas{i,1} = rmfield(grand_betas{i,1},{'powspctrm','slope','label','freq','time','dimord','cfg'});
+    clear tmp_pow i
 end
 
 %% Run Statistics
-% define cluster names
-plot_names = {'enc_pow','ret_pow','rse_pow','pre_pow','diff_pow',...
-    'enc_slope','ret_slope','rse_slope','pre_slope','diff_slope',...
-    'enc_offset','ret_offset','rse_offset','pre_offset','diff_offset'};
-
 % set seed
 rng(1) 
 
 % test oscillatory power
 cfg             = [];
-cfg.tail        = [zeros(3,1)-1; 1; -1; zeros(10,1)];
+cfg.tail        = zeros(4,1)-1;
 cfg.parameter   = 'pow';
-[stat,tbl]      = run_oneSampleT(cfg, grand_freq(:));
-tbl             = addvars(tbl,plot_names','Before','t');
+[s_pow,t_pow]   = run_oneSampleT(cfg, grand_betas(:));
+
+% test slope
+cfg             = [];
+cfg.tail        = zeros(4,1);
+cfg.parameter   = 'slp';
+[s_slp,t_slp]   = run_oneSampleT(cfg, grand_betas(:));
+
+% combine tables
+stat = cat(1,s_pow,s_slp);
+tbl = cat(1,t_pow,t_slp);
+
+% add labels
+plot_names = {'enc_pow','ret_pow','rse_pow','rse_prepow',...
+    'enc_slope','ret_slope','rse_slope','rse_preslope'}';
+tbl = addvars(tbl,plot_names,'Before','t');
+disp(tbl)
 
 % save data
 save([dir_bids,'derivatives/group/eeg/group_task-all_pow-stat.mat'],'stat','tbl');
@@ -323,22 +166,36 @@ save([dir_bids,'derivatives/group/eeg/group_task-all_pow-stat.mat'],'stat','tbl'
 tbl = array2table(zeros(n_subj,numel(plot_names)),'VariableNames',plot_names);
 
 % cycle through conditions
-for i = 1 : 15
+for i = 1 : 4
      
-    % get indices of clusters
-    if i > 5 || i == 4
-        clus_idx = stat{i}.posclusterslabelmat==1;
+    % get indices of power clusters
+    clus_idx = stat{i}.negclusterslabelmat==1;
+
+    % create table
+    tbl.(plot_names{i})(:,1) = nanmean(grand_betas{i}.pow(:,clus_idx),2);
+    
+    % get indices of slope clusters
+    if i ~= 2
+        clus_idx = stat{i+4}.negclusterslabelmat==1;
     else
-        clus_idx = stat{i}.negclusterslabelmat==1;
+        clus_idx = stat{i+4}.posclusterslabelmat==1;
     end
 
     % create table
-    tbl.(plot_names{i})(:,1) = nanmean(grand_freq{i}.pow(:,clus_idx),2);
+    tbl.(plot_names{i+4})(:,1) = nanmean(grand_betas{i}.slp(:,clus_idx),2);
 end
+
+% get rough plot
+figure; hold on
+for i = 1 : 8
+    plot(i,tbl.(plot_names{i}),'ko')
+end
+set(gca,'xtick',1:8,'xticklabel',plot_names)
+xlim([0 9])
 
 % write table
 writetable(tbl,[dir_bids,'derivatives/group/eeg/group_task-all_eeg-cluster.csv'],'Delimiter',',')
-copyfile([dir_bids,'derivatives/group/eeg/group_task-all_eeg-cluster.csv'],[dir_repos,'data/fig2_data/group_task-rf_eeg-cluster.csv'])
+copyfile([dir_bids,'derivatives/group/eeg/group_task-all_eeg-cluster.csv'],[dir_repos,'reinstatement_fidelity/data/fig2_data/group_task-rf_eeg-cluster.csv'])
 
 %% Create Masked Surface Plots
 % load template MRI
@@ -348,10 +205,10 @@ load([dir_tool,'fieldtrip-20170319/template/sourcemodel/standard_sourcemodel3d10
 for i = 1 : numel(plot_names)
         
     % get indices of clusters
-    if i > 5 || i == 4
-        clus_idx = stat{i}.posclusterslabelmat==1;
-    else
+    if i ~= 6
         clus_idx = stat{i}.negclusterslabelmat==1;
+    else
+        clus_idx = stat{i}.posclusterslabelmat==1;
     end
     
     % create source data structure
@@ -387,7 +244,7 @@ for i = 1 : numel(plot_names)
     
     % reslice to 1mm isometric to match template MRI
     reslice_nii([dir_bids,'derivatives/group/eeg/group_task-',plot_names{i},'_eeg-maskedmap.nii'],[dir_bids,'derivatives/group/eeg/group_task-',plot_names{i},'_eeg-maskedmap.nii'],[1 1 1]);
-    copyfile([dir_bids,'derivatives/group/eeg/group_task-',plot_names{i},'_eeg-maskedmap.nii'],[dir_repos,'data/fig2_data/group_task-',plot_names{i},'_eeg-maskedmap.nii'])    
+    copyfile([dir_bids,'derivatives/group/eeg/group_task-',plot_names{i},'_eeg-maskedmap.nii'],[dir_repos,'reinstatement_fidelity/data/fig2_data/group_task-',plot_names{i},'_eeg-maskedmap.nii'])    
 end
 
 %% Create Unasked Surface Plots
