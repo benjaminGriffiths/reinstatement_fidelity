@@ -4,6 +4,12 @@ clearvars
 close all
 clc
 
+% start parallel pool
+p = gcp('nocreate');
+if isempty(p)
+    parpool(4);
+end
+
 % define root directory
 if ispc;    dir_bids = 'Y:/projects/reinstatement_fidelity/bids_data/';
             dir_tool = 'Y:/projects/general/';
@@ -32,24 +38,26 @@ for subj = 1 : n_subj
     fprintf('\nloading sub-%02.0f data...\n',subj);
     load([dir_subj,sprintf('sub-%02.0f',subj),'_task-rf_eeg-source.mat'])  
     
-    % run fooof analysis for visual encoding
-    [freq{1},spec{1},h] = get_fooof(source,'visual','encoding');
-    saveas(h,sprintf('%sderivatives/group/figures/fooof/sub-%02.0f_plot-visencfooof.jpg',dir_bids,subj),'jpg')  
+    % define modality and task names
+    mtN = {'visual','auditory';'encoding','retrieval'};
     
-    % run fooof analysis for visual retrieval
-    [freq{2},spec{2},h] = get_fooof(source,'visual','retrieval');
-    saveas(h,sprintf('%sderivatives/group/figures/fooof/sub-%02.0f_plot-visretfooof.jpg',dir_bids,subj),'jpg')  
+    % cycle through modality
+    for i = 1 : size(mtN,1)
+        
+        % predefine output cells
+        freq = cell(2,1);
+        spec = cell(2,1);
+        
+        % cycle through each task
+        for j = 1 : size(mtN,2)
     
-    % run fooof analysis for auditory encoding
-    [freq{3},spec{3},h] = get_fooof(source,'visual','encoding');
-    saveas(h,sprintf('%sderivatives/group/figures/fooof/sub-%02.0f_plot-audencfooof.jpg',dir_bids,subj),'jpg')  
-    
-    % run fooof analysis for auditory retrieval
-    [freq{4},spec{4},h] = get_fooof(source,'visual','retrieval');
-    saveas(h,sprintf('%sderivatives/group/figures/fooof/sub-%02.0f_plot-audretfooof.jpg',dir_bids,subj),'jpg')  
-       
-    % save data
-    save([dir_subj,sprintf('sub-%02.0f',subj),'_task-rf_eeg-fooof.mat'],'freq','spec')  
+            % run fooof analysis
+            freq{j} = get_fooof(source,mtN{1,i},mtN{2,j});
+        end
+        
+        % save data
+        save(sprintf('%sderivatives/sub-%02.0f/eeg/sub-%02.0f_task-rf_eeg-%sfooof.mat',dir_bids,subj,subj,mtN{1,i}),'freq','spec')  
+    end
     
     % update command line
     te = round(toc/3600,1);
@@ -63,7 +71,7 @@ end
 
 %% Run Per-Participant Regression
 % predefine group structure
-group_betas = cell(n_subj,4);
+group_betas = cell(n_subj,3); tic
 
 % cycle through each subject
 for subj = 1 :  n_subj
@@ -75,13 +83,13 @@ for subj = 1 :  n_subj
     fprintf('\nloading sub-%02.0f data...\n',subj);
     load([dir_subj,sprintf('sub-%02.0f',subj),'_task-rf_eeg-fooof.mat']) 
     
-    % run fooof analysis
-    [group_betas(subj,:),h] = get_betas(freq,'linreg');
-    
-    % save figure    
-    saveas(h,sprintf('%sderivatives/group/figures/eeg_regression/sub-%02.0f_plot-regression.jpg',dir_bids,subj),'jpg')  
-    close all
-    clear h spec freq subj dir_subj
+    % get beta weights
+    group_betas{subj,1} = get_betas(freq{1},'erd');
+    group_betas{subj,2} = get_betas(freq{2},'erd');
+    group_betas{subj,3} = get_betas(freq{2},'rse');
+      
+    % tidy workspace 
+    clear h spec te tr freq subj dir_subj
 end
     
 %% Get Group Average
@@ -95,13 +103,16 @@ for i = 1 : size(group_betas,2)
     cfg = [];
     cfg.keepindividual = 'yes';
     cfg.parameter = {'powspctrm','slope'};
-    grand_betas{i} = ft_freqgrandaverage(cfg,group_betas{:,i});    
+    grand_betas{i,1} = ft_freqgrandaverage(cfg,group_betas{:,i});  
 end
 
 % tidy workspace
 clear i group_betas cfg
 
 %% Change Datatype to Source
+% reshape beta structure
+grand_betas = grand_betas(:);
+
 % load ROI data
 load([dir_bids,'derivatives/group/eeg/roi.mat'])
 
@@ -132,19 +143,22 @@ for i = 1 : numel(grand_betas)
     clear tmp_pow i
 end
 
+% save data
+save([dir_bids,'derivatives/group/eeg/group_task-all_pow-beta.mat'],'grand_betas');
+
 %% Run Statistics
 % set seed
 rng(1) 
 
 % test oscillatory power
 cfg             = [];
-cfg.tail        = zeros(4,1)-1;
+cfg.tail        = zeros(3,1)-1;
 cfg.parameter   = 'pow';
 [s_pow,t_pow]   = run_oneSampleT(cfg, grand_betas(:));
 
 % test slope
 cfg             = [];
-cfg.tail        = zeros(4,1);
+cfg.tail        = zeros(3,1);
 cfg.parameter   = 'slp';
 [s_slp,t_slp]   = run_oneSampleT(cfg, grand_betas(:));
 
@@ -153,8 +167,7 @@ stat = cat(1,s_pow,s_slp);
 tbl = cat(1,t_pow,t_slp);
 
 % add labels
-plot_names = {'enc_pow','ret_pow','rse_pow','rse_prepow',...
-    'enc_slope','ret_slope','rse_slope','rse_preslope'}';
+plot_names = {'pow_enc','pow_ret','pow_rse','slp_enc','slp_ret','slp_rse'}';
 tbl = addvars(tbl,plot_names,'Before','t');
 disp(tbl)
 
@@ -166,7 +179,7 @@ save([dir_bids,'derivatives/group/eeg/group_task-all_pow-stat.mat'],'stat','tbl'
 tbl = array2table(zeros(n_subj,numel(plot_names)),'VariableNames',plot_names);
 
 % cycle through conditions
-for i = 1 : 4
+for i = 1 : 3%numel(plot_names)
      
     % get indices of power clusters
     clus_idx = stat{i}.negclusterslabelmat==1;
@@ -175,14 +188,14 @@ for i = 1 : 4
     tbl.(plot_names{i})(:,1) = nanmean(grand_betas{i}.pow(:,clus_idx),2);
     
     % get indices of slope clusters
-    if i ~= 2
-        clus_idx = stat{i+4}.negclusterslabelmat==1;
+    if i ~= 4
+        clus_idx = stat{i}.negclusterslabelmat==1;
     else
-        clus_idx = stat{i+4}.posclusterslabelmat==1;
+        clus_idx = stat{i}.posclusterslabelmat==1;
     end
 
     % create table
-    tbl.(plot_names{i+4})(:,1) = nanmean(grand_betas{i}.slp(:,clus_idx),2);
+    tbl.(plot_names{i})(:,1) = nanmean(grand_betas{i}.slp(:,clus_idx),2);
 end
 
 % get rough plot
@@ -202,7 +215,7 @@ copyfile([dir_bids,'derivatives/group/eeg/group_task-all_eeg-cluster.csv'],[dir_
 load([dir_tool,'fieldtrip-20170319/template/sourcemodel/standard_sourcemodel3d10mm.mat']);
 
 % cycle through conditions
-for i = 1 : numel(plot_names)
+for i = 1 :3% numel(plot_names)
         
     % get indices of clusters
     if i ~= 6
