@@ -27,8 +27,10 @@ addpath(genpath([dir_repos,'fooof_mat/']))
 n_subj = 21;
 
 %% Get Power and Slope for Each Participant
+% predefine group freq structure
+group_freq = cell(n_subj,6); tic
+
 % cycle through each subject
-tic
 for subj = 1 : n_subj
     
     % define subject data directory
@@ -38,113 +40,87 @@ for subj = 1 : n_subj
     fprintf('\nloading sub-%02.0f data...\n',subj);
     load([dir_subj,sprintf('sub-%02.0f',subj),'_task-rf_eeg-source.mat'])  
     
-    % define modality and task names
-    mtN = {'visual','auditory';'encoding','retrieval'};
+    % run fooof analysis
+    [freq,sigout,h] = get_condition_fooof(source);
     
-    % cycle through modality
-    for i = 1 : size(mtN,1)
-        
-        % predefine output cells
-        freq = cell(2,1);
-        spec = cell(2,1);
-        
-        % cycle through each task
-        for j = 1 : size(mtN,2)
+    % save outputs
+    saveas(h,sprintf('%sderivatives/group/figures/fooof/sub-%02.0f_task-vis_eeg-fooof.jpg',dir_bids,subj),'jpg')
+    save(sprintf('%sderivatives/sub-%02.0f/eeg/sub-%02.0f_task-rf_eeg-fooof.mat',dir_bids,subj,subj),'freq')  
     
-            % run fooof analysis
-            freq{j} = get_fooof(source,mtN{1,i},mtN{2,j});
-        end
-        
-        % save data
-        save(sprintf('%sderivatives/sub-%02.0f/eeg/sub-%02.0f_task-rf_eeg-%sfooof.mat',dir_bids,subj,subj,mtN{1,i}),'freq','spec')  
-    end
+    % add data to group
+    group_freq(subj,:) = freq;
+    
+    % extract signal
+    signal(subj,:,1) = mean(sigout{1,1}(:,3,:),3);
+    signal(subj,:,2) = mean(sigout{1,1}(:,4,:),3);
+    signal(subj,:,3) = mean(sigout{1,1}(:,5,1),3);
     
     % update command line
-    te = round(toc/3600,1);
+    te = round(toc/60,1);
     tr = round((te/subj)*(n_subj-subj),1);
-    fprintf('\nsub-%02.0f complete...\ntotal time elapsed: %1.1f hours...\nestimated time remaining: %1.1f hours...\n',subj,te,tr)
+    fprintf('\nsub-%02.0f complete...\ntotal time elapsed: %1.1f minutes...\nestimated time remaining: %1.1f minutes...\n',subj,te,tr)
     
     % tidy up
     close all
     clear dir_subj subj freq spec h source te tr
 end
 
-%% Run Per-Participant Regression
-% predefine group structure
-group_betas = cell(n_subj,3); tic
+% plot outcome
+figure; hold on
+f = squeeze(signal(1,:,3));
+shadedErrorBar(f,mean(signal(:,:,1)),sem(signal(:,:,1)))
+shadedErrorBar(f,mean(signal(:,:,2)),sem(signal(:,:,2)))
 
-% cycle through each subject
-for subj = 1 :  n_subj
-    
-    % define subject data directory
-    dir_subj = [dir_bids,'sourcedata/',sprintf('sub-%02.0f',subj),'/eeg/'];    
-    
-    % load in fooof data
-    fprintf('\nloading sub-%02.0f data...\n',subj);
-    load([dir_subj,sprintf('sub-%02.0f',subj),'_task-rf_eeg-fooof.mat']) 
-    
-    % get beta weights
-    group_betas{subj,1} = get_betas(freq{1},'erd');
-    group_betas{subj,2} = get_betas(freq{2},'erd');
-    group_betas{subj,3} = get_betas(freq{2},'rse');
-      
-    % tidy workspace 
-    clear h spec te tr freq subj dir_subj
-end
-    
 %% Get Group Average
 % create grand data cell
-grand_betas = cell(size(group_betas,2),1);
+grand_freq = cell(size(group_freq,2),1);
 
 % cycle through each condition
-for i = 1 : size(group_betas,2)
+for i = 1 : size(group_freq,2)
     
     % get grand average
-    cfg = [];
-    cfg.keepindividual = 'yes';
-    cfg.parameter = {'powspctrm','slope'};
-    grand_betas{i,1} = ft_freqgrandaverage(cfg,group_betas{:,i});  
+    cfg                 = [];
+    cfg.keepindividual  = 'yes';
+    cfg.parameter       = {'powspctrm','slope'};
+    grand_freq{i,1}     = ft_freqgrandaverage(cfg,group_freq{:,i});  
 end
 
 % tidy workspace
 clear i group_betas cfg
 
 %% Change Datatype to Source
-% reshape beta structure
-grand_betas = grand_betas(:);
-
 % load ROI data
 load([dir_bids,'derivatives/group/eeg/roi.mat'])
 
 % cycle through each data type
-for i = 1 : numel(grand_betas)
+for i = 1 : numel(grand_freq)
     
     % add in source model details
-    grand_betas{i,1}.powdimord   = 'rpt_pos';
-    grand_betas{i,1}.dim         = roi.dim;
-    grand_betas{i,1}.inside      = roi.inside(:);
-    grand_betas{i,1}.pos         = roi.pos;
-    grand_betas{i,1}.pow         = zeros(n_subj,numel(grand_betas{i,1}.inside));
-    grand_betas{i,1}.slp         = zeros(n_subj,numel(grand_betas{i,1}.inside));
-    grand_betas{i,1}.cfg         = [];
+    grand_freq{i,1}.powdimord   = 'rpt_pos';
+    grand_freq{i,1}.dim         = roi.dim;
+    grand_freq{i,1}.inside      = roi.inside(:);
+    grand_freq{i,1}.pos         = roi.pos;
+    grand_freq{i,1}.pow         = zeros(n_subj,numel(grand_freq{i,1}.inside));
+    grand_freq{i,1}.slp         = zeros(n_subj,numel(grand_freq{i,1}.inside));
+    grand_freq{i,1}.cfg         = [];
     
     % add in "outside" virtual electrodes to pow
-    tmp_pow = zeros(size(grand_betas{i,1}.pow,1),size(grand_betas{i,1}.inside,1));
-    tmp_pow(:,grand_betas{i,1}.inside) = grand_betas{i,1}.powspctrm;
-    grand_betas{i,1}.pow = tmp_pow;
+    tmp_pow = zeros(size(grand_freq{i,1}.pow,1),size(grand_freq{i,1}.inside,1));
+    tmp_pow(:,grand_freq{i,1}.inside) = grand_freq{i,1}.powspctrm;
+    grand_freq{i,1}.pow = tmp_pow;
         
     % add in "outside" virtual electrodes to slope
-    tmp_pow = zeros(size(grand_betas{i,1}.pow,1),size(grand_betas{i,1}.inside,1));
-    tmp_pow(:,grand_betas{i,1}.inside) = grand_betas{i,1}.slope;
-    grand_betas{i,1}.slp = tmp_pow;
+    tmp_pow = zeros(size(grand_freq{i,1}.pow,1),size(grand_freq{i,1}.inside,1));
+    tmp_pow(:,grand_freq{i,1}.inside) = grand_freq{i,1}.slope;
+    grand_freq{i,1}.slp = tmp_pow;
     
     % remove freq details
-    grand_betas{i,1} = rmfield(grand_betas{i,1},{'powspctrm','slope','label','freq','time','dimord','cfg'});
+    grand_freq{i,1} = rmfield(grand_freq{i,1},{'powspctrm','slope','label','freq','time','dimord','cfg'});
     clear tmp_pow i
 end
 
 % save data
-save([dir_bids,'derivatives/group/eeg/group_task-all_pow-beta.mat'],'grand_betas');
+save([dir_bids,'derivatives/group/eeg/group_task-all_pow-fooof.mat'],'grand_freq');
 
 %% Run Statistics
 % set seed
@@ -152,23 +128,27 @@ rng(1)
 
 % test oscillatory power
 cfg             = [];
-cfg.tail        = zeros(3,1)-1;
+cfg.tail        = zeros(6,1)-1;
 cfg.parameter   = 'pow';
-[s_pow,t_pow]   = run_oneSampleT(cfg, grand_betas(:));
+[s_pow,t_pow]   = run_oneSampleT(cfg, grand_freq(:));
 
 % test slope
 cfg             = [];
-cfg.tail        = zeros(3,1);
+cfg.tail        = zeros(6,1);
 cfg.parameter   = 'slp';
-[s_slp,t_slp]   = run_oneSampleT(cfg, grand_betas(:));
+[s_slp,t_slp]   = run_oneSampleT(cfg, grand_freq(:));
 
 % combine tables
 stat = cat(1,s_pow,s_slp);
 tbl = cat(1,t_pow,t_slp);
 
 % add labels
-plot_names = {'pow_enc','pow_ret','pow_rse','slp_enc','slp_ret','slp_rse'}';
-tbl = addvars(tbl,plot_names,'Before','t');
+modality = repmat({'visual','audio'},[6 1]);
+measure  = repmat({'power','slope'},[3 1]);
+task     = repmat({'encoding','retrieval','RSE'},[1 4]);
+tbl = addvars(tbl,modality(:),'Before','t');
+tbl = addvars(tbl,repmat(measure(:),[2 1]),'Before','t');
+tbl = addvars(tbl,task(:),'Before','t');
 disp(tbl)
 
 % save data
@@ -176,8 +156,8 @@ save([dir_bids,'derivatives/group/eeg/group_task-all_pow-stat.mat'],'stat','tbl'
 
 %% Extract Raw Power of Cluster 
 % prepare table for stat values
+plot_names={'enc','ret','rse'};
 tbl = array2table(zeros(n_subj,numel(plot_names)),'VariableNames',plot_names);
-
 % cycle through conditions
 for i = 1 : 3%numel(plot_names)
      
@@ -185,7 +165,7 @@ for i = 1 : 3%numel(plot_names)
     clus_idx = stat{i}.negclusterslabelmat==1;
 
     % create table
-    tbl.(plot_names{i})(:,1) = nanmean(grand_betas{i}.pow(:,clus_idx),2);
+    tbl.(plot_names{i})(:,1) = nanmean(grand_freq{i}.pow(:,clus_idx),2);
     
     % get indices of slope clusters
     if i ~= 4
@@ -195,16 +175,16 @@ for i = 1 : 3%numel(plot_names)
     end
 
     % create table
-    tbl.(plot_names{i})(:,1) = nanmean(grand_betas{i}.slp(:,clus_idx),2);
+    tbl.(plot_names{i})(:,1) = nanmean(grand_freq{i}.slp(:,clus_idx),2);
 end
 
 % get rough plot
 figure; hold on
-for i = 1 : 8
+for i = 1 : 3
     plot(i,tbl.(plot_names{i}),'ko')
 end
-set(gca,'xtick',1:8,'xticklabel',plot_names)
-xlim([0 9])
+set(gca,'xtick',1:3,'xticklabel',plot_names)
+xlim([0 4])
 
 % write table
 writetable(tbl,[dir_bids,'derivatives/group/eeg/group_task-all_eeg-cluster.csv'],'Delimiter',',')

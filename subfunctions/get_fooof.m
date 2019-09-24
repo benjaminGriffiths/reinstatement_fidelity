@@ -1,28 +1,7 @@
-function freq = get_fooof(data,modality,operation)
+function freq = get_fooof(data)
 
 % check variables
 fprintf('organising data...\n')
-
-% predefine conditional arrays to include all trials
-modality_to_include   = zeros(numel(data.trial),1);
-operation_to_include  = zeros(numel(data.trial),1);
-
-% cycle through each trial
-for trl = 1 : numel(data.trial)
-
-    % mark trials that match specified operation
-    modality_to_include(trl) = strcmpi(data.trialinfo{trl}.modality,modality);
-    operation_to_include(trl) = strcmpi(data.trialinfo{trl}.operation,operation);
-end
-
-% get conditions which fall into both categories
-comb_to_include = modality_to_include & operation_to_include;
-
-% select trials of interest
-data.trial      = data.trial(comb_to_include==1);
-data.time       = data.time(comb_to_include==1);
-data.trialinfo  = data.trialinfo(comb_to_include==1);
-clear trl modality_to_include modality
 
 % define key variables
 ntrl    = numel(data.trial);
