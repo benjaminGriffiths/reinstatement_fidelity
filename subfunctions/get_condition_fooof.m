@@ -14,7 +14,17 @@ for trl = 1 : numel(data.trialinfo)
 end
 
 % recode trialinfo
-data = recode_trlinfo(data);
+data    = recode_trlinfo(data);
+trial   = data.trial;
+
+% % filter
+% fprintf('filtering data...\n')
+% parfor trl = 1 : numel(data.trial)
+%     dat = trial{trl};
+% 	dat = ft_preproc_bandstopfilter(dat,100,[15 17],4,'but','twopass','no');
+% 	trial{trl} = ft_preproc_bandstopfilter(dat,100,[30 34],4,'but','twopass','no');
+% end
+% data.trial = trial;
 
 % predefine freq structure
 freq = repmat({struct('time',1,...
@@ -114,7 +124,7 @@ end
 function [A,B,freqs] = get_erd_psd(data,trls)
 
 % update user
-fprintf('calculating ERD PSD...\n');
+fprintf('calculating ERD FOOOF...\n');
 
 % define key variables
 ntrl    = numel(data.trial(trls));
@@ -125,12 +135,16 @@ ntime   = numel(data.time{1});
 signal = permute(reshape(cell2mat(data.trial(trls)),[nchan,ntime,ntrl]),[2 1 3]);
 
 % get post-stim psd
-postsig = mean(signal(data.time{1}>=0.5&data.time{1}<=1.5,:,:),3);
-[A,freqs] = pwelch(postsig,100,[],[],100);
+postsig = signal(data.time{1}>=0.5&data.time{1}<=1.5,:,:);
+[A,freqs] = pwelch(postsig(:,:),50,25,[],100);
 
 % get pre-stim psd
-presig  = mean(signal(data.time{1}>=-1&data.time{1}<=0,:,:),3);
-[B,~] = pwelch(presig(:,:),100,[],[],100);
+presig  = signal(data.time{1}>=-1&data.time{1}<=0,:,:);
+[B,~] = pwelch(presig(:,:),50,25,[],100);
+
+% reshape psd and average over channels
+A = mean(reshape(A,[size(A,1),size(signal,2),size(signal,3)]),3);
+B = mean(reshape(B,[size(B,1),size(signal,2),size(signal,3)]),3);
 
 end
 
@@ -150,12 +164,16 @@ memory  = data.trialinfo(trls,1);
 signal = permute(reshape(cell2mat(data.trial(trls)),[nchan,ntime,ntrl]),[2 1 3]);
 
 % get post-stim psd
-hits = mean(signal(data.time{1}>=0.5&data.time{1}<=1.5,:,memory==1),3);
-[A,freqs] = pwelch(hits,100,[],[],100);
+hits        = signal(data.time{1}>=0.5&data.time{1}<=1.5,:,memory==1);
+[A,freqs]   = pwelch(hits(:,:),50,25,[],100);
 
 % get pre-stim psd
-misses  = mean(signal(data.time{1}>=-1&data.time{1}<=0,:,memory==0),3);
-[B,~] = pwelch(misses(:,:),100,[],[],100);
+misses      = signal(data.time{1}>=0.5&data.time{1}<=1.5,:,memory==0);
+[B,~]       = pwelch(misses(:,:),50,25,[],100);
+
+% reshape psd and average over channels
+A = mean(reshape(A,[size(A,1),size(signal,2),size(hits,3)]),3);
+B = mean(reshape(B,[size(B,1),size(signal,2),size(misses,3)]),3);
 
 end
 
@@ -165,14 +183,14 @@ function [auc,sig,params] = get_fooof_diff(A,B,freqs)
 % predefine output data
 auc = nan(size(A,2),2);
 params = nan(size(A,2),2);
-sig = nan(64,5,size(A,2));
+sig = nan(95,5,size(A,2));
 
 % cycle through each trl
 parfor i = 1 : size(A,2)
 
     % initialize FOOOF object
-    fm = py.fooof.FOOOF([1 12],...    % peak width
-                        inf,...      % n peaks
+    fm = py.fooof.FOOOF([1 8],...    % peak width
+                        inf,...        % n peaks
                         0,...        % min amp.
                         2,...        % peak thr.
                         'fixed',...  % knee
@@ -180,7 +198,7 @@ parfor i = 1 : size(A,2)
 
     % convert inputs
     pyF   = py.numpy.array(freqs');
-    f_range = py.list([5 30]);
+    f_range = py.list([3 40]);
     
     % extract power
     pyA = py.numpy.array(A(:,i)');
@@ -215,7 +233,7 @@ parfor i = 1 : size(A,2)
     fracDiff = trapz(fitA.bg_fit) - trapz(fitB.bg_fit);
     
     % get difference in oscillatory spectrum
-    fidx = (fitA.freqs>=7 & fitA.freqs<=14);
+    fidx = (fitA.freqs>=6 & fitA.freqs<=14);
     oscA = fitA.fooofed_spectrum(fidx) - fitA.bg_fit(fidx);
     oscB = fitB.fooofed_spectrum(fidx) - fitB.bg_fit(fidx);
     

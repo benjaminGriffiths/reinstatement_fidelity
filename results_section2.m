@@ -41,7 +41,7 @@ for subj = 1 : n_subj
     load([dir_subj,sprintf('sub-%02.0f',subj),'_task-rf_eeg-source.mat'])  
     
     % run fooof analysis
-    [freq,sigout,h] = get_condition_fooof(source);
+    [freq,~,h] = get_condition_fooof(source);
     
     % save outputs
     saveas(h,sprintf('%sderivatives/group/figures/fooof/sub-%02.0f_task-vis_eeg-fooof.jpg',dir_bids,subj),'jpg')
@@ -49,11 +49,6 @@ for subj = 1 : n_subj
     
     % add data to group
     group_freq(subj,:) = freq;
-    
-    % extract signal
-    signal(subj,:,1) = mean(sigout{1,1}(:,3,:),3);
-    signal(subj,:,2) = mean(sigout{1,1}(:,4,:),3);
-    signal(subj,:,3) = mean(sigout{1,1}(:,5,1),3);
     
     % update command line
     te = round(toc/60,1);
@@ -64,12 +59,6 @@ for subj = 1 : n_subj
     close all
     clear dir_subj subj freq spec h source te tr
 end
-
-% plot outcome
-figure; hold on
-f = squeeze(signal(1,:,3));
-shadedErrorBar(f,mean(signal(:,:,1)),sem(signal(:,:,1)))
-shadedErrorBar(f,mean(signal(:,:,2)),sem(signal(:,:,2)))
 
 %% Get Group Average
 % create grand data cell

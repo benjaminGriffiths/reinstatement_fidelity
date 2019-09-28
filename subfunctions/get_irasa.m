@@ -1,4 +1,4 @@
-function [freq] = get_irasa(data,operation,modality)
+function [freq] = get_irasa(data,operation,modality,contrast)
 
 % check variables
 fprintf('\npreparing data for irasa...\n')
@@ -45,87 +45,73 @@ data          = ft_selectdata(config,data);
 % create freq structure
 freq                = [];
 freq.label          = data.label;
-freq.time           = 1;
-freq.dimord         = 'rpt_chan_freq_time';
-freq.trialinfo      = data.trialinfo;
+freq.time           = [-0.5 1];
+freq.dimord         = 'chan_freq_time';
 freq.cfg            = [];
 
-% restrict data to pre- and post-power
-predata     = ft_selectdata(struct('latency',[-1 0]),data);
-postdata    = ft_selectdata(struct('latency',[0.5 1.5]),data);
+% if ERD contrast
+if strcmpi(contrast,'erd')
+
+    % restrict data to pre- and post-power
+    A = ft_selectdata(struct('latency',[-1 0]),data);
+    B = ft_selectdata(struct('latency',[0.5 1.5]),data);
+
+    % extrat signal
+    Asig = reshape(cell2mat(A.trial),[size(A.trial{1},1) size(A.trial{1},2) numel(A.trial)]);
+    Asig = permute(Asig,[3 2 1]);
+    Bsig = reshape(cell2mat(B.trial),[size(B.trial{1},1) size(B.trial{1},2) numel(B.trial)]);
+    Bsig = permute(Bsig,[3 2 1]);
+    
+% if  RSE contrast    
+else
+    
+    % recode trial info
+    tmp = recode_trlinfo(data);
+    
+    % restrict data to pre- and post-power
+    A = ft_selectdata(struct('latency',[0.5 1.5],'trials',tmp.trialinfo(:,1) == 0),data);
+    B = ft_selectdata(struct('latency',[0.5 1.5],'trials',tmp.trialinfo(:,1) == 1),data);
+
+    % extrat signal
+    Asig = reshape(cell2mat(A.trial),[size(A.trial{1},1) size(A.trial{1},2) numel(A.trial)]);
+    Asig = permute(Asig,[3 2 1]);
+    Bsig = reshape(cell2mat(B.trial),[size(B.trial{1},1) size(B.trial{1},2) numel(B.trial)]);
+    Bsig = permute(Bsig,[3 2 1]);
+end
 
 % extract variables to avoid overhead comm.
-sig  = [predata.trial postdata.trial];
 fs   = 100;
-fr   = [5 25];
+fr   = [3 25];
 
 % predefine osci and frac results
-osci = zeros(numel(sig),numel(data.label),26); 
-fhz  = zeros(numel(sig),26);
+osci = zeros(size(Bsig,2),29,2); 
+fhz  = zeros(size(Bsig,2),29);
 frac = osci;
 
 % cycle through every trial
-fprintf('calculating irasa...\n')
-parfor trl = 1 : numel(sig)
+fprintf('calculating irasa...\n');
+for chan = 1 : size(Bsig,3)
         
-    % run irasa
-    spec = amri_sig_fractal(sig{trl}',fs,...
+    % run irasa on post
+    Bspec = amri_sig_avgfractal(Bsig(:,:,chan)',fs,...
                             'frange',fr);
 
+    % run irasa on pre
+    Aspec = amri_sig_avgfractal(Asig(:,:,chan)',fs,...
+                            'frange',fr);
+                        
     % record results
-    osci(trl,:,:) = spec.osci';
-    frac(trl,:,:) = spec.frac';
-    fhz(trl,:)    = spec.freq;
+    osci(chan,:,:) = [Aspec.osci Bspec.osci];
+    frac(chan,:,:) = [Aspec.frac Bspec.frac];
+    fhz(chan,:)    = Aspec.freq;    
 end
 
 % define derived freqs
 foi = fhz(1,:);
 
-% prepare to extract slop
-fprintf('estimating intercept and slope...\n')
-offset = zeros(size(frac,1)*size(frac,2),1);
-slope = offset;
-aucf  = offset;
-auco  = offset;
-
-% collapse power
-frac = permute(frac,[3 1 2]);
-frac = frac(:,:);
-osc2 = permute(osci,[3 1 2]);
-osc2 = osc2(:,:);
-
-% get log-transformed data
-X = log10(foi);
-Y = log10(frac);   
-
-% cycle through every point
-parfor i = 1 : size(Y,2)
-    
-    % run linear model
-    B = fitlm(X,squeeze(Y(:,i)));
-
-    % store offset and slope
-    offset(i,1) = B.Coefficients.tStat(1);
-    slope(i,1) = B.Coefficients.tStat(2); 
-    aucf(i,1) = trapz(foi,frac(:,i));
-    auco(i,1) = trapz(foi,osc2(:,i));
-end
-
-% reshape output
-offset = reshape(offset,[size(frac,1) size(frac,2)]);
-slope  = reshape(slope,[size(frac,1) size(frac,2)]);
-
 % add in freq
 fprintf('packaging data...\n')
-freq.powspctrm  = osci(numel(data.trial)+1:end,:,:);
-freq.powslope   = slope(numel(data.trial)+1:end,:);
-freq.powoffset  = offset(numel(data.trial)+1:end,:);
-freq.powfracauc = aucf(numel(data.trial)+1:end,:);
-freq.powosciauc = auco(numel(data.trial)+1:end,:);
-freq.prepow     = osci(1:numel(data.trial),:,:);
-freq.preslope   = slope(1:numel(data.trial),:);
-freq.preoffset  = offset(1:numel(data.trial),:);
-freq.preauc     = aucf(1:numel(data.trial),:);
-freq.preosciauc = auco(1:numel(data.trial),:);
+freq.powspctrm  = osci;
+freq.fractal    = frac;
 freq.freq       = foi;
 fprintf('done...\n')

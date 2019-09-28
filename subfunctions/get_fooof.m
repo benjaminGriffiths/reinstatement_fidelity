@@ -1,7 +1,34 @@
-function freq = get_fooof(data)
+function freq = get_fooof(data,modality,operation)
 
 % check variables
 fprintf('organising data...\n')
+
+% predefine conditional arrays to include all trials
+modality_to_include   = zeros(numel(data.trial),1);
+operation_to_include  = zeros(numel(data.trial),1);
+
+% cycle through each trial
+for trl = 1 : numel(data.trial)
+
+    % mark trials that match specified operation
+    modality_to_include(trl) = strcmpi(data.trialinfo{trl}.modality,modality);
+    operation_to_include(trl) = strcmpi(data.trialinfo{trl}.operation,operation);
+end
+
+% get conditions which fall into both categories
+comb_to_include = modality_to_include & operation_to_include;
+
+% select trials of interest
+data.trial      = data.trial(comb_to_include==1);
+data.time       = data.time(comb_to_include==1);
+data.trialinfo  = data.trialinfo(comb_to_include==1);
+clear trl modality_to_include modality
+
+% filter
+cfg = [];
+cfg.bsfilter = 'yes';
+cfg.bsfreq = [15 17; 30 34];
+data = ft_preprocessing(cfg,data);
 
 % define key variables
 ntrl    = numel(data.trial);
@@ -19,7 +46,7 @@ clear postsig presig
 
 % get PSD
 fprintf('calculating PSD...\n');
-[psd,freqs] = pwelch(signal(:,:),100,[],[],100);
+[psd,freqs] = pwelch(signal(:,:),50,25,[],100);
 
 % predefine output data
 peak_amp   = nan(ntrl*2*nchan,1);
@@ -32,10 +59,10 @@ fprintf('getting trial FOOOF...\n');
 parfor i = 1 : size(psd,2)
 
     % run FOOOF
-    modfit = fooof(freqs',psd(:,i)',[5 40],struct('peak_width_limits',[0.8 3],'max_n_peaks',8),true);
+    modfit = fooof(freqs',psd(:,i)',[3 40],struct('peak_width_limits',[2 6],'max_n_peaks',8),true);
 
     % get peak amplitude/freq
-    peaks   = modfit.peak_params(modfit.peak_params(:,1)<15,:);
+    peaks   = modfit.peak_params(modfit.peak_params(:,1)<30,:);
     
     % if peak found
     if ~isempty(peaks)

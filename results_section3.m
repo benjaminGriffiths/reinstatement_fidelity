@@ -678,205 +678,168 @@ mask_roi{4} = mri;
 % clean workspace
 clear mri source dir_subj roi cfg lay
 
+%% Calculate Single-Trial FOOOF
+% cycle through each subject
+tic
+for subj = 1 : n_subj
+    
+    % define subject data directory
+    dir_subj = [dir_bids,'sourcedata/',sprintf('sub-%02.0f',subj),'/eeg/'];    
+    
+    % load in raw data
+    fprintf('\nloading sub-%02.0f data...\n',subj);
+    load([dir_subj,sprintf('sub-%02.0f',subj),'_task-rf_eeg-source.mat'])  
+    
+    % run fooof analysis
+    freq    = cell(2,1);
+    freq{1} = get_roi_fooof(source,mask_roi{1},'visual','encoding');
+    freq{2} = get_roi_fooof(source,mask_roi{2},'visual','retrieval');
+    
+    % save outputs
+    save(sprintf('%sderivatives/sub-%02.0f/eeg/sub-%02.0f_task-rf_eeg-roifooof.mat',dir_bids,subj,subj),'freq')  
+    
+    % update command line
+    te = round(toc/60,1);
+    tr = round((te/subj)*(n_subj-subj),1);
+    fprintf('\nsub-%02.0f complete...\ntotal time elapsed: %1.1f minutes...\nestimated time remaining: %1.1f minutes...\n',subj,te,tr)
+    
+    % tidy up
+    close all
+    clear dir_subj subj freq spec h source te tr
+end
+
 %% Correlate Similarity and Power
 % load in similarity index
 load([dir_root,'bids_data/derivatives/group/rsa-correlation/group_task-all_fmri-si'])
 
 % load mean bold
 load([dir_root,'bids_data/derivatives/group/rsa-correlation/group_task-all_fmri-meanbold'])
-
-% create cell for peak frequencies
-n_chan=1817;
-peak_idx = nan(n_subj,n_chan); tic
    
-% predefine matrix for correlation values
-r = cell(2,1);
-m = r; tic
-figure; hold on
+% predefine structure for correlation values
+grand_freq = repmat({struct('dimord','subj_chan_freq_time',...
+                    'freq',8,...
+                    'label',{{'dummy'}},...
+                    'time',1,...
+                    'cfg',[],...
+                    'pow',zeros(n_subj,1),...
+                    'slp',zeros(n_subj,1),...
+                    'bold',zeros(n_subj,1))},[2 1]); tic
 
 % cycle through each subject
 for subj = 1 : n_subj
     
-    % ---- load data ---- %
     % define subject data directory
     dir_subj = [dir_bids,'sourcedata/',sprintf('sub-%02.0f',subj),'/eeg/'];
         
     % load in fooof data
-    fprintf('\nloading sub-%02.0f data...\n',subj);
-    load([dir_subj,sprintf('sub-%02.0f',subj),'_task-rf_eeg-fooof.mat']) 
-    subplot(6,4,subj); hold on
+    load(sprintf('%sderivatives/sub-%02.0f/eeg/sub-%02.0f_task-rf_eeg-roifooof.mat',dir_bids,subj,subj),'freq')  
     
-    % recode trialinfo
-    freq = recode_trlinfo(freq);
-    
-    % ---- prepare for regression ---- %
     % cycle through each mask (plus one for forgotten ers)
     for mask = 1 : numel(mask_names)
         
-        % update user
-        fprintf('fitting model %d of %d...\n',mask,numel(mask_names))
-    
-        % get trials for task of interest
-        if mask == 1; toi = freq.trialinfo(:,5) == 1;
-        else; toi = freq.trialinfo(:,5) == 0;
-        end
-        
-        % define pre/post stim split
-        prestim     = sum(toi)/2+1:sum(toi);
-        poststim    = 1:sum(toi)/2;
-        
         % extract all trial numbers from powspctrm
-        trl_nums = freq.trialinfo(toi,2+mask);
+        trl_nums = freq{mask}.trialinfo(:,2+mask);
 
         % fix numbers
         trl_nums(trl_nums>48 & trl_nums<=96)    = trl_nums(trl_nums>48 & trl_nums<=96) - 48;
         trl_nums(trl_nums>96 & trl_nums<=144)   = trl_nums(trl_nums>96 & trl_nums<=144) - 48;
         trl_nums(trl_nums>144 & trl_nums<=192)  = trl_nums(trl_nums>144 & trl_nums<=192) - 96;
-        trl_nums = trl_nums(poststim);
         
         % define outcome regressor (i.e. similarity)
-        X = squeeze(rsa_vec(subj,mask,trl_nums));
-        
-        % extract eeg metrics (restricted to channels in roi)
-        pow = freq.powspctrm(toi,:);
-        slp = freq.slope(toi,:);
-        
-        % extract behavioural metrics
-        conf = freq.trialinfo(toi,2);
-        mem  = freq.trialinfo(toi,1);
+        Y = squeeze(rsa_vec(subj,mask,trl_nums));
         
         % define predictor regressors
-        Y         = zeros(numel(poststim),8,size(pow,2));
-        Y(:,1,:)  = pow(poststim,:);       % poststim pow
-        Y(:,2,:)  = pow(prestim,:);       % prestim pow
-        Y(:,3,:)  = slp(poststim,:);       % poststim slope
-        Y(:,4,:)  = slp(prestim,:);        % prestim slope
-        Y(:,5,:)  = repmat(squeeze(mean_bold(subj,mask,trl_nums)),[1 1 size(pow,2)]); % BOLD
-        Y(:,6,:)  = repmat(trl_nums,[1 1 size(pow,2)]);         % trl no.
-        Y(:,7,:)  = repmat(conf(poststim),[1 1 size(pow,2)]);   % confidence
-        Y(:,8,:)  = repmat(mem(poststim),[1 1 size(pow,2)]);    % memory
+        X       = zeros(size(freq{mask}.powspctrm,1),3);
+        X(:,1)  = zscore(freq{mask}.erdspctrm);
+        X(:,2)  = zscore(freq{mask}.erdintcpt);
+        X(:,3)  = zscore(freq{mask}.erdslope);
+        X(:,4)  = zscore(mean_bold(subj,mask,trl_nums));
+        X(:,5)  = trl_nums;
+            
+        % if retrieval,
+        if mask == 2
+            
+            % add in confidence
+            X(:,6)  = freq{mask}.trialinfo(:,2);
+            X(:,7)  = freq{mask}.trialinfo(:,1);
         
-        % mark missing data
-        nandx = any(isnan(Y(:,:,1)),2);
-
-        % drop missing trials
-        Y = Y(~nandx,:,:);
-        X = X(~nandx,:);
-        
-        % zscore regressors
-        %Y = zscore(Y);
-        
-        % cycle through each channel of mask
-        for chan = 1 : size(pow,2)
-                                        
-            % run linear model
-            B = fitlm(Y(:,:,chan),X);
-
-            % store data
-            r{mask}(subj,:,chan) = B.Coefficients.tStat(2:end);                
+%             % drop forgotten
+%             Y(freq{mask}.trialinfo(:,1) ~= 1) = [];
+%             X(freq{mask}.trialinfo(:,1) ~= 1,:) = [];
+%             
+            % mark trials that need to be excluded (e.g. NaN)
+            toExclude = isnan(X(:,6)) | isnan(X(:,7));
+        else
+            toExclude = false(size(Y));
         end
         
-        % plot
-        histogram(squeeze(r{mask}(subj,1,:)),50)
+        % run linear model
+        B = fitlm(X,Y);
+
+        % store data
+        grand_freq{mask}.pow(subj,1)  = B.Coefficients.tStat(2);
+        grand_freq{mask}.int(subj,1)  = B.Coefficients.tStat(3);
+        grand_freq{mask}.slp(subj,1)  = B.Coefficients.tStat(4);
+        grand_freq{mask}.bold(subj,1) = B.Coefficients.tStat(5);
+        grand_freq{mask}.lin(subj,1)  = B.Coefficients.tStat(6);
+        
+        % if retrieval, add in confidence
+        if mask == 2
+            grand_freq{mask}.conf(subj,1) = B.Coefficients.tStat(7); 
+            grand_freq{mask}.mem(subj,1) = B.Coefficients.tStat(8); 
+        else
+            grand_freq{mask}.conf(subj,1) = NaN; 
+            grand_freq{mask}.mem(subj,1) = NaN;
+        end
     end
     
     % update user
-    fprintf('sub-%02.0f complete... time elapsed: %1.1f seconds...\n',subj,round(toc,1))
-end
-
-% predefine grand_freq structure
-grand_freq = cell(16,1);
-figure; hold on; count = 1;
-xlim([0 9])
-
-% define analysis label
-lab = {'enc_postpow','enc_prepow','enc_postslp','enc_preslp'...
-       'ret_postpow','ret_prepow','ret_postslp','ret_preslp'}';
-
-% cycle through each regressor
-for i = 1 : size(r{1},2)
-
-    % prepare data structure for one-sample t-test
-    grand_freq{i,1}              = struct('powdimord','rpt_pos',...
-                                          'dim',mask_roi{3}.dim,...
-                                          'inside',mask_roi{3}.inside(:),...
-                                          'pos',mask_roi{3}.pos,...
-                                          'cfg',[],...
-                                          'pow',zeros(n_subj,numel(mask_roi{3}.inside)));
-                                      
-    % add in power
-    tmp_pow = zeros(size(grand_freq{i,1}.pow,1),size(grand_freq{i,1}.inside,1));
-    tmp_pow(:,grand_freq{i,1}.inside) = r{1}(:,i,:);
-    grand_freq{i,1}.pow = tmp_pow;
-        
-    % save as map
-    if i <= 4
-        
-        % cycle through subjects
-        for subj = 1 : 21
-            
-            % duplicate outcome
-            source = grand_freq{i,1};
-            source.pow = source.pow(subj,:)';
-            source.powdimord = 'pos';
-
-            % plot
-            cfg = [];
-            cfg.method = 'slice';
-            cfg.funparameter = 'pow';
-            cfg.anaparameter = 'anatomy';
-            cfg.funcolorlim = 'maxabs';
-            cfg.funcolormap = flipud(brewermap(120,'RdBu'));
-            ft_sourceplot(cfg,source,mask_roi{4});
-            saveas(gca,sprintf('%sderivatives/group/figures/eegfmri_betamap/plot-%s_sub-%02.0f.jpg',dir_bids,lab{i},subj),'jpg')  
-            close all
-        end
-    end
-   
-    % plot 
-    plot(count,mean(grand_freq{i,1}.pow,2),'kx','markersize',4,'markeredgecolor',[0 0 0],'markerfacecolor',[1 1 1]);
-    plot(count,mean(grand_freq{i,1}.pow(:)),'ko','markersize',6,'markeredgecolor',[0 0 0],'markerfacecolor',[0 0 0]);
-    count = count + 1;
-end
-
-% do same for retrieval
-figure; hold on; count = 1;
-xlim([0 9]);
-for i = 1 : size(r{2},2)
-
-    % duplicate data structure for ERS recalled data
-    grand_freq{i+8}             = grand_freq{i};
-                    
-    % add in power
-    tmp_pow = zeros(size(grand_freq{i+8,1}.pow,1),size(grand_freq{i+8,1}.inside,1));
-    tmp_pow(:,grand_freq{i+8,1}.inside) = r{2}(:,i,:);
-    grand_freq{i+8,1}.pow = tmp_pow;
-        
-    % plot 
-    plot(count,mean(grand_freq{i+8,1}.pow,2),'kx','markersize',4,'markeredgecolor',[0 0 0],'markerfacecolor',[1 1 1]);
-    plot(count,mean(grand_freq{i+8,1}.pow(:)),'ko','markersize',6,'markeredgecolor',[0 0 0],'markerfacecolor',[0 0 0]);
-    count = count + 1;
+    fprintf('sub-%02.0f complete...\n',subj)
 end
 
 % save data
 save([dir_bids,'derivatives/group/rsa-correlation/group_task-all_comb-freq.mat'],'grand_freq'); 
 
-%% Run Statistics
+% Run Statistics
 % set seed
 rng(1) 
 
-% define analysis label
-lab = {'enc: prepow','enc: postpow','enc: offset','enc: slope','enc: bold','enc: lin','enc: conf','enc: mem'...
-       'ret: prepow','ret: postpow','ret: offset','ret: slope','ret: bold','ret: lin','ret: conf','ret: mem'}';
+% define parameter and tail
+param = {'pow','int','slp','bold','lin','conf','mem'};
+tail  = [-1 0 0 0 0 0 0];
 
-% predefine cell for statistics
-cfg             = [];
-cfg.tail        = [zeros(4,1)-1; zeros(4,1); zeros(4,1)-1; zeros(4,1)];
-cfg.parameter   = 'pow';
-[stat,tbl]      = run_oneSampleT(cfg, grand_freq([1:4,9:12])); 
-%tbl             = addvars(tbl,lab,'Before','t');
+% predefine stat/tbl outputs
+sout = cell(numel(param),1);
+tout = cell(numel(param),1);
+
+% cycle through each parameter
+for i = 1 : numel(param)
+    
+    % predefine cell for statistics
+    cfg             = [];
+    cfg.tail        = [0 0] + tail(i);
+    cfg.parameter   = param{i};
+    [sout{i},tout{i}] = run_oneSampleT(cfg, grand_freq(:)); 
+end
+
+% combine tables
+tbl = cat(1,tout{:});
+
+% add labels
+opt = repmat({'encoding','retrieval'},[1 numel(param)])';
+var = repmat(param,[2 1]);
+tbl = addvars(tbl,var(:),'Before','t');
+tbl = addvars(tbl,opt(:),'Before','t');
 disp(tbl)
- 
+
+figure; hold on
+boxplot([grand_freq{1}.pow,grand_freq{2}.pow]);
+yline(0);
+plot(1.3,grand_freq{1}.pow,'ko')
+plot(2.3,grand_freq{2}.pow,'ko')
+%%
+
+
 % plot
 figure; hold on
 for i = 1 : size(grand_freq,2)

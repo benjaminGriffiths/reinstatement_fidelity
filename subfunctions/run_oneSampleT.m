@@ -5,6 +5,7 @@ if ~isfield(cfg,'frequency'); cfg.frequency = [8 30]; end
 if ~isfield(cfg,'latency'); cfg.latency = [0.5 1.5]; end
 if ~isfield(cfg,'parameter'); cfg.parameter = 'powspctrm'; end
 if ~isfield(cfg,'tail'); cfg.tail = 0; cfg.clustertail = 0; end
+if ~isfield(cfg,'rm_outliers'); cfg.rm_outliers = false; end
 
 % if data is struct, convert to cell
 if isstruct(data); data = {data}; end
@@ -23,7 +24,7 @@ config                   = [];
 config.uvar              = 1;
 config.ivar              = 2;
 config.method            = 'montecarlo';
-config.statistic         = 'ft_statfun_depsamplesT';
+config.statistic         = 'ft_statfun_wilcoxon';
 config.correctm          = 'cluster';
 config.numrandomization  = 2000;
 config.alpha             = 0.05;
@@ -95,7 +96,11 @@ for condition = 1 : n_data
         config.clustertail  = cfg.tail;
         stat{condition}     = ft_freqstatistics(config, data{condition}, null_freq);
     end
-        
+     
+    % for coding help, add in missing fields
+    if ~isfield(stat{condition},'posclusters'); stat{condition}.posclusters = []; end
+    if ~isfield(stat{condition},'negclusters'); stat{condition}.negclusters = []; end
+    
     % if one-tailed test
     if cfg.tail(condition)~=0
 
@@ -131,6 +136,8 @@ for condition = 1 : n_data
         % if data does not consist of a single value
         if ~issingle % CURRENTLY NOT FUNCTIONAL
 
+            
+            
             % identify which p-value is larger
             if isempty(stat{condition,1}.posclusters) && ~isempty(stat{condition,1}.negclusters)
                 tailname = 'negclusters';
