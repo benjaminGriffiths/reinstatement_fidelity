@@ -4,24 +4,46 @@ function run_EEG_analysis(skipComputation)
 if nargin == 0; skipComputation = true; end
 
 % define root directory
-if ispc;    dir_bids = 'Y:/projects/reinstatement_fidelity/bids_data/';
+if ispc;    dir_bids = 'Y:/projects/reinstatement_fidelity/';
             dir_repos = 'E:/bjg335/projects/'; % repository directory
+            dir_tool = 'Y:/projects/general/'; % repository directory
 else;       dir_bids = '/media/bjg335/rds-share-2018-hanslmas-memory/projects/reinstatement_fidelity/bids_data/';
             dir_repos = '/media/bjg335/rds-share-2018-hanslmas-memory/projects/git_clone/'; % repository directory
 end
 
 % add subfunctions
 addpath([dir_repos,'reinstatement_fidelity/subfunctions'])
-addpath(genpath([dir_repos,'fooof_mat/']))
+addpath(genpath([dir_tool,'wen_spectral/']))
 
 % define number of subjects
 n_subj = 21;
 n_chan = 1817;
 
-%% Get Power and Fractal for Each Participant
+%% Get Power for Each Participant
 % get IRASA if requested
-if ~skipComputation; tic
+if ~skipComputation
 
+    %% Run Wavelet
+    % cycle through each subject
+    tic
+    for subj = 1 : n_subj
+
+        % define subject data directory
+        dir_subj = [dir_bids,'sourcedata/',sprintf('sub-%02.0f',subj),'/eeg/'];    
+
+        % load in raw data
+        fprintf('\nloading sub-%02.0f data...\n',subj);
+        load([dir_subj,sprintf('sub-%02.0f',subj),'_task-rf_eeg-source.mat'],'source')
+        
+        % get time-frequency representaiton of data for specified conditions
+        freq = get_wavelet(source);
+        
+        % save outputs
+        save(sprintf('%sderivatives/sub-%02.0f/eeg/sub-%02.0f_task-rf_eeg-wavelet.mat',dir_bids,subj,subj),'freq','-v7.3')  
+        fprintf('sub-%02.0f complete...\ntotal time elapsed: %1.1f minutes...\nestimated time remaining: %1.1f minutes...\n',subj,round(toc/60,1),round((round(toc/60,1)/subj)*(n_subj-subj),1))
+    end
+    
+    %% Run IRASA
     % start parallel pool
     p = gcp('nocreate');
     if isempty(p)
@@ -38,14 +60,20 @@ if ~skipComputation; tic
         fprintf('\nloading sub-%02.0f data...\n',subj);
         load([dir_subj,sprintf('sub-%02.0f',subj),'_task-rf_eeg-source.mat'],'source')  
 
+        % get peak of irasa
+        peakfreq = get_peak_irasa(source);
+
         % get irasa
         freq{1} = get_irasa(source,'encoding','visual','erd');
         freq{2} = get_irasa(source,'retrieval','visual','erd');
         freq{3} = get_irasa(source,'retrieval','visual','rse');
+        freq{4} = get_irasa(source,'encoding','visual','erd');
+        freq{5} = get_irasa(source,'retrieval','visual','erd');
+        freq{6} = get_irasa(source,'retrieval','visual','rse');
 
         % save spectral outputs
-        save(sprintf('%sderivatives/sub-%02.0f/eeg/sub-%02.0f_task-rf_eeg-irasa.mat',dir_bids,subj,subj),'freq')  
-        fprintf('\nsub-%02.0f complete...\ntotal time elapsed: %1.1f minutes...\nestimated time remaining: %1.1f minutes...\n',subj,round(toc/60,1),round((ound(toc/60,1)/subj)*(n_subj-subj),1))
+        save(sprintf('%sderivatives/sub-%02.0f/eeg/sub-%02.0f_task-rf_eeg-irasa.mat',dir_bids,subj,subj),'freq','peakfreq')  
+        fprintf('\nsub-%02.0f complete...\ntotal time elapsed: %1.1f minutes...\nestimated time remaining: %1.1f minutes...\n',subj,round(toc/60,1),round((round(toc/60,1)/subj)*(n_subj-subj),1))
 
         % tidy up
         close all
@@ -56,52 +84,29 @@ if ~skipComputation; tic
     delete(gcp);
 end
 
-%% Extract Slope and Peak Alpha Power
+%% Get Grand Wavelet Power
 % predefine group freq structure
 grand_freq = repmat({struct('cfg',[],'time',1,...
                     'freq',8,'label',{{}},...
                     'dimord','subj_chan_freq_time',...
-                    'powspctrm',nan(n_subj,n_chan),...
-                    'slope',nan(n_subj,n_chan))},[6 1]);
+                    'powspctrm',nan(n_subj,n_chan))},[6 1]); tic
 
 % cycle through each subject
 for subj = 1 : n_subj
     
     % load in raw data
-    load(sprintf('%sderivatives/sub-%02.0f/eeg/sub-%02.0f_task-rf_eeg-irasa.mat',dir_bids,subj,subj),'freq')  
-        
-    % plot freq spectrum for each output
-    h = int_plotFreqSpec(freq);
-    saveas(h,sprintf('%s/derivatives/group/figures/irasa/sub-%02.0f_irasa-visual',dir_bids,subj),'jpg')
-    close all
-        
-    % cycle through each cell
-    for i = 1 : numel(freq)
+    load(sprintf('%sderivatives/sub-%02.0f/eeg/sub-%02.0f_task-rf_eeg-wavelet.mat',dir_bids,subj,subj),'freq')  
     
-        % get alpha power difference
-        alpha_idx = freq{i}.freq >= 7 & freq{i}.freq <= 25;
-        grand_freq{i}.powspctrm(subj,:) = mean(freq{i}.powspctrm(:,alpha_idx,2) - freq{i}.powspctrm(:,alpha_idx,1),2);
-        grand_freq{i}.label = freq{i}.label;
-        
-        % cycle through each channel
-        for chan = 1 : size(freq{i}.fractal,1)
-            
-            % get fractal
-            A = freq{i}.fractal(chan,:,1)';
-            B = freq{i}.fractal(chan,:,2)';
-            f = freq{i}.freq';
-            
-            % set intercept to zero
-            A = detrend(A,0);
-            B = detrend(B,0);
-            
-            % get slope
-            grand_freq{i}.slope(subj,chan) = B\f - A\f;
-        end
-    end
+    % get wavelet difference
+    grand_freq{1,1}.powspctrm(subj,:) = int_getWaveletDiff(freq,'visual','encoding','erd');
+    grand_freq{2,1}.powspctrm(subj,:) = int_getWaveletDiff(freq,'visual','retrieval','erd');
+    grand_freq{3,1}.powspctrm(subj,:) = int_getWaveletDiff(freq,'visual','retrieval','rse');
+    grand_freq{4,1}.powspctrm(subj,:) = int_getWaveletDiff(freq,'auditory','encoding','erd');
+    grand_freq{5,1}.powspctrm(subj,:) = int_getWaveletDiff(freq,'auditory','retrieval','erd');
+    grand_freq{6,1}.powspctrm(subj,:) = int_getWaveletDiff(freq,'auditory','retrieval','rse');
     
-    % update user    
-    fprintf('sub-%02.0f done...\n',subj);
+    % update usr
+    fprintf('\nsub-%02.0f complete...\ntotal time elapsed: %1.1f minutes...\nestimated time remaining: %1.1f minutes...\n',subj,round(toc/60,1),round((round(toc/60,1)/subj)*(n_subj-subj),1))
 end
 
 % load ROI data
@@ -115,40 +120,146 @@ for i = 1 : numel(grand_freq)
 end
 
 % save data
-save([dir_bids,'derivatives/group/eeg/group_task-all_pow-fooof.mat'],'grand_freq');
+save([dir_bids,'derivatives/group/eeg/group_task-rf_pow-wavelet.mat'],'grand_freq');
 
-%% Run Statistics
+%% Get Grand IRASA Metrics
+% predefine group freq structure
+grand_freq = repmat({struct('cfg',[],'time',1,...
+                    'freq',8,'label',{{}},...
+                    'dimord','subj_chan_freq_time',...
+                    'powspctrm',nan(n_subj,n_chan),...
+                    'intercept',nan(n_subj,n_chan),...
+                    'fractal',nan(n_subj,n_chan))},[6 1]); tic
+
+% cycle through each subject
+for subj = 1 : n_subj
+    
+    % load in raw data
+    load(sprintf('%sderivatives/sub-%02.0f/eeg/sub-%02.0f_task-rf_eeg-irasa.mat',dir_bids,subj,subj),'freq')  
+        
+    % cycle through each cell
+    for i = 1 : numel(freq)
+    
+        % get alpha power difference
+        alpha_idx = freq{i}.freq >= 8 & freq{i}.freq <= 25;
+        grand_freq{i}.powspctrm(subj,:) = mean(freq{i}.powspctrm(:,alpha_idx,2) - freq{i}.powspctrm(:,alpha_idx,1),2);
+        grand_freq{i}.label             = freq{i}.label;
+        
+        % cycle through channels
+        for chan = 1 : size(freq{i}.powspctrm,1)
+            
+            % log transform data
+            logF = log10(freq{i}.freq');
+            logP = squeeze(log10(freq{i}.fractal(chan,:,:)));
+            
+            % get linfit
+            Afit = fitlm(logF,logP(:,1));
+            Bfit = fitlm(logF,logP(:,2));
+            
+            % get slope and intercept difference
+            grand_freq{i}.fractal(subj,chan) = Bfit.Coefficients.tStat(2) - Afit.Coefficients.tStat(2);
+            grand_freq{i}.intercept(subj,chan) = Bfit.Coefficients.tStat(1) - Afit.Coefficients.tStat(1);
+        end
+        
+        % get fractal
+    end
+    
+    % update user    
+    fprintf('sub-%02.0f done... time elapsed: %1.1f minutes...\n',subj,toc/60);
+end
+
+% load ROI data
+load([dir_bids,'derivatives/group/eeg/roi.mat'],'roi')
+
+% cycle through each data type
+for i = 1 : numel(grand_freq)
+    
+    % convert datatype to source
+    grand_freq{i,1} = int_convertData(grand_freq{i,1},roi);
+end
+
+% save data
+save([dir_bids,'derivatives/group/eeg/group_task-rf_pow-irasa.mat'],'grand_freq');
+
+%% Run Wavelet Statistics
+% load wavelet data
+load([dir_bids,'derivatives/group/eeg/group_task-rf_pow-wavelet.mat'],'grand_freq');
+
 % set seed
 rng(1) 
 
-% define names of analyses
-metric = {'pow','slp'};
-condition = {'vis_enc','vis_ret','vis_rse','aud_enc','aud_ret','aud_rse'};
-
 % run statistics
-[stat,tbl] = int_runStats(grand_freq,metric,[-1 0]);
-disp(tbl)
+[stat,tbl] = int_runStats(grand_freq,{'pow'},-1,'ft_statfun_depsamplesT');
 
 % save data
-save([dir_bids,'derivatives/group/eeg/group_task-all_pow-stat.mat'],'stat','tbl');
+save([dir_bids,'derivatives/group/eeg/group_task-rf_pow-wavestat.mat'],'stat','tbl');
 
 % extract subject activation in cluster
-clus_tbl = int_extractSubjs(grand_freq,stat,tbl,metric,condition);
+condition = {'vis_enc','vis_ret','vis_rse','aud_enc','aud_ret','aud_rse'};
+clus_tbl = int_extractSubjs(grand_freq,stat,tbl,{'pow'},condition);
 
 % write table
-writetable(clus_tbl,[dir_bids,'derivatives/group/eeg/group_task-all_eeg-cluster.csv'],'Delimiter',',')
-copyfile([dir_bids,'derivatives/group/eeg/group_task-all_eeg-cluster.csv'],[dir_repos,'reinstatement_fidelity/data/fig2_data/group_task-rf_eeg-cluster.csv'])
+writetable(clus_tbl,[dir_bids,'derivatives/group/eeg/group_task-rf_eeg-wavecluster.csv'],'Delimiter',',')
+copyfile([dir_bids,'derivatives/group/eeg/group_task-rf_eeg-wavecluster.csv'],[dir_repos,'reinstatement_fidelity/data/fig2_data/group_task-rf_eeg-wavecluster.csv'])
 
 % cycle through each condition
 for i = 1 : numel(condition)
     
     % get power brain map
-    filename = [dir_bids,'derivatives/group/eeg/group_task-',condition{i},'_eeg-map.nii'];
+    filename = [dir_bids,'derivatives/group/eeg/group_task-',condition{i},'_eeg-wavemap.nii'];
     int_extractMap(stat{i},filename);
     
     % copy to git repo
-    copyfile(filename,[dir_repos,'reinstatement_fidelity/data/fig2_data/group_task-',condition{i},'_eeg-map.nii'])    
+    copyfile(filename,[dir_repos,'reinstatement_fidelity/data/fig2_data/group_task-',condition{i},'_waveeeg-map.nii'])    
 end
+
+% return table
+disp(tbl)
+
+%% Run IRASA Statistics
+% load irasa data
+load([dir_bids,'derivatives/group/eeg/group_task-rf_pow-irasa.mat'],'grand_freq');
+
+% set seed
+rng(1) 
+
+% define names of analyses
+metric = {'pow','slp','int'};
+condition = {'vis_enc','vis_ret','vis_rse','aud_enc','aud_ret','aud_rse'};
+
+% run statistics
+[stat,tbl] = int_runStats(grand_freq,metric,[-1 0 0],'ft_statfun_depsamplesT');
+
+% save data
+save([dir_bids,'derivatives/group/eeg/group_task-rf_pow-irasastat.mat'],'stat','tbl');
+
+% extract subject activation in cluster
+clus_tbl = int_extractSubjs(grand_freq,stat,tbl,metric,condition);
+
+% write table
+writetable(clus_tbl,[dir_bids,'derivatives/group/eeg/group_task-rf_eeg-irasacluster.csv'],'Delimiter',',')
+copyfile([dir_bids,'derivatives/group/eeg/group_task-rf_eeg-irasacluster.csv'],[dir_repos,'reinstatement_fidelity/data/fig2_data/group_task-rf_eeg-irasacluster.csv'])
+
+% cycle through each condition
+for i = 1 : numel(condition)
+    
+    % get power brain map
+    filename = [dir_bids,'derivatives/group/eeg/group_task-',condition{i},'_irasaeeg-map.nii'];
+    int_extractMap(stat{i},filename);
+    
+    % copy to git repo
+    copyfile(filename,[dir_repos,'reinstatement_fidelity/data/fig2_data/group_task-',condition{i},'_irasaeeg-map.nii'])    
+    
+    % get slope brain map
+    filename = [dir_bids,'derivatives/group/eeg/group_task-',condition{i},'_irasaslp-map.nii'];
+    int_extractMap(stat{i+6},filename);
+    
+    % copy to git repo
+    copyfile(filename,[dir_repos,'reinstatement_fidelity/data/fig2_data/group_task-',condition{i},'_irasaslp-map.nii'])    
+end
+
+% return statistics
+disp(tbl)
 
 end
 
@@ -159,6 +270,67 @@ end
 %       ------                                                            %
 %                                                                         %
 % ----------------------------------------------------------------------- %
+
+
+function pow = int_getWaveletDiff(freq,modality,operation,contrast)
+
+% get number of trials
+ntrl = size(freq.powspctrm,1);
+
+% predefine output vars
+ismodality  = false(ntrl,1);
+isoperation = false(ntrl,1);
+
+% cycle through each trl
+for trl = 1 : ntrl
+    ismodality(trl,1) = strcmpi(freq.trialinfo{trl}.modality,modality);
+    isoperation(trl,1) = strcmpi(freq.trialinfo{trl}.operation,operation);   
+end
+
+% get trials of interest
+trloi = ismodality & isoperation;
+
+% switch based on contrast
+switch contrast
+    case 'erd'
+        
+        % get windows of interest
+        pretime  = freq.time>= -1 & freq.time <= -0.375;
+        posttime = freq.time>= 0.5 & freq.time <= 1.5;
+        
+        % get power 
+        prepow  = freq.powspctrm(trloi,:,:,pretime);
+        postpow = freq.powspctrm(trloi,:,:,posttime);
+        
+        % get difference
+        pow = mean(mean(postpow(:,:,:),3) - mean(prepow(:,:,:),3),1)';
+        
+    case 'rse'
+        
+        % get windows of interest
+        timeoi = freq.time>= 0.5 & freq.time <= 1.5;
+        
+        % predefine memory vector
+        mem = zeros(ntrl,1);
+        
+        % cycle through each trl
+        for trl = 1 : ntrl
+            mem(trl) = freq.trialinfo{trl}.recalled == 1;
+        end
+        
+        % get trials of interest
+        hits = mem & trloi;
+        misses = ~mem & trloi;
+
+        % get power 
+        hitpow  = mean(freq.powspctrm(hits,:,:,timeoi),1);
+        misspow = mean(freq.powspctrm(misses,:,:,timeoi),1);
+        
+        % get difference
+        pow = mean(hitpow(:,:,:) - misspow(:,:,:),3)';        
+end
+
+end
 
 function h = int_plotFreqSpec(freq)
 
@@ -202,7 +374,12 @@ for i = 1 : 3
 end
 end
 
-function [stat,tbl] = int_runStats(data,parameters,tails)
+function [stat,tbl] = int_runStats(data,parameters,tails,test)
+
+% set statistical test if not defined
+if ~exist('test','var')
+    test = 'ft_statfun_depsamplesT';
+end
 
 % get key parameters
 n_paras = numel(parameters);
@@ -219,6 +396,7 @@ for i = 1 : n_paras
     cfg             = [];
     cfg.tail        = zeros(n_datas,1)+tails(i);
     cfg.parameter   = parameters{i};
+    cfg.statistic   = test;
     [s{i},t{i}]     = run_oneSampleT(cfg, data(:));
 end
 
@@ -252,12 +430,22 @@ tmp_pow(:,data.inside) = data.powspctrm;
 data.pow = tmp_pow;
 
 % add in "outside" virtual electrodes to slope
-tmp_pow = zeros(size(data.pow,1),size(data.inside,1));
-tmp_pow(:,data.inside) = data.slope;
-data.slp = tmp_pow;
+if isfield(data,'fractal')
+    tmp_pow = zeros(size(data.pow,1),size(data.inside,1));
+    tmp_pow(:,data.inside) = data.fractal;
+    data.slp = tmp_pow;
+    data = rmfield(data,'fractal');
+    
+    tmp_pow = zeros(size(data.pow,1),size(data.inside,1));
+    tmp_pow(:,data.inside) = data.intercept;
+    data.int = tmp_pow;
+    data = rmfield(data,'intercept');
+else
+    data = rmfield(data,{'slp'});
+end
 
 % remove freq details
-data = rmfield(data,{'powspctrm','slope','label','freq','time','dimord','cfg'});
+data = rmfield(data,{'powspctrm','label','freq','time','dimord','cfg'});
     
 end
 
@@ -283,14 +471,8 @@ for i = 1 : numel(metric)
         % get cluster indices
         clusidx = stat{count}.(cluslab)==1;
         
-        % extract data
-        dat = nanmean(data{j}.(metric{i})(:,clusidx),2);
-        
-        % log normalise
-        dat = dat ./ 10.^max(order(dat));
-        sgn = sign(dat);
-        logdat = log10(abs(dat)+1) .* sgn .* 10;
-        output(:,count) = logdat;
+        % save output
+        output(:,count) = nanmean(data{j}.(metric{i})(:,clusidx),2);
         
         % define label
         label{count} = [condition{j},'_',metric{i}];
@@ -300,19 +482,6 @@ end
 
 % create table
 tbl = array2table(output,'VariableNames',label);
-
-% plot
-figure('visible','on'); hold on
-subplot(1,2,1); hold on
-boxplot(table2array(tbl(:,1:size(tbl,2)/2)))
-for i = 1 : size(tbl,2)/2  
-    plot(i+.3,table2array(tbl(:,i)),'ko');
-end
-subplot(1,2,2); hold on
-boxplot(table2array(tbl(:,size(tbl,2)/2+1:end)))
-for i = 1 : size(tbl,2)/2  
-    plot(i+.3,table2array(tbl(:,i+size(tbl,2)/2)),'ko');
-end
 
 end
 
