@@ -1,4 +1,4 @@
-%% EEG: Confidence Analysis
+function supp_confidence
 % prepare workspace
 % initialisation
 clearvars
