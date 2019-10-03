@@ -129,22 +129,21 @@ mpl.rcParams['axes.linewidth'] = 1
 
 # %% -- prepare data -------------------------------------------- #
 # define raincloud data filename
-data_fname = wdir + "data/fig2_data/group_task-rf_eeg-cluster.csv"
+data_fname = wdir + "data/fig2_data/group_task-rf_eeg-wavecluster.csv"
 
 # load raincloud data
 data_raincloud = pandas.read_csv(data_fname,
                        delimiter=",")
 
 # restrict to retrieval data
-data_enc = data_raincloud.drop(labels = ['ret_pow','rse_pow','rse_prepow','ret_slope','rse_slope','rse_preslope',], axis = 1)
-#data_ret = data_raincloud.drop(labels = ['enc_pow','rse_pow','pre_pow','diff_pow','enc_slope','rse_slope','pre_slope','diff_slope','enc_offset','rse_offset','pre_offset','diff_offset'], axis = 1)
-#data_rse = data_raincloud.drop(labels = ['ret_pow','enc_pow','pre_pow','diff_pow','ret_slope','enc_slope','pre_slope','diff_slope','ret_offset','enc_offset','pre_offset','diff_offset'], axis = 1)
+data_vis = data_raincloud.drop(labels = ['aud_enc_pow','aud_ret_pow','aud_rse_pow'], axis = 1)
+data_aud = data_raincloud.drop(labels = ['vis_enc_pow','vis_ret_pow','vis_rse_pow'], axis = 1)
 
 # %% ----- Raincloud Plot ----- # 
 # create figure
 f,ax = pyplot.subplots(1,1)
-f.set_figheight(3.7/2.54) # 4inches 
-f.set_figwidth(4.2/2.54) # 12inches
+f.set_figheight(4.7/2.54) # 4inches 
+f.set_figwidth(8.3/2.54) # 12inches
 f.set_dpi(1000)
 
 # define colour scheme
@@ -153,22 +152,82 @@ colour = [colour[2],colour[3],colour[4]]
 
 # define labels
 labels = {'title':'',
-          'ylabel':'Normalised Beta (t)',
-          'xticklabel':['Osc. Power','Slope'],
-          'yticks':[-3,-1.5,0,1.5,3],
-          'yticklabel':['-3','-1.5','0','1.5','3']}
+          'ylabel':'Alpha/Beta Power (z)',
+          'xticklabel':['Percept. ERD','Ret. ERD','Ret. Success'],
+          'yticks':[-0.6,-0.3,0,0.3],
+          'yticklabel':['-0.6','-0.3','0','0.3']}
 
 # plot raincloud
-custom_rainplot(data_enc,colour,ax,'Calibri',labels,[-3,3],0.15,[1])
+custom_rainplot(data_vis,colour,ax,'Calibri',labels,[-0.6,0.3],0.15,[1])
    
 # save image
-#pyplot.savefig(wdir + "/figures/fig2a.tif",bbox_inches='tight',transparent=True,dpi='figure')
+pyplot.savefig(wdir + "/figures/fig2a.tif",bbox_inches='tight',transparent=True,dpi='figure')
+
+# %% ----- Raincloud Plot ----- # 
+# create figure
+f,ax = pyplot.subplots(1,1)
+f.set_figheight(4.7/2.54) # 4inches 
+f.set_figwidth(8.3/2.54) # 12inches
+f.set_dpi(1000)
+
+# define colour scheme
+colour = sns.color_palette("Blues",n_colors=7)
+colour = [colour[2],colour[3],colour[4]]
+
+# define labels
+labels = {'title':'',
+          'ylabel':'Alpha/Beta Power (z)',
+          'xticklabel':['Percept. ERD','Ret. ERD','Ret. Success'],
+          'yticks':[-0.6,-0.3,0,0.3],
+          'yticklabel':['-0.6','-0.3','0','0.3']}
+
+# plot raincloud
+custom_rainplot(data_aud,colour,ax,'Calibri',labels,[-0.6,0.3],0.15,[1])
+   
+# save image
+pyplot.savefig(wdir + "/figures/fig2a.tif",bbox_inches='tight',transparent=True,dpi='figure')
   
-# %% ----- Raincloud Plot ----- # 
+
+# %% -- IRASA DATA -------------- #
+
+# %% -- prepare data -------------------------------------------- #
+# define raincloud data filename
+data_fname = wdir + "data/fig2_data/group_task-rf_eeg-irasacluster.csv"
+
+# load raincloud data
+data_raincloud = pandas.read_csv(data_fname,
+                       delimiter=",")
+
+# restrict to retrieval data
+data_pow = data_raincloud.drop(labels = ['aud_enc_pow','aud_ret_pow','aud_rse_pow',
+                                         'vis_enc_slp','vis_ret_slp','vis_rse_slp',
+                                         'aud_enc_slp','aud_ret_slp','aud_rse_slp',
+                                         'vis_enc_int','vis_ret_int','vis_rse_int',
+                                         'aud_enc_int','aud_ret_int','aud_rse_int'], axis = 1)
+    
+# restrict to retrieval data
+data_slp = data_raincloud.drop(labels = ['aud_enc_pow','aud_ret_pow','aud_rse_pow',
+                                         'vis_enc_pow','vis_ret_pow','vis_rse_pow',
+                                         'aud_enc_slp','aud_ret_slp','aud_rse_slp',
+                                         'vis_enc_int','vis_ret_int','vis_rse_int',
+                                         'aud_enc_int','aud_ret_int','aud_rse_int'], axis = 1)
+    
+# restrict to retrieval data
+data_int = data_raincloud.drop(labels = ['aud_enc_pow','aud_ret_pow','aud_rse_pow',
+                                         'vis_enc_pow','vis_ret_pow','vis_rse_pow',
+                                         'aud_enc_slp','aud_ret_slp','aud_rse_slp',
+                                         'vis_enc_slp','vis_ret_slp','vis_rse_slp',
+                                         'aud_enc_int','aud_ret_int','aud_rse_int'], axis = 1)
+
+# --- plot power
+# rescale power
+pow_sign = np.sign(data_pow)
+data_pow = np.log10(abs(data_pow / (10**7))+1) * pow_sign
+    
 # create figure
 f,ax = pyplot.subplots(1,1)
-f.set_figheight(3.7/2.54) # 4inches 
-f.set_figwidth(5.7/2.54) # 12inches
+f.set_figheight(4.7/2.54) # 4inches 
+f.set_figwidth(8.3/2.54) # 12inches
 f.set_dpi(1000)
 
 # define colour scheme
@@ -177,22 +236,23 @@ colour = [colour[2],colour[3],colour[4]]
 
 # define labels
 labels = {'title':'',
-          'ylabel':'Normalised Beta (t)',
-          'xticklabel':['Osc. Power','Slope','Offset'],
-          'yticks':[-3,-1.5,0,1.5,3],
-          'yticklabel':['-3','-1.5','0','1.5','3']}
+          'ylabel':'Alpha/Beta Log-Norm. Power [a.u.]',
+          'xticklabel':['Percept. ERD','Ret. ERD','Ret. Success'],
+          'yticks':[-1,-0.5,0,0.5],
+          'yticklabel':['-1','-0.5','0','0.5']}
 
 # plot raincloud
-custom_rainplot(data_ret,colour,ax,'Calibri',labels,[-3,3],0.15,[1])
+custom_rainplot(data_pow,colour,ax,'Calibri',labels,[-1,0.5],0.15,[1])
    
 # save image
-#pyplot.savefig(wdir + "/figures/fig2a.tif",bbox_inches='tight',transparent=True,dpi='figure')
+pyplot.savefig(wdir + "/figures/fig2a.tif",bbox_inches='tight',transparent=True,dpi='figure')
 
-# %% ----- Raincloud Plot ----- # 
+
+# --- plot slope
 # create figure
 f,ax = pyplot.subplots(1,1)
-f.set_figheight(3.7/2.54) # 4inches 
-f.set_figwidth(5.7/2.54) # 12inches
+f.set_figheight(4.7/2.54) # 4inches 
+f.set_figwidth(8.3/2.54) # 12inches
 f.set_dpi(1000)
 
 # define colour scheme
@@ -201,13 +261,40 @@ colour = [colour[2],colour[3],colour[4]]
 
 # define labels
 labels = {'title':'',
-          'ylabel':'Normalised Beta (t)',
-          'xticklabel':['Osc. Power','Slope','Offset'],
-          'yticks':[-3,-1.5,0,1.5,3],
-          'yticklabel':['-3','-1.5','0','1.5','3']}
+          'ylabel':'Aperiodic Slope',
+          'xticklabel':['Percept. ERD','Ret. ERD','Ret. Success'],
+          'yticks':[-40,-20,0,20],
+          'yticklabel':['-40','-20','0','20']}
 
 # plot raincloud
-custom_rainplot(data_rse,colour,ax,'Calibri',labels,[-3,3],0.15,[1])
+custom_rainplot(data_slp,colour,ax,'Calibri',labels,[-40,20],0.15,[1])
    
 # save image
-#pyplot.savefig(wdir + "/figures/fig2a.tif",bbox_inches='tight',transparent=True,dpi='figure')
+pyplot.savefig(wdir + "/figures/fig2a.tif",bbox_inches='tight',transparent=True,dpi='figure')
+
+
+# --- plot int
+# create figure
+f,ax = pyplot.subplots(1,1)
+f.set_figheight(4.7/2.54) # 4inches 
+f.set_figwidth(8.3/2.54) # 12inches
+f.set_dpi(1000)
+
+# define colour scheme
+colour = sns.color_palette("Blues",n_colors=7)
+colour = [colour[2],colour[3],colour[4]]
+
+# define labels
+labels = {'title':'',
+          'ylabel':'Aperiodic Intercept (t)',
+          'xticklabel':['Percept. ERD','Ret. ERD','Ret. Success'],
+          'yticks':[-100,0,100,200],
+          'yticklabel':['-100','0','100','200']}
+
+# plot raincloud
+custom_rainplot(data_int,colour,ax,'Calibri',labels,[-100,200],0.15,[1])
+   
+# save image
+pyplot.savefig(wdir + "/figures/fig2a.tif",bbox_inches='tight',transparent=True,dpi='figure')
+
+
