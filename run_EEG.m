@@ -1,4 +1,4 @@
-function run_EEG_analysis(skipComputation)
+function run_EEG(skipComputation)
 
 % if skip argument not entered, set skip to true
 if nargin == 0; skipComputation = true; end
@@ -160,8 +160,6 @@ for subj = 1 : n_subj
             grand_freq{i}.fractal(subj,chan) = Bfit.Coefficients.tStat(2) - Afit.Coefficients.tStat(2);
             grand_freq{i}.intercept(subj,chan) = Bfit.Coefficients.tStat(1) - Afit.Coefficients.tStat(1);
         end
-        
-        % get fractal
     end
     
     % update user    
@@ -260,6 +258,75 @@ end
 
 % return statistics
 disp(tbl)
+
+%% Get EEG Time-Series
+% load stat
+load([dir_bids,'derivatives/group/eeg/group_task-rf_pow-wavestat.mat'],'stat');tic
+
+% cycle through subjects
+for subj = 1 : n_subj
+
+    % define subject data directory
+    dir_subj = [dir_bids,'sourcedata/',sprintf('sub-%02.0f',subj),'/eeg/'];    
+
+    % load in raw data
+    fprintf('\nloading sub-%02.0f data...\n',subj);
+    load([dir_subj,sprintf('sub-%02.0f',subj),'_task-rf_eeg-source.mat'],'source')
+    
+    % get time-frequency representaiton of data for specified conditions
+    freq = get_wavelet(source);
+
+    % recode trialinfo
+    freq = recode_trlinfo(freq);
+    
+    % define indices
+    fidx = freq.freq>=8&freq.freq<=30;
+    tidx = freq.time>=0.5&freq.time<=1.5;
+    pidx = freq.time>=-1&freq.time<=-0.375;
+    
+    % get trials of interest
+    trls{1} = freq.trialinfo(:,5) == 1 & freq.trialinfo(:,6) == 1;
+    trls{2} = freq.trialinfo(:,5) == 0 & freq.trialinfo(:,6) == 1;
+    trls{3} = [freq.trialinfo(:,5) == 0 & freq.trialinfo(:,6) == 1  freq.trialinfo(:,1)==1];
+    trls{4} = freq.trialinfo(:,5) == 1 & freq.trialinfo(:,6) == 0;
+    trls{5} = freq.trialinfo(:,5) == 0 & freq.trialinfo(:,6) == 0;
+    trls{6} = [freq.trialinfo(:,5) == 0 & freq.trialinfo(:,6) == 0  freq.trialinfo(:,1)==1];      
+    
+    % cycle through each stat
+    for s = 1 : numel(stat)
+        
+        % get channel index
+        cidx = stat{s}.negclusterslabelmat(stat{s}.inside)==1;
+        
+        % extract data
+        if s ~= 3 && s ~= 6
+            tmp = permute(freq.powspctrm(trls{s},cidx,fidx,:) - nanmean(freq.powspctrm(trls{s},cidx,fidx,pidx),4),[4 1 2 3]);
+            timediff{s}(subj,:) = smooth(nanmean(tmp(:,:),2));
+            
+            tmp = permute(mean(freq.powspctrm(trls{s},cidx,:,tidx),4) - nanmean(freq.powspctrm(trls{s},cidx,:,pidx),4),[3 1 2 4]);
+            freqdiff{s}(subj,:) = smooth(nanmean(tmp(:,:),2));
+            
+        else
+            tmp = permute(nanmean(freq.powspctrm(trls{s}(:,1)&trls{s}(:,2),cidx,fidx,:),1) - nanmean(freq.powspctrm(trls{s}(:,1)&~trls{s}(:,2),cidx,fidx,:),1),[4 1 2 3]);
+            timediff{s}(subj,:) = smooth(nanmean(tmp(:,:),2));
+            
+            tmp = permute(nanmean(freq.powspctrm(trls{s}(:,1)&trls{s}(:,2),cidx,:,tidx),1) - nanmean(freq.powspctrm(trls{s}(:,1)&~trls{s}(:,2),cidx,:,tidx),1),[3 1 2 4]);
+            freqdiff{s}(subj,:) = smooth(nanmean(tmp(:,:),2));            
+        end
+    end
+    
+    % save outputs
+    save(sprintf('%sderivatives/sub-%02.0f/eeg/sub-%02.0f_task-rf_eeg-wavelet.mat',dir_bids,subj,subj),'freq','-v7.3')  
+    fprintf('sub-%02.0f complete...\ntotal time elapsed: %1.1f minutes...\nestimated time remaining: %1.1f minutes...\n',subj,round(toc/60,1),round((round(toc/60,1)/subj)*(n_subj-subj),1))
+end
+
+% cycle through each condition and save
+lab = {'visenc','visret','visrse','audenc','audret','audrse'};
+
+for i = 1 : 6
+    writematrix(freqdiff{s},[dir_repos,'reinstatement_fidelity/data/fig2_data/group_task-freq_eeg-',lab{i},'.csv'])
+    writematrix(timediff{s},[dir_repos,'reinstatement_fidelity/data/fig2_data/group_task-time_eeg-',lab{i},'.csv'])
+end
 
 end
 
