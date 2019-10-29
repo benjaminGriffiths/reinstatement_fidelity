@@ -81,11 +81,11 @@ end
 
 % extract variables to avoid overhead comm.
 fs   = 100;
-fr   = [3 25];
+fr   = [5 25];
 
 % predefine osci and frac results
-osci = zeros(size(Bsig,2),29,2); 
-fhz  = zeros(size(Bsig,2),29);
+osci = zeros(size(Bsig,2),26,2); 
+fhz  = zeros(size(Bsig,2),26);
 frac = osci;
 
 % cycle through every trial

@@ -6,6 +6,7 @@
 # %% -- import modules ------------------------------------------------------ #
 import matplotlib as mpl
 import numpy as np
+import scipy
 import pandas
 import ptitprince as pt
 import seaborn as sns
@@ -20,8 +21,19 @@ def custom_rainplot(data,colour,axes,fontname,labels,ylim,offset,pvalue):
     trans   = axes.transData
     offset  = transforms.ScaledTranslation(offset,0,f.dpi_scale_trans)
     
+    # drop outliers from violin
+    data_violin = data.copy()
+    for i in np.arange(0,np.size(data_violin,1)):
+        qs  = data_violin.iloc[:,i].quantile([.25,.75])
+        qs = qs.tolist()
+        iqr = scipy.stats.iqr(data_violin.iloc[:,i])
+        idx = (data_violin.iloc[:,i] > (qs[1] + 1.5*iqr)) | (data_violin.iloc[:,i] < (qs[0] - 1.5*iqr))
+        idx = [x for x, val in enumerate(idx) if val] 
+        if idx:
+            data_violin.iloc[idx,i] = float('nan')
+    
     # plot violin
-    axes=pt.half_violinplot(data = data,bw = "scott",inner = None, scale = "count",
+    axes=pt.half_violinplot(data = data_violin,bw = "scott",inner = None, scale = "count",
                           width = 0.5, linewidth = 1, cut = 1, palette = colour,
                           ax = axes, edgecolor = [0,0,0])
     
@@ -61,6 +73,7 @@ def custom_rainplot(data,colour,axes,fontname,labels,ylim,offset,pvalue):
                        width=1,
                        length=2.5)
     axes.set_yticks(labels['yticks'])
+    axes.set_title(labels['title'],fontname=fontname,fontweight='light',fontsize=6)
     axes.set_xticklabels(labels['xticklabel'],fontname=fontname,fontweight='light',fontsize=6)
     axes.set_yticklabels(labels['yticklabel'],fontname=fontname,fontweight='light',fontsize=6)
 
@@ -98,8 +111,8 @@ data_raincloud['LeftTemp'][9] = 0
 
 # create figure
 f,ax = pyplot.subplots(1,1)
-f.set_figheight(5/2.54) # 4inches 
-f.set_figwidth(5.8/2.54) # 12inches
+f.set_figheight(3.7/2.54) # 4inches 
+f.set_figwidth(4/2.54) # 12inches
 f.set_dpi(1000)
 
 # define colour scheme
@@ -107,8 +120,8 @@ colour = sns.color_palette("Reds",n_colors=7)
 colour = [colour[2],colour[3],colour[4]]
 
 # define labels
-labels = {'title':'',
-          'ylabel':'Visual Perceptual Similarity (z)',
+labels = {'title':'Visual Perception',
+          'ylabel':'Similarity Index (z)',
           'xticklabel':['Occipital','Temporal','Frontal'],
           'yticks':[-0.05,0,0.05,0.1,0.15],
           'yticklabel':['-0.05','0','0.05','0.1','0.15']}
@@ -129,8 +142,8 @@ data_raincloud = pandas.read_csv(data_fname,
 
 # create figure
 f,ax = pyplot.subplots(1,1)
-f.set_figheight(5/2.54) # 4inches 
-f.set_figwidth(4.2/2.54) # 12inches
+f.set_figheight(3.7/2.54) # 4inches 
+f.set_figwidth(4/2.54) # 12inches
 f.set_dpi(1000)
 
 # define colour scheme
@@ -138,8 +151,8 @@ colour = sns.color_palette("Reds",n_colors=7)
 colour = [colour[2],colour[4]]
 
 # define labels
-labels = {'title':'',
-          'ylabel':'Visual Reinstatement Similarity (z)',
+labels = {'title':'Visual Retrieval',
+          'ylabel':'Similarity Index (z)',
           'xticklabel':['Left Fusiform','Right Fusiform'],
           'yticks':[-0.1,0,0.1,0.2],
           'yticklabel':['-0.1','0','0.1','0.2']}
@@ -161,8 +174,8 @@ data_raincloud = pandas.read_csv(data_fname,
 
 # create figure
 f,ax = pyplot.subplots(1,1)
-f.set_figheight(5/2.54) # 4inches 
-f.set_figwidth(4.2/2.54) # 12inches
+f.set_figheight(3.7/2.54) # 4inches 
+f.set_figwidth(4/2.54) # 12inches
 f.set_dpi(1000)
 
 # define colour scheme
@@ -170,8 +183,8 @@ colour = sns.color_palette("Reds",n_colors=7)
 colour = [colour[2],colour[4]]
 
 # define labels
-labels = {'title':'',
-          'ylabel':'Auditory Perceptual Similarity (z)',
+labels = {'title':'Auditory Perception',
+          'ylabel':'Similarity Index (z)',
           'xticklabel':['Left Temporal','Right Temporal'],
           'yticks':[-0.05,0,0.05,0.1,0.15],
           'yticklabel':['-0.05','0','0.05','0.1','0.15']}
@@ -179,9 +192,6 @@ labels = {'title':'',
 # plot raincloud
 custom_rainplot(data_raincloud,colour,ax,'calibri',labels,[-0.05,0.15],0.125,[1,1])
    
-# save image
-pyplot.savefig(wdir + "/figures/fig1a.tif",bbox_inches='tight',transparent=True,dpi='figure')
-
 # save image
 pyplot.savefig(wdir + "/figures/fig1c.tif",bbox_inches='tight',transparent=True,dpi='figure')
 
@@ -195,8 +205,8 @@ data_raincloud = pandas.read_csv(data_fname,
 
 # create figure
 f,ax = pyplot.subplots(1,1)
-f.set_figheight(5/2.54) # 4inches 
-f.set_figwidth(3.2/2.54) # 12inches
+f.set_figheight(3.7/2.54) # 4inches 
+f.set_figwidth(2.5/2.54) # 12inches
 f.set_dpi(1000)
 
 # define colour scheme
@@ -204,14 +214,14 @@ colour = sns.color_palette("Reds",n_colors=7)
 colour = [colour[3]]
 
 # define labels
-labels = {'title':'',
-          'ylabel':'Auditory Retrieval Similarity (z)',
+labels = {'title':'Auditory Retrieval',
+          'ylabel':'Similarity Index (z)',
           'xticklabel':['Left Frontal'],
-          'yticks':[-0.2,0,0.2,0.4],
-          'yticklabel':['-0.2','0','0.2','0.4']}
+          'yticks':[-0.3,-0.15,0,0.15,0.3],
+          'yticklabel':['-0.3','','0','','0.3']}
 
 # plot raincloud
-custom_rainplot(data_raincloud,colour,ax,'calibri',labels,[-0.1,0.2],0.125,[1,1])
+custom_rainplot(data_raincloud,colour,ax,'calibri',labels,[-0.3,0.3],0.125,[1,1])
    
 # save image
 pyplot.savefig(wdir + "/figures/fig1d.tif",bbox_inches='tight',transparent=True,dpi='figure')
@@ -227,8 +237,8 @@ data_raincloud = pandas.read_csv(data_fname,
 
 # create figure
 f,ax = pyplot.subplots(1,1)
-f.set_figheight(5/2.54) # 4inches 
-f.set_figwidth(4.2/2.54) # 12inches
+f.set_figheight(3.7/2.54) # 4inches 
+f.set_figwidth(3/2.54) # 12inches
 f.set_dpi(1000)
 
 # define colour scheme
@@ -236,9 +246,9 @@ colour = sns.color_palette("Reds",n_colors=7)
 colour = [colour[3]]
 
 # define labels
-labels = {'title':'',
-          'ylabel':'Visual Response Similarity (z)',
-          'xticklabel':['C1','C2'],
+labels = {'title':'Retrieval Response',
+          'ylabel':'Similarity Index (z)',
+          'xticklabel':['L. Temp.','L. Insula'],
           'yticks':[-0.2,-0.1,0,0.1,0.2],
           'yticklabel':['-0.2','','0','','0.2']}
 
@@ -247,3 +257,35 @@ custom_rainplot(data_raincloud,colour,ax,'calibri',labels,[-0.2,0.2],0.125,[1,1]
    
 # save image
 pyplot.savefig(wdir + "/figures/fig1e.tif",bbox_inches='tight',transparent=True,dpi='figure')
+
+
+# %% ----- VISUAL FORGOTTEN ERS ----- # 
+# define raincloud data filename
+data_fname = wdir + "data/fig1_data/ers_forg_betas.csv"
+
+# load raincloud data
+data_raincloud = pandas.read_csv(data_fname,
+                       delimiter=",")
+
+# create figure
+f,ax = pyplot.subplots(1,1)
+f.set_figheight(3.7/2.54) # 4inches 
+f.set_figwidth(3/2.54) # 12inches
+f.set_dpi(1000)
+
+# define colour scheme
+colour = sns.color_palette("Reds",n_colors=7)
+colour = [colour[3]]
+
+# define labels
+labels = {'title':'Forgotten Similarity',
+          'ylabel':'Similarity Index (z)',
+          'xticklabel':['R. Central'],
+          'yticks':[-0.1,-0.05,0,0.05,0.1],
+          'yticklabel':['-0.1','','0','','0.1']}
+
+# plot raincloud
+custom_rainplot(data_raincloud,colour,ax,'calibri',labels,[-0.1,0.1],0.125,[1,1])
+   
+# save image
+pyplot.savefig(wdir + "/figures/fig1f.tif",bbox_inches='tight',transparent=True,dpi='figure')

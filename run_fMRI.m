@@ -634,17 +634,17 @@ for subj = 1 : n_subj
     subj_handle = sprintf('sub-%02.0f',subj);
     
     % get searchlight images
-    rMapFiles{subj,1}  = [dir_root,'bids_data/derivatives/',subj_handle,'/rsa-percept/sw',subj_handle,'_task-percept_rsa-searchlightVisual.nii,1'];
+    rMapFiles{subj,1}  = [dir_root,'derivatives/',subj_handle,'/rsa-percept/sw',subj_handle,'_task-percept_rsa-searchlightVisual.nii,1'];
 end
 
 % make group directory
-mkdir([dir_root,'bids_data/derivatives/group/rsa-percept/'])
+mkdir([dir_root,'derivatives/group/rsa-percept/'])
 
 % delete spm if it exists
-if exist([dir_root,'bids_data/derivatives/group/rsa-percept/SPM.mat'],'file'); delete([dir_root,'bids_data/derivatives/group/rsa-percept/SPM.mat']); end
+if exist([dir_root,'derivatives/group/rsa-percept/SPM.mat'],'file'); delete([dir_root,'derivatives/group/rsa-percept/SPM.mat']); end
 
 % create second-level glms
-matlabbatch{1}.spm.stats.factorial_design.dir                       = {[dir_root,'bids_data/derivatives/group/rsa-percept/']};
+matlabbatch{1}.spm.stats.factorial_design.dir                       = {[dir_root,'derivatives/group/rsa-percept/']};
 matlabbatch{1}.spm.stats.factorial_design.des.t1.scans              = rMapFiles(:,1);
 matlabbatch{1}.spm.stats.factorial_design.cov                       = struct('c', {}, 'cname', {}, 'iCFI', {}, 'iCC', {});
 matlabbatch{1}.spm.stats.factorial_design.multi_cov                 = struct('files', {}, 'iCFI', {}, 'iCC', {});
@@ -658,7 +658,7 @@ spm_jobman('run',matlabbatch)
 clear matlabbatch subjHandle subj
 
 % estimate model
-matlabbatch{1}.spm.stats.fmri_est.spmmat            = {[dir_root,'bids_data/derivatives/group/rsa-percept/SPM.mat']};
+matlabbatch{1}.spm.stats.fmri_est.spmmat            = {[dir_root,'derivatives/group/rsa-percept/SPM.mat']};
 matlabbatch{1}.spm.stats.fmri_est.write_residuals   = 0;
 matlabbatch{1}.spm.stats.fmri_est.method.Classical  = 1;
 
@@ -666,7 +666,7 @@ spm_jobman('run',matlabbatch)
 clear matlabbatch
 
 % define contrasts
-matlabbatch{1}.spm.stats.con.spmmat(1)                  = {[dir_root,'bids_data/derivatives/group/rsa-percept/SPM.mat']};   
+matlabbatch{1}.spm.stats.con.spmmat(1)                  = {[dir_root,'derivatives/group/rsa-percept/SPM.mat']};   
 matlabbatch{1}.spm.stats.con.delete                     = 0;    
 matlabbatch{1}.spm.stats.con.consess{1}.tcon.name       = 'within>between';
 matlabbatch{1}.spm.stats.con.consess{1}.tcon.convec     = 1;
@@ -677,13 +677,13 @@ clear matlabbatch
 
 %% Extract Metrics for Visualisation
 % combine visual cluster and save
-combine_spm_cluster([dir_root,'bids_data/derivatives/group/rsa-percept/'])
+combine_spm_cluster([dir_root,'derivatives/group/rsa-percept/'])
 
 % load SPM details
-load([dir_root,'bids_data/derivatives/group/rsa-percept/SPM.mat'])
+load([dir_root,'derivatives/group/rsa-percept/SPM.mat'])
 
 % extract subject values for each cluster
-[betas,d] = extract_sample_points([dir_root,'bids_data/derivatives/group/rsa-percept/'],SPM);
+[betas,d] = extract_sample_points([dir_root,'derivatives/group/rsa-percept/'],SPM);
 
 % save betas as table
 tbl = array2table(betas','VariableNames',{'Occipital','LeftTemp','FrontCent'});
@@ -1325,11 +1325,11 @@ for subj = 1 : n_subj
     subj_handle = sprintf('sub-%02.0f',subj);
     
     % get searchlight images
-    rMapFiles{subj,1}  = [dir_root,'bids_data/derivatives/',subj_handle,'/rsa-ers/sw',subj_handle,'_task-rf_rsa-searchlight_response.nii,1'];
+    rMapFiles{subj,1}  = [dir_root,'derivatives/',subj_handle,'/rsa-ers/sw',subj_handle,'_task-rf_rsa-searchlight.nii,1'];
 end
 
 % create second-level glms
-matlabbatch{1}.spm.stats.factorial_design.dir                       = {[dir_root,'bids_data/derivatives/group/rsa-ers_response']};
+matlabbatch{1}.spm.stats.factorial_design.dir                       = {[dir_root,'derivatives/group/rsa-ers']};
 matlabbatch{1}.spm.stats.factorial_design.des.t1.scans              = rMapFiles(:,1);
 matlabbatch{1}.spm.stats.factorial_design.cov                       = struct('c', {}, 'cname', {}, 'iCFI', {}, 'iCC', {});
 matlabbatch{1}.spm.stats.factorial_design.multi_cov                 = struct('files', {}, 'iCFI', {}, 'iCC', {});
@@ -1343,7 +1343,7 @@ spm_jobman('run',matlabbatch)
 clear matlabbatch subjHandle subj
 
 % estimate model
-matlabbatch{1}.spm.stats.fmri_est.spmmat            = {[dir_root,'bids_data/derivatives/group/rsa-ers_response/SPM.mat']};
+matlabbatch{1}.spm.stats.fmri_est.spmmat            = {[dir_root,'derivatives/group/rsa-ers/SPM.mat']};
 matlabbatch{1}.spm.stats.fmri_est.write_residuals   = 0;
 matlabbatch{1}.spm.stats.fmri_est.method.Classical  = 1;
 
@@ -1351,7 +1351,7 @@ spm_jobman('run',matlabbatch)
 clear matlabbatch
 
 % define contrasts
-matlabbatch{1}.spm.stats.con.spmmat(1)                  = {[dir_root,'bids_data/derivatives/group/rsa-ers_response/SPM.mat']};   
+matlabbatch{1}.spm.stats.con.spmmat(1)                  = {[dir_root,'derivatives/group/rsa-ers/SPM.mat']};   
 matlabbatch{1}.spm.stats.con.delete                     = 0;    
 matlabbatch{1}.spm.stats.con.consess{1}.tcon.name       = 'within>between';
 matlabbatch{1}.spm.stats.con.consess{1}.tcon.convec     = 1;
@@ -1362,18 +1362,18 @@ clear matlabbatch
 
 %% Extract Metrics for Visualisation
 % combine visual cluster and save
-combine_spm_cluster([dir_root,'bids_data/derivatives/group/rsa-ers_response/'])
+combine_spm_cluster([dir_root,'derivatives/group/rsa-ers_response/'])
 
 % load SPM details
-load([dir_root,'bids_data/derivatives/group/rsa-ers_response/SPM.mat'])
+load([dir_root,'derivatives/group/rsa-ers_response/SPM.mat'])
 
 % extract subject values for each cluster
-[betas,d] = extract_sample_points([dir_root,'bids_data/derivatives/group/rsa-ers_response/'],SPM);
+[betas,d] = extract_sample_points([dir_root,'derivatives/group/rsa-ers_response/'],SPM);
 
 % save betas as table
-tbl = array2table(betas','VariableNames',{'LeftTemp','LeftInsula'});
+tbl = array2table(betas','VariableNames',{'LeftFusi','RightFusi'});
 writetable(tbl,[dir_repos,'data/fig1_data/ers_resp_betas.csv'],'Delimiter',',')
 
 % save effect size as table
-tbl = array2table(d','VariableNames',{'LeftTemp','LeftInsula'});
+tbl = array2table(d','VariableNames',{'LeftFusi','RightFusi'});
 writetable(tbl,[dir_repos,'data/fig1_data/ers_resp_cohensD.csv'],'Delimiter',',')

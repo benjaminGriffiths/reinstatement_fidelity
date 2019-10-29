@@ -141,7 +141,7 @@ for subj = 1 : n_subj
     for i = 1 : numel(freq)
     
         % get alpha power difference
-        alpha_idx = freq{i}.freq >= 8 & freq{i}.freq <= 25;
+        alpha_idx = (freq{i}.freq >= 8 & freq{i}.freq <= 30);
         grand_freq{i}.powspctrm(subj,:) = mean(freq{i}.powspctrm(:,alpha_idx,2) - freq{i}.powspctrm(:,alpha_idx,1),2);
         grand_freq{i}.label             = freq{i}.label;
         
@@ -216,6 +216,7 @@ disp(tbl)
 
 %% Run IRASA Statistics
 % load irasa data
+load([dir_bids,'derivatives/group/eeg/group_task-rf_pow-wavestat.mat'],'stat');
 load([dir_bids,'derivatives/group/eeg/group_task-rf_pow-irasa.mat'],'grand_freq');
 
 % set seed
@@ -224,6 +225,13 @@ rng(1)
 % define names of analyses
 metric = {'pow','slp','int'};
 condition = {'vis_enc','vis_ret','vis_rse','aud_enc','aud_ret','aud_rse'};
+
+% restrict ROI to ensure valid check
+for i = 1 : 6
+    for j = 1 : 3
+        grand_freq{i}.(metric{j})(:,stat{i}.negclusterslabelmat ~= 1) = 0;
+    end
+end
 
 % run statistics
 [stat,tbl] = int_runStats(grand_freq,metric,[-1 0 0],'ft_statfun_depsamplesT');
@@ -238,30 +246,117 @@ clus_tbl = int_extractSubjs(grand_freq,stat,tbl,metric,condition);
 writetable(clus_tbl,[dir_bids,'derivatives/group/eeg/group_task-rf_eeg-irasacluster.csv'],'Delimiter',',')
 copyfile([dir_bids,'derivatives/group/eeg/group_task-rf_eeg-irasacluster.csv'],[dir_repos,'reinstatement_fidelity/data/fig2_data/group_task-rf_eeg-irasacluster.csv'])
 
-% cycle through each condition
-for i = 1 : numel(condition)
-    
-    % get power brain map
-    filename = [dir_bids,'derivatives/group/eeg/group_task-',condition{i},'_irasaeeg-map.nii'];
-    int_extractMap(stat{i},filename);
-    
-    % copy to git repo
-    copyfile(filename,[dir_repos,'reinstatement_fidelity/data/fig2_data/group_task-',condition{i},'_irasaeeg-map.nii'])    
-    
-    % get slope brain map
-    filename = [dir_bids,'derivatives/group/eeg/group_task-',condition{i},'_irasaslp-map.nii'];
-    int_extractMap(stat{i+6},filename);
-    
-    % copy to git repo
-    copyfile(filename,[dir_repos,'reinstatement_fidelity/data/fig2_data/group_task-',condition{i},'_irasaslp-map.nii'])    
-end
-
 % return statistics
 disp(tbl)
 
+%% Get IRASA Spectrum
+load([dir_bids,'derivatives/group/eeg/group_task-rf_pow-wavestat.mat'],'stat');
+pow = [];
+frac = [];
+
+% cycle through each subject
+for subj = 1 : n_subj
+    
+    % load in raw data
+    load(sprintf('%sderivatives/sub-%02.0f/eeg/sub-%02.0f_task-rf_eeg-irasa.mat',dir_bids,subj,subj),'freq')  
+    
+    % restrict to wavelet voxels    
+    for i = 1:6
+        coi = stat{i}.negclusterslabelmat(stat{i}.inside == 1)==1;
+        pow(end+1:end+26,1) = smooth(mean(freq{i}.powspctrm(coi,:,2),1),3); % post pow
+        pow(end-25:end,2) = subj; % subj
+        pow(end-25:end,3) = i; % task
+        pow(end-25:end,4) = 1; % epoch
+        pow(end+1:end+26,1) = smooth(mean(freq{i}.powspctrm(coi,:,1),1),3); % pre pow
+        pow(end-25:end,2) = subj; % subj
+        pow(end-25:end,3) = i; % task
+        pow(end-25:end,4) = 2; % epoch    
+        
+        frac(end+1:end+26,1) = smooth(mean(freq{i}.fractal(coi,:,2),1),3); % post pow
+        frac(end-25:end,2) = subj; % subj
+        frac(end-25:end,3) = i; % task
+        frac(end-25:end,4) = 1; % epoch
+        frac(end+1:end+26,1) = smooth(mean(freq{i}.fractal(coi,:,1),1),3); % pre pow
+        frac(end-25:end,2) = subj; % subj
+        frac(end-25:end,3) = i; % task
+        frac(end-25:end,4) = 2; % epoch           
+    end
+end
+
+% save
+writematrix(pow,[dir_repos,'reinstatement_fidelity/data/fig2_data/group_task-irasa_eeg_osci.csv'])
+writematrix(frac,[dir_repos,'reinstatement_fidelity/data/fig2_data/group_task-irasa_eeg_frac.csv'])
+
+%% Get Power Distribution
+% load stat
+load([dir_bids,'derivatives/group/eeg/group_task-rf_pow-wavestat.mat'],'stat');tic
+hc = [];
+
+% cycle through subjects
+for subj = 1 : n_subj
+
+    % load data
+    load(sprintf('%sderivatives/sub-%02.0f/eeg/sub-%02.0f_task-rf_eeg-wavelet.mat',dir_bids,subj,subj),'freq')  
+    
+    % extract visual encoding power
+    toi1     = freq.time>=0.5&freq.time<=1.5;
+    toi2     = freq.time>=-1&freq.time<=0;
+    foi     = freq.freq>=8&freq.freq<=30;
+    trls    = freq.trialinfo(:,5) == 1 & freq.trialinfo(:,6) == 1;
+    chan    = stat{1}.negclusterslabelmat(stat{1}.inside==1)==1;
+    pow     = freq.powspctrm(trls,chan,foi,toi1)-freq.powspctrm(trls,chan,foi,toi2);
+    pow     = zscore(nanmean(pow(:,:),2));
+    
+    % bin data
+    [h,e]               = histcounts(pow,linspace(-5.25,5.25,22));
+    hc(end+1:end+21,1)  = h;
+    hc(end-20:end,2)    = e(1:end-1) + diff(e)/2;
+    hc(end-20:end,3)    = 1;
+    hc(end-20:end,4)    = subj;
+    
+    % extract visual retrieval power
+    toi1     = freq.time>=0.5&freq.time<=1.5;
+    toi2     = freq.time>=-1&freq.time<=0;
+    foi     = freq.freq>=8&freq.freq<=30;
+    trls    = freq.trialinfo(:,5) == 0 & freq.trialinfo(:,6) == 1 & freq.trialinfo(:,1) == 1;
+    chan    = stat{3}.negclusterslabelmat(stat{1}.inside==1)==1;
+    pow     = freq.powspctrm(trls,chan,foi,toi1)-freq.powspctrm(trls,chan,foi,toi2);
+    pow     = zscore(nanmean(pow(:,:),2));
+    
+    % bin data
+    [h,e]               = histcounts(pow,linspace(-5.25,5.25,22));
+    hc(end+1:end+21,1)  = h;
+    hc(end-20:end,2)    = e(1:end-1) + diff(e)/2;
+    hc(end-20:end,3)    = 2;
+    hc(end-20:end,4)    = subj;
+    
+    % extract visual retrieval power
+    toi1     = freq.time>=0.5&freq.time<=1.5;
+    toi2     = freq.time>=-1&freq.time<=0;
+    foi     = freq.freq>=8&freq.freq<=30;
+    trls    = freq.trialinfo(:,5) == 1 & freq.trialinfo(:,6) == 0;
+    chan    = stat{4}.negclusterslabelmat(stat{1}.inside==1)==1;
+    pow     = freq.powspctrm(trls,chan,foi,toi1)-freq.powspctrm(trls,chan,foi,toi2);
+    pow     = zscore(nanmean(pow(:,:),2));
+    
+    % bin data
+    [h,e]               = histcounts(pow,linspace(-5.25,5.25,22));
+    hc(end+1:end+21,1)  = h;
+    hc(end-20:end,2)    = e(1:end-1) + diff(e)/2;
+    hc(end-20:end,3)    = 3;
+    hc(end-20:end,4)    = subj;
+    toc
+end
+
+% save
+writematrix(hc,[dir_repos,'reinstatement_fidelity/data/fig2_data/group_task-bimodal_eeg_power.csv'])
+   
 %% Get EEG Time-Series
 % load stat
 load([dir_bids,'derivatives/group/eeg/group_task-rf_pow-wavestat.mat'],'stat');tic
+ts = cell(6,1);
+fs = cell(6,1);
+ms = cell(6,2);
 
 % cycle through subjects
 for subj = 1 : n_subj
@@ -282,7 +377,7 @@ for subj = 1 : n_subj
     % define indices
     fidx = freq.freq>=8&freq.freq<=30;
     tidx = freq.time>=0.5&freq.time<=1.5;
-    pidx = freq.time>=-1&freq.time<=-0.375;
+    pidx = freq.time>=-1&freq.time<=0;
     
     % get trials of interest
     trls{1} = freq.trialinfo(:,5) == 1 & freq.trialinfo(:,6) == 1;
@@ -300,32 +395,65 @@ for subj = 1 : n_subj
         
         % extract data
         if s ~= 3 && s ~= 6
-            tmp = permute(freq.powspctrm(trls{s},cidx,fidx,:) - nanmean(freq.powspctrm(trls{s},cidx,fidx,pidx),4),[4 1 2 3]);
-            timediff{s}(subj,:) = smooth(nanmean(tmp(:,:),2));
+            tmp = permute(freq.powspctrm(trls{s},cidx,fidx,:),[4 1 2 3]);
+            ts{s}(end+1:end+size(tmp,1),1) = smooth(nanmean(tmp(:,:),2),10);
+            ts{s}(end-size(tmp,1)+1:end,2) = freq.time;
+            ts{s}(end-size(tmp,1)+1:end,3) = subj;
             
-            tmp = permute(mean(freq.powspctrm(trls{s},cidx,:,tidx),4) - nanmean(freq.powspctrm(trls{s},cidx,:,pidx),4),[3 1 2 4]);
-            freqdiff{s}(subj,:) = smooth(nanmean(tmp(:,:),2));
+            tmp1 = permute(nanmean(freq.powspctrm(trls{s},cidx,:,tidx),4),[3 1 2 4]);
+            fs{s}(end+1:end+size(tmp1,1),1) = smooth(nanmean(tmp1(:,:),2),3);
+            fs{s}(end-size(tmp1,1)+1:end,2) = freq.freq;
+            fs{s}(end-size(tmp1,1)+1:end,3) = subj;
+            fs{s}(end-size(tmp1,1)+1:end,4) = 1;
+            tmp2 = permute(nanmean(freq.powspctrm(trls{s},cidx,:,pidx),4),[3 1 2 4]);
+            fs{s}(end+1:end+size(tmp1,1),1) = smooth(nanmean(tmp2(:,:),2),3);
+            fs{s}(end-size(tmp2,1)+1:end,2) = freq.freq;
+            fs{s}(end-size(tmp2,1)+1:end,3) = subj;
+            fs{s}(end-size(tmp2,1)+1:end,4) = 2;
             
         else
-            tmp = permute(nanmean(freq.powspctrm(trls{s}(:,1)&trls{s}(:,2),cidx,fidx,:),1) - nanmean(freq.powspctrm(trls{s}(:,1)&~trls{s}(:,2),cidx,fidx,:),1),[4 1 2 3]);
-            timediff{s}(subj,:) = smooth(nanmean(tmp(:,:),2));
+            % memory time
+            tmp1 = permute(nanmean(freq.powspctrm(trls{s}(:,1)&trls{s}(:,2),cidx,:,:),3),[4 1 2 3]);
+            ms{s,1}(end+1:end+size(tmp1,1),1) = smooth(nanmean(tmp1(:,:),2),10);
+            ms{s,1}(end-size(tmp1,1)+1:end,2) = freq.time;
+            ms{s,1}(end-size(tmp1,1)+1:end,3) = subj;
+            ms{s,1}(end-size(tmp1,1)+1:end,4) = 1;
             
-            tmp = permute(nanmean(freq.powspctrm(trls{s}(:,1)&trls{s}(:,2),cidx,:,tidx),1) - nanmean(freq.powspctrm(trls{s}(:,1)&~trls{s}(:,2),cidx,:,tidx),1),[3 1 2 4]);
-            freqdiff{s}(subj,:) = smooth(nanmean(tmp(:,:),2));            
+            tmp2 = permute(nanmean(freq.powspctrm(trls{s}(:,1)&~trls{s}(:,2),cidx,:,:),3),[4 1 2 3]);
+            ms{s,1}(end+1:end+size(tmp1,1),1) = smooth(nanmean(tmp2(:,:),2),10);
+            ms{s,1}(end-size(tmp2,1)+1:end,2) = freq.time;
+            ms{s,1}(end-size(tmp2,1)+1:end,3) = subj;
+            ms{s,1}(end-size(tmp2,1)+1:end,4) = 2;
+            
+            % memory freq
+            tmp1 = permute(nanmean(freq.powspctrm(trls{s}(:,1)&trls{s}(:,2),cidx,:,tidx),4),[3 1 2 4]);
+            ms{s,2}(end+1:end+size(tmp1,1),1) = smooth(nanmean(tmp1(:,:),2),3);
+            ms{s,2}(end-size(tmp1,1)+1:end,2) = freq.freq;
+            ms{s,2}(end-size(tmp1,1)+1:end,3) = subj;
+            ms{s,2}(end-size(tmp1,1)+1:end,4) = 1;
+            
+            tmp2 = permute(nanmean(freq.powspctrm(trls{s}(:,1)&~trls{s}(:,2),cidx,:,tidx),4),[3 1 2 4]);
+            ms{s,2}(end+1:end+size(tmp1,1),1) = smooth(nanmean(tmp2(:,:),2),3);
+            ms{s,2}(end-size(tmp2,1)+1:end,2) = freq.freq;
+            ms{s,2}(end-size(tmp2,1)+1:end,3) = subj;
+            ms{s,2}(end-size(tmp2,1)+1:end,4) = 2;            
         end
     end
     
-    % save outputs
-    save(sprintf('%sderivatives/sub-%02.0f/eeg/sub-%02.0f_task-rf_eeg-wavelet.mat',dir_bids,subj,subj),'freq','-v7.3')  
     fprintf('sub-%02.0f complete...\ntotal time elapsed: %1.1f minutes...\nestimated time remaining: %1.1f minutes...\n',subj,round(toc/60,1),round((round(toc/60,1)/subj)*(n_subj-subj),1))
 end
 
 % cycle through each condition and save
 lab = {'visenc','visret','visrse','audenc','audret','audrse'};
 
-for i = 1 : 6
-    writematrix(freqdiff{s},[dir_repos,'reinstatement_fidelity/data/fig2_data/group_task-freq_eeg-',lab{i},'.csv'])
-    writematrix(timediff{s},[dir_repos,'reinstatement_fidelity/data/fig2_data/group_task-time_eeg-',lab{i},'.csv'])
+for i = [1 2 4 5]
+    writematrix(fs{i},[dir_repos,'reinstatement_fidelity/data/fig2_data/group_task-freq_eeg-',lab{i},'.csv'])
+    writematrix(ts{i},[dir_repos,'reinstatement_fidelity/data/fig2_data/group_task-time_eeg-',lab{i},'.csv'])
+end
+
+for i = [3 6]
+    writematrix(ms{i,2},[dir_repos,'reinstatement_fidelity/data/fig2_data/group_task-freq_eeg-',lab{i},'.csv'])
+    writematrix(ms{i,1},[dir_repos,'reinstatement_fidelity/data/fig2_data/group_task-time_eeg-',lab{i},'.csv'])
 end
 
 end
@@ -554,19 +682,13 @@ end
 
 function int_extractMap(stat,filename)
 
-% get indices of clusters
-clus_idx = stat.negclusterslabelmat==1;
-
 % create source data structure
 source                  = [];
 source.inside           = stat.inside;
 source.dim              = stat.dim;
 source.pos              = stat.pos*10;
 source.unit             = 'mm';
-
-% define powspctrm of cluster
-source.pow              = nan(size(stat.pos,1),1);     
-source.pow(clus_idx)	= stat.stat(clus_idx); 
+source.pow              = stat.stat;
 
 % reshape data to 3D
 source.pow              = reshape(source.pow,source.dim);

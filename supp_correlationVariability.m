@@ -1,3 +1,6 @@
+function supp_correlationVariability
+
+%% Run Simulation
 noise = 0 : 0.01 : 1;
 ssivar = 0 : 0.01 : 1;
 ntrls = 100;
@@ -18,5 +21,6 @@ for i = 1 : numel(noise)
 end
 
 % plot
-imagesc(ssivar,noise,r); axis xy
+imagesc(ssivar(2:end),noise,r(:,2:end)); axis xy
 xlabel('SSI Variability'); ylabel('EEG Noise')
+

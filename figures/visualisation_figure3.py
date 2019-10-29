@@ -123,78 +123,53 @@ mpl.rcParams['axes.linewidth'] = 1
 
 # %% -- prepare data -------------------------------------------- #
 # define raincloud data filename
-data_fname = wdir + "data/fig3_data/group_task-all_eeg-cluster.csv"
+data_fname = wdir + "data/fig3_data/group_task-rf_eegfmri-parametricwavecluster.csv"
 
 # load raincloud data
 data_raincloud = pandas.read_csv(data_fname,
                        delimiter=",")
 
 # restrict to retrieval data
-data_raincloud = data_raincloud.drop(labels = ['forgotten','per_noBold','ret_noBold','ret_noConf'], axis = 1)
+data_enc = data_raincloud.drop(labels = ['ret_bold','ret_conf','ret_postpow','ret_prepow'], axis = 1)
+data_ret = data_raincloud.drop(labels = ['enc_bold','enc_conf','enc_postpow','enc_prepow'], axis = 1)
 
 # ----- Raincloud Plot ----- # 
 # create figure
 f,ax = pyplot.subplots(1,1)
 f.set_figheight(5/2.54) # 4inches 
-f.set_figwidth(4.2/2.54) # 12inches
+f.set_figwidth(6.2/2.54) # 12inches
 f.set_dpi(1000)
 
 # define colour scheme
 colour = sns.color_palette("Greens",n_colors=7)
-colour = [colour[1],colour[3]]
+colour = [colour[1],colour[2],colour[3],colour[4]]
 
 # define labels
 labels = {'title':'',
           'ylabel':'Power-Similarity Correlation (z)',
-          'xticklabel':['Perception','Retrieval'],
-          'yticks':[-0.4,-0.2,0,0.2,0.4],
-          'yticklabel':['-0.4','-0.2','0','0.2','0.4']}
+          'xticklabel':['BOLD','Confidence','Post-Stimulus Power','Pre-Stimulus Power'],
+          'yticks':[-4,-2,0,2,4],
+          'yticklabel':['-4','-2','0','2','4']}
 
 # plot raincloud
-custom_rainplot(data_raincloud,colour,ax,'calibri',labels,[-0.4,0.4],0.125,[1,1])
+custom_rainplot(data_enc,colour,ax,'calibri',labels,[-4,4],0.125,[1,1])
    
 # save image
 pyplot.savefig(wdir + "/figures/fig3a.jpg",bbox_inches='tight',transparent=True,dpi='figure')
 
-# %% --- correlation plot
-# define raincloud data filename
-data_fname = wdir + "data/fig3_data/subj-01_task-ers_xy.csv"
-
+# ----- Raincloud Plot ----- # 
 # create figure
 f,ax = pyplot.subplots(1,1)
-f.set_figheight(2.3/2.54) # 4inches 
-f.set_figwidth(2.3/2.54) # 12inches
-f.set_dpi(300)
+f.set_figheight(5/2.54) # 4inches 
+f.set_figwidth(6.2/2.54) # 12inches
+f.set_dpi(1000)
 
-# load raincloud data
-data_corr = pandas.read_csv(data_fname,
-                       delimiter=",",
-                       header=None,
-                       names=['X','Y'])
-
-# define colour scheme
-colour = sns.color_palette("Greens",n_colors=7)
-colour = [colour[4]]
-
-# draw scatter
-sns.scatterplot(x='X',y='Y',data=data_corr,linewidth=0,alpha = 0.7,ax=ax,**{'s':3,'edgecolors':colour,'c':colour})
-sns.regplot(x='X',y='Y',data=data_corr,ax=ax,scatter=False,color=colour[0])
-
-# aesthetics
-ax.set_ylabel('Similarity Index (z)',fontname='Calibri',fontsize=6,labelpad=5,fontweight='light')   # add Y axis label
-ax.set_xlabel('Alpha/Beta Power (z)',fontname='Calibri',fontsize=6,labelpad=3,fontweight='light')   # add Y axis label
-
-ax.set_ylim(-2,2.6)                  # set Y axis range to 0 -> 1
-ax.set_xlim(-2.5,2.1)                  # set Y axis range to 0 -> 1  
-ax.set_yticks([])
-ax.set_xticks([])
-
-# change axes
-ax.spines['top'].set_visible(False)
-ax.spines['right'].set_visible(False)
-
+# plot raincloud
+custom_rainplot(data_ret,colour,ax,'calibri',labels,[-4,4],0.125,[1,1])
+   
 # save image
 pyplot.savefig(wdir + "/figures/fig3b.jpg",bbox_inches='tight',transparent=True,dpi='figure')
+
 
 # %% Corr 2
 # define raincloud data filename

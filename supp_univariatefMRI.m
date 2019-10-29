@@ -20,8 +20,6 @@ n_volumes   = 255;                                          % number of volumes
 n_runs      = 8;
 TR          = 2;
 EEG_sample  = 5000;
-scan_fov    = [64 64 32];                                   % scan field of view
-scan_vox    = [3 3 4];                                      % scan voxel size
 
 % add subfunctions
 addpath([dir_repos,'subfunctions'])
@@ -260,7 +258,7 @@ contrast_labels = {'contrastModality_atEncoding' 'contrastModality_atRetrieval' 
 for i = 1 : numel(contrast_labels)
     
     % define directory for second-level analysis
-    stat_dir = [dir_root,'bids_data/derivatives/group/spm/',contrast_labels{i},'/'];
+    stat_dir = [dir_root,'derivatives/group/spm/',contrast_labels{i},'/'];
     mkdir(stat_dir)
     
     % predefine cell to hold contrast filenames
@@ -271,7 +269,7 @@ for i = 1 : numel(contrast_labels)
         
         % add filename of contrast image to group cell
         subj_handle = sprintf('sub-%02.0f',subj);
-        contrast_files{subj,1} = [dir_root,'bids_data/derivatives/',subj_handle,'/spm/con_',sprintf('%04.0f',i),'.nii'];
+        contrast_files{subj,1} = [dir_root,'derivatives/',subj_handle,'/spm/con_',sprintf('%04.0f',i),'.nii'];
         
         clear subj_handle
     end
@@ -312,18 +310,29 @@ end
 clus_name{1} = {'occipital','leftTemporalPole','rightTemporalPole'};
 clus_name{2} = {'rightFusiform','leftFusiform'};
 clus_name{3} = {'occipital','limbic'};
+clus_name{4} = {'lAud','rAud','lFusi','rFusi'};
+
+%update contrast labels
+contrast_labels{4} = 'contrastModality_forAudio';
 
 % cycle through each first-level contrast
-for i = 1 : 3
+for i = 1 : 4
     
     % combine visual cluster and save
-    combine_spm_cluster([dir_root,'bids_data/derivatives/group/spm/',contrast_labels{i},'/'])
+    combine_spm_cluster([dir_root,'derivatives/group/spm/',contrast_labels{i},'/'])
 
+    % if audio, flip t
+    if i == 4
+        tmp = load_nii([dir_root,'derivatives\group\spm\contrastModality_forAudio\spmT_0001_masked_smooth.nii']);
+        tmp.img = -tmp.img;
+        save_nii(tmp,[dir_root,'derivatives\group\spm\contrastModality_forAudio\spmT_0001_masked_smooth.nii']);
+    end
+    
     % load SPM details
-    load([dir_root,'bids_data/derivatives/group/spm/',contrast_labels{i},'/SPM.mat'])
+    load([dir_root,'derivatives/group/spm/',contrast_labels{i},'/SPM.mat'],'SPM')
 
     % extract subject values for each cluster
-    [betas,d] = extract_sample_points([dir_root,'bids_data/derivatives/group/spm/',contrast_labels{i},'/'],SPM);
+    [betas,d] = extract_sample_points([dir_root,'derivatives/group/spm/',contrast_labels{i},'/'],SPM);
 
     % save betas as table
     tbl = array2table(betas','VariableNames',clus_name{i});

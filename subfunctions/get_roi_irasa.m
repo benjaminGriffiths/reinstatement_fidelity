@@ -50,8 +50,8 @@ freq.dimord         = 'rpt_chan_freq_time';
 freq.cfg            = [];
 
 % restrict data to pre- and post-power
-A = ft_selectdata(struct('latency',[-1 0],'channel',{roi.label}),data);
-B = ft_selectdata(struct('latency',[0.5 1.5],'channel',{roi.label}),data);
+A = ft_selectdata(struct('latency',[-1 0],'channels',{roi.label}),data);
+B = ft_selectdata(struct('latency',[0.5 1.5],'channels',{roi.label}),data);
 
 % extrat signal
 Asig = reshape(cell2mat(A.trial),[size(A.trial{1},1) size(A.trial{1},2) numel(A.trial)]);
@@ -62,7 +62,7 @@ fs   = 100;
 fr   = [5 25];
 
 % predefine osci and frac results
-osci = zeros(size(Bsig,3),26); 
+osci = zeros(size(Bsig,3),26,2); 
 fhz  = zeros(size(Bsig,3),26);
 frac = osci;
 
@@ -77,10 +77,10 @@ parfor trl = 1 : size(Bsig,3)
     % run irasa on pre
     Aspec = amri_sig_avgfractal(Asig(:,:,trl)',fs,...
                             'frange',fr);
-                        
+        
     % record results
-    osci(trl,:) = Bspec.osci-Aspec.osci;
-    frac(trl,:) = Bspec.frac-Aspec.frac;
+    osci(trl,:,:) = [Bspec.osci Aspec.osci];
+    frac(trl,:,:) = [Bspec.frac Aspec.frac];
     fhz(trl,:)  = Bspec.freq;    
 end
 

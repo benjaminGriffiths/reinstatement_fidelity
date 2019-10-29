@@ -2012,83 +2012,72 @@ load([dir_root,'derivatives/group/rsa-correlation-audio/group_task-all_fmri-si']
 % load mean bold
 load([dir_root,'derivatives/group/rsa-correlation-audio/group_task-all_fmri-meanbold'],'mean_bold')
    
+% load stat
+load([dir_root,'derivatives/group/eeg/group_task-rf_pow-wavestat.mat'],'stat')
+
 % predefine structure for correlation values
 grand_freq = repmat({struct('dimord','subj_chan_freq_time',...
                     'freq',8,...
                     'label',{{'dummy'}},...
                     'time',1,...
-                    'cfg',[])},[1 3]); tic
+                    'cfg',[])},[1 2]); tic
                 
 % cycle through each subject
 for subj = 1 : n_subj
     
-    % load in irasa data
-    load(sprintf('%sderivatives/sub-%02.0f/eeg/sub-%02.0f_task-audiocorr_eeg-irasa.mat',dir_root,subj,subj),'freq')  
-         
+    % load in wavelet data
+    load(sprintf('%sderivatives/sub-%02.0f/eeg/sub-%02.0f_task-corr_eeg-wavemap.mat',dir_root,subj,subj),'freq')
+    
     % extract all trial numbers from powspctrm
-    trl_nums = freq{1}.trialinfo(:,3);
+    trl_nums = freq{3}.trialinfo(:,3);
 
     % extract bold for these trials
     bold_tmp = squeeze(mean_bold(subj,trl_nums));
 
-    % fix numbers
+    % adjsut trials numbers for rsa_vec
     trl_nums(trl_nums>48 & trl_nums<=96)    = trl_nums(trl_nums>48 & trl_nums<=96) - 48;
     trl_nums(trl_nums>96 & trl_nums<=144)   = trl_nums(trl_nums>96 & trl_nums<=144) - 48;
-    trl_nums(trl_nums>144 & trl_nums<=192)  = trl_nums(trl_nums>144 & trl_nums<=192) - 96;       
-
-    % get alpha/beta power
-    pow      = [];
-    pow(:,1) = squeeze(mean(freq{1}.powspctrm(:,1,freq{1}.freq>=8),3)); 
-    pow(:,2) = squeeze(mean(freq{1}.powspctrm(:,2,freq{1}.freq>=8),3)); 
-
-    % predefine slope out
-    frac = zeros(size(freq{1}.fractal,1),2,2);
-
-    % cycle through trials
-    for trl = 1 : size(freq{1}.fractal,1)
-
-        % log transform fractal
-        logF = log10(freq{1}.freq');
-        logP = squeeze(log10(freq{1}.fractal(trl,:,:)))';
-
-        % get linfit
-        Afit = fitlm(logF,logP(:,1)); %post
-        Bfit = fitlm(logF,logP(:,2)); %pre
-
-        % get slope and intercept difference
-        frac(trl,1,:) = Bfit.Coefficients.tStat;
-        frac(trl,2,:) = Afit.Coefficients.tStat;
-    end
+    trl_nums(trl_nums>144 & trl_nums<=192)  = trl_nums(trl_nums>144 & trl_nums<=192) - 96;
 
     % create regressor matrix
     X      = zeros(numel(trl_nums),4);
     X(:,1) = rsa_vec(subj,trl_nums);
-    X(:,2) = pow(:,1)-pow(:,2);
-    X(:,3) = pow(:,2);
-    X(:,4) = frac(:,1,1)-frac(:,2,1);
-    X(:,5) = frac(:,1,2)-frac(:,2,2);
-    X(:,6) = frac(:,2,1);
-    X(:,7) = frac(:,2,2);
-    X(:,8) = bold_tmp;
-    X(:,9) = freq{mask}.trialinfo(:,2);
-
-    % if retrieval, drop forgotten
-    if mask == 2; X(freq{mask}.trialinfo(:,1)~=1,:) = []; end
+    X(:,2) = mean(freq{3}.powspctrm(:,stat{4}.negclusterslabelmat(stat{4}.inside==1)==1,:,2),2);
+    X(:,3) = mean(freq{3}.powspctrm(:,stat{4}.negclusterslabelmat(stat{4}.inside==1)==1,:,1),2);
+    X(:,4) = bold_tmp;
+    X(:,5) = freq{3}.trialinfo(:,2);
 
     % create table
-    tbl = array2table(X,'VariableNames',{'rsa','postpow','prepow','postint','postslp','preint','preslp','bold','conf'});
+    tbl = array2table(X,'VariableNames',{'rsa','prepow','postpow','bold','conf'});
 
+    % --- fit pre/post model --- %
     % define predictors
-    preds = {'bold','conf','postpow','postslp','postint'};
+    preds = {'bold','conf','postpow','prepow'};
 
     % run linear model
     B = fitlm(tbl,'ResponseVar','rsa',...
-                  'PredictorVars',preds,...
-                  'RobustOpts','on');
-              
+                  'RobustOpts','on',...
+                  'PredictorVars',preds);
+
     % extract predictor results
-    for p = 1 : numel(preds); grand_freq{1,3}.(preds{p})(subj,1) = B.Coefficients.tStat(preds{p}); end   
-    
+    for p = 1 : numel(preds); grand_freq{1,1}.(preds{p})(subj,1) = B.Coefficients.tStat(preds{p}); end   
+
+    % --- fit median split model --- %
+    % define predictors
+    preds = {'bold','conf','postpow','prepow'};
+
+    % median split variables
+    tbl.prepow  = double(tbl.prepow>=median(tbl.prepow));
+    tbl.postpow = double(tbl.postpow>=median(tbl.postpow));
+
+    % run linear model
+    B = fitlm(tbl,'ResponseVar','rsa',...
+                  'RobustOpts','on',...
+                  'PredictorVars',preds);
+
+    % extract predictor results
+    for p = 1 : numel(preds); grand_freq{1,2}.(preds{p})(subj,1) = B.Coefficients.tStat(preds{p}); end 
+        
     % update user
     fprintf('sub-%02.0f complete...\n',subj)
 end
@@ -2101,14 +2090,14 @@ save([dir_root,'derivatives/group/rsa-correlation-audio/group_task-rf_comb-freq.
 rng(1) 
 
 % define parameter and tail
-tail     = cell(3,1);
-tail{1}  = [-1 0 0];
-tail{2}  = [0 -1 0 0];
-tail{3}  = [0 -1 0 0];
+modName  = {'parametric','median'};
+tail     = cell(2,1);
+tail{1}  = [0 0 -1 0];
+tail{2}  = [0 0 -1 0];
 stat = {};
 
 % cycle through each model
-for model = 1 : 3
+for model = 1 : 2
 
     % predefine stat/tbl outputs
     sout = cell(numel(tail{model}),1);
@@ -2130,126 +2119,145 @@ for model = 1 : 3
 
     % combine tables
     tbl = cat(1,tout{:});
-    stat{model} = cat(1,sout{:});
+    %stat{model} = cat(1,sout{:});
 
     % add labels
     tbl = addvars(tbl,preds,'Before','t');
     disp(tbl)
+        
+    % write cluster information
+    clus_tbl = int_extractSubjs(grand_freq(:,model),preds,{'enc'});
+    writetable(clus_tbl,[dir_root,'derivatives/group/eeg/group_task-rf_eegfmri-',modName{model},'audiowavecluster.csv'],'Delimiter',',')
+    copyfile([dir_root,'derivatives/group/eeg/group_task-rf_eegfmri-',modName{model},'audiowavecluster.csv'],[dir_repos,'data/fig3_data/group_task-rf_eegfmri-',modName{model},'audiowavecluster.csv'])  
 end
-
-% sort hot data
-load([dir_bids,'derivatives/group/eeg/group_task-rf_eegfmri-hot_data.mat'],'hot_data')
-hot_data = cat(2,hot_data,grand_freq{2}.postpow);
-save([dir_bids,'derivatives/group/eeg/group_task-rf_eegfmri-hot_datawaud.mat'],'hot_data')
 
 %% Correlate Similarity and IRASA
 % load in similarity index
-load([dir_bids,'derivatives/group/rsa-correlation/group_task-all_fmri-si'],'rsa_vec')
+load([dir_root,'derivatives/group/rsa-correlation-audio/group_task-all_fmri-si'],'rsa_vec')
 
 % load mean bold
-load([dir_bids,'derivatives/group/rsa-correlation/group_task-all_fmri-meanbold'],'mean_bold')
+load([dir_root,'derivatives/group/rsa-correlation-audio/group_task-all_fmri-meanbold'],'mean_bold')
    
 % predefine structure for correlation values
-grand_freq = repmat({struct('dimord','subj_chan_freq_time',...
+grand_freq = struct('dimord','subj_chan_freq_time',...
                     'freq',8,...
                     'label',{{'dummy'}},...
                     'time',1,...
-                    'cfg',[])},[2 1]); tic
+                    'cfg',[]); tic
                 
 % cycle through each subject
 for subj = 1 : n_subj
     
     % load in irasa data
-    load(sprintf('%sderivatives/sub-%02.0f/eeg/sub-%02.0f_task-corr_eeg-irasa.mat',dir_bids,subj,subj),'freq')  
-    
-    % cycle through each mask (plus one for forgotten ers)
-    for mask = 1 : numel(mask_names)
+    load(sprintf('%sderivatives/sub-%02.0f/eeg/sub-%02.0f_task-corr_eeg-irasa.mat',dir_root,subj,subj),'freq')  
         
-        % extract all trial numbers from powspctrm
-        trl_nums = freq{mask}.trialinfo(:,2+mask);
-        
-        % extract bold for these trials
-        bold_tmp = squeeze(mean_bold(subj,mask,trl_nums));
-        
-        % fix numbers
-        trl_nums(trl_nums>48 & trl_nums<=96)    = trl_nums(trl_nums>48 & trl_nums<=96) - 48;
-        trl_nums(trl_nums>96 & trl_nums<=144)   = trl_nums(trl_nums>96 & trl_nums<=144) - 48;
-        trl_nums(trl_nums>144 & trl_nums<=192)  = trl_nums(trl_nums>144 & trl_nums<=192) - 96;
-        
-        % get slope/intercept
-        A = [ones(size(freq{mask}.fractal)) freq{mask}.fractal];
-        b = freq{mask}.freq;
-        
-        
-        % create regressor matrix
-        X      = zeros(numel(trl_nums),4);
-        X(:,1) = rsa_vec(subj,mask,trl_nums);
-        X(:,2) = freq{mask}.powspctrm;
-        X(:,3) = [];
-        X(:,4) = bold_tmp;
-        X(:,5) = freq{mask}.trialinfo(:,2);
+    % extract all trial numbers from powspctrm
+    trl_nums = freq{3}.trialinfo(:,3);
 
-        % if retrieval, drop forgotten
-        if mask == 2; X(freq{mask}.trialinfo(:,1)==0,:) = []; end
-        
-        % create table
-        tbl = array2table(X,'VariableNames',{'rsa','erd','frac','bold','conf'});
+    % extract bold for these trials
+    bold_tmp = squeeze(mean_bold(subj,trl_nums));
 
-        % define predictors
-        preds = {'erd','frac','bold','conf'};
-        
-        % run linear model
-        B = fitlm(tbl,'ResponseVar','rsa',...
-                      'PredictorVars',preds,...
-                      'RobustOpts','on');
-                  
-        % extract predictor results
-        for p = 1 : numel(preds)
-                        
-            % store data
-            grand_freq{mask}.(preds{p})(subj,1) = B.Coefficients.tStat(preds{p});
-        end     
+    % fix numbers
+    trl_nums(trl_nums>48 & trl_nums<=96)    = trl_nums(trl_nums>48 & trl_nums<=96) - 48;
+    trl_nums(trl_nums>96 & trl_nums<=144)   = trl_nums(trl_nums>96 & trl_nums<=144) - 48;
+    trl_nums(trl_nums>144 & trl_nums<=192)  = trl_nums(trl_nums>144 & trl_nums<=192) - 96;       
+
+    % get alpha/beta power
+    pow      = [];
+    pow(:,1) = squeeze(mean(freq{3}.powspctrm(:,1,freq{3}.freq>=8),3)); 
+    pow(:,2) = squeeze(mean(freq{3}.powspctrm(:,2,freq{3}.freq>=8),3)); 
+
+    % predefine slope out
+    frac = zeros(size(freq{3}.fractal,1),2,2);
+
+    % cycle through trials
+    for trl = 1 : size(freq{3}.fractal,1)
+
+        % log transform fractal
+        logF = log10(freq{3}.freq');
+        logP = squeeze(log10(freq{3}.fractal(trl,:,:)))';
+
+        % get linfit
+        Afit = fitlm(logF,logP(:,1)); %post
+        Bfit = fitlm(logF,logP(:,2)); %pre
+
+        % get slope and intercept difference
+        frac(trl,1,:) = Bfit.Coefficients.tStat;
+        frac(trl,2,:) = Afit.Coefficients.tStat;
     end
+
+    % create regressor matrix
+    X      = zeros(numel(trl_nums),4);
+    X(:,1) = rsa_vec(subj,trl_nums);
+    X(:,2) = pow(:,1);
+    X(:,3) = pow(:,2);
+    X(:,4) = frac(:,1,1);
+    X(:,5) = frac(:,1,2);
+    X(:,6) = frac(:,2,1);
+    X(:,7) = frac(:,2,2);
+    X(:,8) = bold_tmp;
+    X(:,9) = freq{3}.trialinfo(:,2);
+
+    % create table
+    tbl = array2table(X,'VariableNames',{'rsa','postpow','prepow','postint','postslp','preint','preslp','bold','conf'});
+
+    % define predictors
+    preds = {'bold','conf','postpow','prepow','postslp','preslp','postint','preint'};
+
+    % run linear model
+    B = fitlm(tbl,'ResponseVar','rsa',...
+                  'PredictorVars',preds,...
+                  'RobustOpts','on');
+
+    % extract predictor results
+    for p = 1 : numel(preds)
+
+        % store data
+        grand_freq.(preds{p})(subj,1) = B.Coefficients.tStat(preds{p});
+    end 
     
     % update user
     fprintf('sub-%02.0f complete...\n',subj)
 end
 
 % save data
-save([dir_bids,'derivatives/group/rsa-correlation/group_task-all_comb-freq.mat'],'grand_freq'); 
+save([dir_root,'derivatives/group/rsa-correlation-audio/group_task-all_comb-freq.mat'],'grand_freq'); 
 
 % Run Statistics
 % set seed
 rng(1) 
 
-% define parameter and tail
-tail  = [-1 -1 0 0];
-
-% predefine stat/tbl outputs
-sout = cell(numel(preds),1);
-tout = cell(numel(preds),1);
-
-% cycle through each parameter
-for i = 1 : numel(preds)
-    
-    % predefine cell for statistics
-    cfg             = [];
-    cfg.tail        = [0 0] + tail(i);
-    cfg.parameter   = preds{i};
-    cfg.statistic   = '';
-    [sout{i},tout{i}] = run_oneSampleT(cfg, grand_freq(:)); 
-end
-
-% combine tables
-tbl = cat(1,tout{:});
-
-% add labels
-opt = repmat({'encoding','retrieval'},[1 numel(preds)])';
-var = repmat(preds,[2 1]);
-tbl = addvars(tbl,var(:),'Before','t');
-tbl = addvars(tbl,opt(:),'Before','t');
+% predefine cell for statistics
+cfg             = [];
+cfg.tail        = -1;
+cfg.parameter   = 'postpow';
+[~,tbl]      = run_oneSampleT(cfg, {grand_freq});
 disp(tbl)
 
 end
 
+
+%% SUBFUNCTIONS
+
+function tbl = int_extractSubjs(data,metric,condition)
+
+count = 1;
+output = nan(size(data{1}.(metric{1}),1),numel(metric)*numel(condition));
+label = cell(numel(metric)*numel(condition),1);
+for i = 1 : numel(metric)
+    for j = 1 : numel(condition)
+           
+        % save output
+        output(:,count) = data{j}.(metric{i});
+        
+        % define label
+        label{count} = [condition{j},'_',metric{i}];
+        count = count + 1;
+    end
+end
+
+% create table
+tbl = array2table(output,'VariableNames',label);
+
+end
 

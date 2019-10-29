@@ -129,7 +129,7 @@ data_raincloud = pandas.read_csv(data_fname,
 f,ax = pyplot.subplots(1,1)
 f.set_figheight(6.3/2.54) # 4inches 
 f.set_figwidth(10/2.54) # 12inches
-f.set_dpi(300)
+f.set_dpi(1000)
 
 # define labels
 labels = {'title':'',
@@ -154,9 +154,9 @@ data_raincloud = pandas.read_csv(data_fname,
 
 # create figure
 f,ax = pyplot.subplots(1,1)
-f.set_figheight(6.3/2.54) # 4inches 
-f.set_figwidth(4/2.54) # 12inches
-f.set_dpi(300)
+f.set_figheight(6/2.54) # 4inches 
+f.set_figwidth(5/2.54) # 12inches
+f.set_dpi(1000)
 
 # define labels
 labels = {'title':'',

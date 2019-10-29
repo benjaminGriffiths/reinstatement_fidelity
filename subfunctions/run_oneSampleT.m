@@ -4,6 +4,7 @@ function [stat,tbl] = run_oneSampleT(cfg,data)
 if ~isfield(cfg,'frequency'); cfg.frequency = [8 30]; end
 if ~isfield(cfg,'latency'); cfg.latency = [0.5 1.5]; end
 if ~isfield(cfg,'parameter'); cfg.parameter = 'powspctrm'; end
+if ~isfield(cfg,'statistic'); cfg.statistic = 'ft_statfun_depsamplesT'; end
 if ~isfield(cfg,'tail'); cfg.tail = 0; cfg.clustertail = 0; end
 if ~isfield(cfg,'rm_outliers'); cfg.rm_outliers = false; end
 
@@ -24,7 +25,7 @@ config                   = [];
 config.uvar              = 1;
 config.ivar              = 2;
 config.method            = 'montecarlo';
-config.statistic         = 'ft_statfun_wilcoxon';
+config.statistic         = cfg.statistic;
 config.correctm          = 'cluster';
 config.numrandomization  = 2000;
 config.alpha             = 0.05;
@@ -114,13 +115,17 @@ for condition = 1 : n_data
         % if data does not consist of a single value
         if ~issingle
 
-            % extract key values
-            tbl.p(condition,1)  = round(stat{condition,1}.(tailname)(1).prob,3);
-            tbl.t(condition,1)  = round(stat{condition,1}.(tailname)(1).clusterstat ./ sum(stat{condition,1}.([(tailname),'labelmat'])(:) == 1),3);
-            tbl.ci(condition,1) = round(stat{condition,1}.(tailname)(1).cirange,3);
+            % check cluster exists
+            if isfield(stat{condition,1},tailname) && ~isempty(stat{condition,1}.(tailname))
+                
+                % extract key values
+                tbl.p(condition,1)  = round(stat{condition,1}.(tailname)(1).prob,3);
+                tbl.t(condition,1)  = round(stat{condition,1}.(tailname)(1).clusterstat ./ sum(stat{condition,1}.([(tailname),'labelmat'])(:) == 1),3);
+                tbl.ci(condition,1) = round(stat{condition,1}.(tailname)(1).cirange,3);
 
-            % calculate cohen's dz
-            tbl.d(condition,1) = round(tbl.t(condition,1)./ sqrt(n_subj),3);
+                % calculate cohen's dz
+                tbl.d(condition,1) = round(tbl.t(condition,1)./ sqrt(n_subj),3);
+            end
 
         else
             % extract key values
@@ -128,7 +133,7 @@ for condition = 1 : n_data
             tbl.t(condition,1)  = round(stat{condition,1}.stat,3);
             tbl.ci(condition,1) = round(stat{condition,1}.cirange,3);
 
-            % calculate cohen's dz
+            % if parametric, calculate cohen's dz
             tbl.d(condition,1) = round(tbl.t(condition,1)./ sqrt(n_subj),3);
         end
         

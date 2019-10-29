@@ -14,7 +14,6 @@ addpath(genpath('Y:/projects/general/rsatoolbox-develop'))
 %% Define Key Parameters
 dir_root    = 'Y:/projects/reinstatement_fidelity/';        % data directory
 dir_repos   = 'E:/bjg335/projects/reinstatement_fidelity/'; % repository directory
-dir_bids    = 'Y:/projects/reinstatement_fidelity/bids_data/';
 dir_tool    = 'Y:/projects/general/';
 n_subj      = 21;                                           % number of subjects
 n_trials    = 192;                                          % number of trials
@@ -22,18 +21,16 @@ n_volumes   = 255;                                          % number of volumes
 n_runs      = 8;
 TR          = 2;
 EEG_sample  = 5000;
-scan_fov    = [64 64 32];                                   % scan field of view
-scan_vox    = [3 3 4];                                      % scan voxel size
 
 % add subfunctions
 addpath([dir_repos,'subfunctions'])
 
 %% Prepare ROI
 % load sourcemodel
-load([dir_tool,'fieldtrip-20170319/template/sourcemodel/standard_sourcemodel3d10mm.mat']);
+load([dir_tool,'fieldtrip-20170319/template/sourcemodel/standard_sourcemodel3d10mm.mat'],'sourcemodel');
 
 % load whole brain
-mri = ft_read_mri([dir_bids,'sourcedata/masks/whole_brain.nii']);
+mri = ft_read_mri([dir_root,'sourcedata/masks/whole_brain.nii']);
 
 % interpolate clusters with grid
 cfg             = [];
@@ -45,10 +42,7 @@ roi.inside      = roi.anatomy(:) > 0;
 roi.pos         = sourcemodel.pos;
 
 % load EEG stat
-load([dir_bids,'derivatives/group/eeg/group_task-all_eeg-stat.mat'])
-
-% define channels of interest
-coi = stat{2}.negclusterslabelmat(roi.inside)==1;
+load([dir_root,'derivatives/group/eeg/group_task-rf_pow-wavestat.mat'],'stat')
 
 %% Run First-Level Analysis
 % cycle through each subject
@@ -57,18 +51,17 @@ for subj = 1 : n_subj
     % --- Prepare Subject --- %
     % define key subject strings
     subj_handle = sprintf('sub-%02.0f',subj);
-    dir_fmri    = [dir_root,'bids_data/',subj_handle,'/'];
-    dir_eeg     = [dir_root,'bids_data/sourcedata/',subj_handle,'/'];
+    dir_eeg     = [dir_root,'sourcedata/',subj_handle,'/'];
     
     % make directory for SPM data
-    mkdir([dir_root,'bids_data/derivatives/',subj_handle,'/univariateEEGfMRI/'])
+    mkdir([dir_root,'derivatives/',subj_handle,'/univariateEEGfMRI/'])
     
     % delete old SPM file if it exists
-    if exist([dir_root,'bids_data/derivatives/',subj_handle,'/univariateEEGfMRI/SPM.mat'],'file'); delete([dir_root,'bids_data/derivatives/',subj_handle,'/univariateEEGfMRI/SPM.mat']); end
+    if exist([dir_root,'derivatives/',subj_handle,'/univariateEEGfMRI/SPM.mat'],'file'); delete([dir_root,'derivatives/',subj_handle,'/univariateEEGfMRI/SPM.mat']); end
     
     % --- Prepare EEG --- %    
     % load data
-    load([dir_eeg,'/eeg/',subj_handle,'_task-rf_eeg-source.mat'])
+    load([dir_eeg,'/eeg/',subj_handle,'_task-rf_eeg-source.mat'],'source')
     
     % find audio/video hit/miss trials
     isvis       = nan(size(source.trialinfo));
@@ -104,36 +97,35 @@ for subj = 1 : n_subj
     
     % get time-frequency representation of data
     cfg             = [];
-    cfg.channel     = source.label(coi);
     cfg.keeptrials  = 'yes';
     cfg.method      = 'wavelet';
     cfg.width       = 6;
     cfg.output      = 'pow';
-    cfg.toi         = 0.5:0.1:1.5;
+    cfg.toi         = [-1:0.1:-0.375, 0.5:0.1:1.5];
     cfg.foi         = 8:2:30; % 100hz sampling
     cfg.pad         = 'nextpow2';
     freq            = ft_freqanalysis(cfg, source); clear source
 
-    % get time-averaged mean and standard deviation of power for each channel and frequency
-    raw_pow = mean(freq.powspctrm,4);
-    avg_pow = mean(raw_pow,1);
-    std_pow = std(raw_pow,[],1);
-
-    % replicate matrices to match freq.powspctrm
-    avg_pow = repmat(avg_pow,[size(freq.powspctrm,1) 1 1 size(freq.powspctrm,4)]);
-    std_pow = repmat(std_pow,[size(freq.powspctrm,1) 1 1 size(freq.powspctrm,4)]);
-
-    % z-transform power
-    freq.powspctrm = (freq.powspctrm - avg_pow) ./ std_pow;
-    clear raw_pow avg_pow std_pow
+    % baseline correct
+    pre_toi         = freq.time < 0;
+    post_toi        = freq.time > 0;
+    freq.powspctrm  = mean(freq.powspctrm(:,:,:,post_toi),4) - mean(freq.powspctrm(:,:,:,pre_toi),4); % get post > pre diff
     
-    % average over time and frequency
-    cfg             = [];
-    cfg.avgoverchan = 'yes';
-    cfg.avgovertime = 'yes';
-    cfg.avgoverfreq = 'yes';
-    freq            = ft_selectdata(cfg,freq);
-       
+    % restrict to relevant channels
+    pow = zeros(size(freq.powspctrm,1),1);
+    for trl = 1 : size(freq.powspctrm,1)
+        
+        % define coi based on conditon
+        if isvis(trl)
+            coi = stat{1}.negclusterslabelmat(stat{1}.inside==1) == 1;
+        else
+            coi = stat{4}.negclusterslabelmat(stat{1}.inside==1) == 1;
+        end
+        
+        pow(trl,1) = mean(mean(freq.powspctrm(trl,coi,:),3),2);
+    end
+    freq.powspctrm = pow;
+    
     % z-score within condition
     for a = 0:1
         for b = 0:1
@@ -164,7 +156,7 @@ for subj = 1 : n_subj
     for run = 1 : n_runs
 
         % load event table
-        tbl = readtable([dir_root,'bids_data/',subj_handle,'/func/',subj_handle,'_task-rf_run-',num2str(run),'_events.tsv'],'FileType','text','Delimiter','\t');
+        tbl = readtable([dir_root,subj_handle,'/func/',subj_handle,'_task-rf_run-',num2str(run),'_events.tsv'],'FileType','text','Delimiter','\t');
         
         % remove first three volumes and last five volumes
         tbl = tbl(4:end-5,:);
@@ -191,7 +183,7 @@ for subj = 1 : n_subj
             events_table.isRemembered(count)    = tbl.recalled(e);
             
             % get button press onset (if pressed)
-            if ~isnan(tbl.rt(e)); button_onset(end+1,1) = tbl.onset(e) + tbl.rt(e); end %#ok<SAGROW>
+            if ~isnan(tbl.rt(e)); button_onset(end+1,1) = tbl.onset(e) + tbl.rt(e); end %#ok<AGROW>
                 
             % update counter
             count = count + 1;
@@ -204,7 +196,7 @@ for subj = 1 : n_subj
     button_onset = button_onset ./ EEG_sample;    
     
     % load movement parameters
-    R = load([dir_root,'bids_data/derivatives/',subj_handle,'/func/rp_a',subj_handle,'_task-rf_run-1_bold.txt']);
+    R = load([dir_root,'derivatives/',subj_handle,'/func/rp_a',subj_handle,'_task-rf_run-1_bold.txt']);
     
     % find first three volumes and last five volumes of each run
     bad_scans = zeros(8*n_runs,1);
@@ -243,7 +235,7 @@ for subj = 1 : n_subj
     save('C:/tmp_mri/spm/R.mat','R')
         
     % get all scans for GLM
-    all_scans = get_functional_files([dir_root,'bids_data/derivatives/',subj_handle,'/'],'swua',true);
+    all_scans = get_functional_files([dir_root,'derivatives/',subj_handle,'/'],'swua',true);
     all_scans = all_scans{1};
     
     % remove bad scans
@@ -374,19 +366,19 @@ for subj = 1 : n_subj
     clear matlabbatch
     
     % copy data   
-    copyfile('C:/tmp_mri/spm/',[dir_root,'bids_data/derivatives/',subj_handle,'/univariateEEGfMRI/'])
+    copyfile('C:/tmp_mri/spm/',[dir_root,'derivatives/',subj_handle,'/univariateEEGfMRI/'])
     rmdir('C:/tmp_mri/','s');         
 end
 
 %% Run Second-Level Stats
 % define each first-level contrast name
-contrast_labels = {'retrieval_visual_hits' 'retrieval_audio_hits' 'encoding_visual_all' 'encoding_visual_audio' 'retrieval_memory' 'encoding_memory' 'retrieval_modality' 'encoding_modality'};
+contrast_labels = {'retrieval_visual_hits' 'retrieval_audio_hits' 'encoding_visual_all' 'encoding_audio_all' 'retrieval_memory' 'encoding_memory' 'retrieval_modality' 'encoding_modality'};
 
 % cycle through each first-level contrast
 for i = 1 : numel(contrast_labels)
     
     % define directory for second-level analysis
-    stat_dir = [dir_root,'bids_data/derivatives/group/univariateEEGfMRI/',contrast_labels{i},'/'];
+    stat_dir = [dir_root,'derivatives/group/univariateEEGfMRI/',contrast_labels{i},'/'];
     mkdir(stat_dir)
     
     % delete old SPM file if it exists
@@ -400,7 +392,7 @@ for i = 1 : numel(contrast_labels)
         
         % add filename of contrast image to group cell
         subj_handle = sprintf('sub-%02.0f',subj);
-        contrast_files{subj,1} = [dir_root,'bids_data/derivatives/',subj_handle,'/univariateEEGfMRI/con_',sprintf('%04.0f',i),'.nii'];
+        contrast_files{subj,1} = [dir_root,'derivatives/',subj_handle,'/univariateEEGfMRI/con_',sprintf('%04.0f',i),'.nii'];
         
         clear subj_handle
     end
@@ -438,31 +430,31 @@ end
 
 %% Extract Metrics for Visualisation
 % define each first-level contrast name
-contrast_labels = {'retrieval_memory' 'encoding_memory' 'retrieval_modality' 'encoding_modality'};
-
-% define cluster regions
-clus_name{1} = {'occipital','parietal'};
-clus_name{2} = {'occipital','parietal'};
-clus_name{3} = {'fusiform','parietal','leftFrontal','rightFrontal','leftIFG'};
-clus_name{4} = {'fusiform','parietal','leftFrontal','rightFrontal'};
-
-% cycle through each first-level contrast
-for i = 1 : numel(contrast_labels)
-    
-    % combine visual cluster and save
-    combine_spm_cluster([dir_root,'bids_data/derivatives/group/univariateEEGfMRI/',contrast_labels{i},'/'])
-
-    % load SPM details
-    load([dir_root,'bids_data/derivatives/group/univariateEEGfMRI/',contrast_labels{i},'/SPM.mat'])
-
-    % extract subject values for each cluster
-    [betas,d] = extract_sample_points([dir_root,'bids_data/derivatives/group/univariateEEGfMRI/',contrast_labels{i},'/'],SPM);
-
-    % save betas as table
-    tbl = array2table(betas','VariableNames',clus_name{i});
-    writetable(tbl,[dir_repos,'data/sup3_data/',contrast_labels{i},'_betas.csv'],'Delimiter',',')
-
-    % save effect size as table
-    tbl = array2table(d','VariableNames',clus_name{i});
-    writetable(tbl,[dir_repos,'data/sup3_data/',contrast_labels{i},'_cohensD.csv'],'Delimiter',',')
-end
+% contrast_labels = {'retrieval_memory' 'encoding_memory' 'retrieval_modality' 'encoding_modality'};
+% 
+% % define cluster regions
+% clus_name{1} = {'occipital','parietal'};
+% clus_name{2} = {'occipital','parietal'};
+% clus_name{3} = {'fusiform','parietal','leftFrontal','rightFrontal','leftIFG'};
+% clus_name{4} = {'fusiform','parietal','leftFrontal','rightFrontal'};
+% 
+% % cycle through each first-level contrast
+% for i = 1 : numel(contrast_labels)
+%     
+%     % combine visual cluster and save
+%     combine_spm_cluster([dir_root,'derivatives/group/univariateEEGfMRI/',contrast_labels{i},'/'])
+% 
+%     % load SPM details
+%     load([dir_root,'derivatives/group/univariateEEGfMRI/',contrast_labels{i},'/SPM.mat'],'SPM')
+% 
+%     % extract subject values for each cluster
+%     [betas,d] = extract_sample_points([dir_root,'derivatives/group/univariateEEGfMRI/',contrast_labels{i},'/'],SPM);
+% 
+%     % save betas as table
+%     tbl = array2table(betas','VariableNames',clus_name{i});
+%     writetable(tbl,[dir_repos,'data/sup3_data/',contrast_labels{i},'_betas.csv'],'Delimiter',',')
+% 
+%     % save effect size as table
+%     tbl = array2table(d','VariableNames',clus_name{i});
+%     writetable(tbl,[dir_repos,'data/sup3_data/',contrast_labels{i},'_cohensD.csv'],'Delimiter',',')
+% end

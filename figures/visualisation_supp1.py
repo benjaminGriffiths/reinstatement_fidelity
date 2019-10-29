@@ -97,9 +97,9 @@ data_raincloud = pandas.read_csv(data_fname,
 
 # create figure
 f,ax = pyplot.subplots(1,1)
-f.set_figheight(6.3/2.54) # 4inches 
-f.set_figwidth(6.6/2.54) # 12inches
-f.set_dpi(300)
+f.set_figheight(3.6/2.54) # 4inches 
+f.set_figwidth(4.2/2.54) # 12inches
+f.set_dpi(1000)
 
 # define colour scheme
 colour = sns.color_palette("Reds",n_colors=7)
@@ -108,7 +108,7 @@ colour = [colour[2],colour[3],colour[4]]
 # define labels
 labels = {'title':'',
           'ylabel':'Beta',
-          'xticklabel':['Occipital','Left Temporal','Right Temporal'],
+          'xticklabel':['Occipital','L. Temp.','R. Temp.'],
           'yticks':[-1,0,1,2,3,4],
           'yticklabel':['-1','0','1','2','3','4']}
 
@@ -128,9 +128,9 @@ data_raincloud = pandas.read_csv(data_fname,
 
 # create figure
 f,ax = pyplot.subplots(1,1)
-f.set_figheight(6.3/2.54) # 4inches 
-f.set_figwidth(4.4/2.54) # 12inches
-f.set_dpi(300)
+f.set_figheight(3.6/2.54) # 4inches 
+f.set_figwidth(3.6/2.54) # 12inches
+f.set_dpi(1000)
 
 # define colour scheme
 colour = sns.color_palette("Reds",n_colors=7)
@@ -159,9 +159,9 @@ data_raincloud = pandas.read_csv(data_fname,
 
 # create figure
 f,ax = pyplot.subplots(1,1)
-f.set_figheight(6.3/2.54) # 4inches 
-f.set_figwidth(4.4/2.54) # 12inches
-f.set_dpi(300)
+f.set_figheight(3.6/2.54) # 4inches 
+f.set_figwidth(3.6/2.54) # 12inches
+f.set_dpi(1000)
 
 # define colour scheme
 colour = sns.color_palette("Reds",n_colors=7)
@@ -180,3 +180,35 @@ custom_rainplot(data_raincloud,colour,ax,'calibri',labels,[-1,2],0.125,[1,1,1])
 # save image
 pyplot.savefig(wdir + "/figures/sup1c.jpg",bbox_inches='tight',transparent=True,dpi='figure')
 
+
+# ----- Audio Plot ----- # 
+# define raincloud data filename
+data_fname = wdir + "data/sup1_data/contrastModality_forAudio_betas.csv"
+
+# load raincloud data
+data_raincloud = pandas.read_csv(data_fname,
+                       delimiter=",")
+data_raincloud = -data_raincloud
+
+# create figure
+f,ax = pyplot.subplots(1,1)
+f.set_figheight(3.6/2.54) # 4inches 
+f.set_figwidth(4.8/2.54) # 12inches
+f.set_dpi(1000)
+
+# define colour scheme
+colour = sns.color_palette("Reds",n_colors=7)
+colour = [colour[2],colour[3]]
+
+# define labels
+labels = {'title':'',
+          'ylabel':'Beta',
+          'xticklabel':['L. Temp.','R. Temp.','L. Fusi','R. Fusi.'],
+          'yticks':[-1,0,1,2,3,4,5],
+          'yticklabel':['-1','0','1','2','3','4','5']}
+
+# plot raincloud
+custom_rainplot(data_raincloud,colour,ax,'calibri',labels,[-1,5],0.1,[1,1,1])
+   
+# save image
+pyplot.savefig(wdir + "/figures/sup1d.jpg",bbox_inches='tight',transparent=True,dpi='figure')
